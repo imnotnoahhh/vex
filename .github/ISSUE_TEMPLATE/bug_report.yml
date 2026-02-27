@@ -1,0 +1,88 @@
+name: Bug Report
+description: 报告一个 bug
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先确认：
+        - 已阅读 README / FAQ
+        - 已搜索是否存在重复 Issue
+  - type: input
+    id: version
+    attributes:
+      label: vex 版本
+      description: "运行 `vex --version` 获取"
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+    validations:
+      required: true
+  - type: input
+    id: arch
+    attributes:
+      label: 架构
+      description: "运行 `uname -m` 获取"
+      placeholder: "arm64 / x86_64"
+    validations:
+      required: true
+  - type: input
+    id: shell
+    attributes:
+      label: Shell
+      description: "例如 zsh / bash"
+      placeholder: "zsh"
+  - type: input
+    id: tool
+    attributes:
+      label: 相关工具
+      description: "涉及哪个工具和版本"
+      placeholder: "node@20.11.0"
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: "清晰描述遇到的问题"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 最小复现命令
+      description: "请给出可直接复制执行的最小命令序列"
+      render: shell
+      placeholder: |
+        vex init
+        vex install node@22
+        vex use node@22
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望输出
+      description: "你期望看到的行为或输出"
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际输出
+      description: "实际发生了什么"
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志/截图
+      description: "粘贴相关终端输出或截图"
+      render: shell
