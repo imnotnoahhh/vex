@@ -1,0 +1,44 @@
+[package]
+name = "vex"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Noah Qin"]
+description = "A fast, multi-language version manager for macOS"
+repository = "https://github.com/user/vex"
+
+[dependencies]
+# CLI 框架
+clap = { version = "4", features = ["derive"] }
+
+# HTTP 客户端
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+
+# 序列化
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "1"
+
+# 压缩和解压
+tar = "0.4"
+flate2 = "1"
+
+# 进度条
+indicatif = "0.18"
+
+# 加密
+sha2 = "0.10"
+
+# 文件系统
+dirs = "6"
+
+# 错误处理
+thiserror = "2"
+
+# 交互式选择
+dialoguer = "0.12"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

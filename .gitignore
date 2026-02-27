@@ -1,0 +1,9 @@
+/target
+*.swp
+*.swo
+*~
+.DS_Store
+.idea/
+.vscode/
+*.iml
+docs/archive/
