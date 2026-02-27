@@ -12,7 +12,7 @@ repository = "https://github.com/imnotnoahhh/vex"
 clap = { version = "4", features = ["derive"] }
 
 # HTTP 客户端
-reqwest = { version = "0.12", features = ["blocking", "json"] }
+reqwest = { version = "0.13", features = ["blocking", "json"] }
 
 # 序列化
 serde = { version = "1", features = ["derive"] }
