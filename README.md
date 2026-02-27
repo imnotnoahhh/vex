@@ -30,24 +30,8 @@
   <a href="#faq">FAQ</a>
 </p>
 
-## Demo
-
-### Install
-
 <p align="center">
   <img src="./docs/demo/vex-install.gif" alt="vex install demo" width="980" />
-</p>
-
-### Switch
-
-<p align="center">
-  <img src="./docs/demo/vex-demo.gif" alt="vex switch demo" width="980" />
-</p>
-
-### Auto-switch from `.tool-versions`
-
-<p align="center">
-  <img src="./docs/demo/vex-auto-switch.gif" alt="vex auto-switch demo" width="980" />
 </p>
 
 ## Features
