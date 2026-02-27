@@ -12,3 +12,7 @@ updates:
       interval: weekly
     commit-message:
       prefix: "ci"
+    ignore:
+      # These versions are managed by cargo-dist
+      - dependency-name: "actions/download-artifact"
+      - dependency-name: "actions/upload-artifact"
