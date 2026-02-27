@@ -5,7 +5,7 @@ edition = "2021"
 license = "MIT"
 authors = ["Noah Qin"]
 description = "A fast, multi-language version manager for macOS"
-repository = "https://github.com/user/vex"
+repository = "https://github.com/imnotnoahhh/vex"
 
 [dependencies]
 # CLI 框架
