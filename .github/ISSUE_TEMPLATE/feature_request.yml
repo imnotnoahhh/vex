@@ -1,0 +1,55 @@
+name: Feature Request
+description: 提出一个新功能建议
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        欢迎提出功能建议。为了更快讨论，请尽量描述清楚场景、收益与替代方案。
+  - type: dropdown
+    id: category
+    attributes:
+      label: 分类
+      options:
+        - 新工具支持
+        - 现有功能改进
+        - 性能优化
+        - 开发体验
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 使用场景
+      description: "你的实际使用场景是什么？"
+      placeholder: "例如：团队在 monorepo 中需要按目录自动切换 node 和 go 版本"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 当前问题或动机
+      description: "现在遇到的痛点是什么？"
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: 期望的解决方案
+      description: "你希望 vex 如何解决这个问题？"
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 替代方案
+      description: "你考虑过哪些替代方案？为什么不理想？"
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 需求优先级
+      options:
+        - 高（近期会频繁用到）
+        - 中（有提升但不紧急）
+        - 低（锦上添花）
