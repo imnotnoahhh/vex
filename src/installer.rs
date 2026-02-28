@@ -3,6 +3,7 @@ use crate::error::{Result, VexError};
 use crate::lock::InstallLock;
 use crate::tools::{Arch, Tool};
 use flate2::read::GzDecoder;
+use owo_colors::OwoColorize;
 use std::fs;
 use std::path::PathBuf;
 use tar::Archive;
@@ -56,15 +57,27 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     // 0. 检查是否已安装
     let final_dir = vex.join("toolchains").join(tool.name()).join(version);
     if final_dir.exists() {
-        println!("{} {} is already installed.", tool.name(), version);
-        println!("Use 'vex use {}@{}' to switch to it.", tool.name(), version);
+        println!(
+            "{} {} is already installed.",
+            format!("{}@{}", tool.name(), version).yellow(),
+            "✓".green()
+        );
+        println!(
+            "Use {} to switch to it.",
+            format!("'vex use {}@{}'", tool.name(), version).cyan()
+        );
         return Ok(());
     }
 
     // Acquire install lock (fail fast if another process is installing the same version)
     let _lock = InstallLock::acquire(&vex, tool.name(), version)?;
 
-    println!("Installing {} {}...", tool.name(), version);
+    println!(
+        "{} {} {}...",
+        "Installing".cyan(),
+        tool.name().yellow(),
+        version.yellow()
+    );
 
     let cache_dir = vex.join("cache");
     fs::create_dir_all(&cache_dir)?;
@@ -80,18 +93,18 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
 
     // 1. 下载
     let download_url = tool.download_url(version, arch)?;
-    println!("Downloading from {}...", download_url);
+    println!("{} from {}...", "Downloading".cyan(), download_url.dimmed());
     download_with_retry(&download_url, &archive_path, 3)?;
 
     // 2. 验证 checksum
     if let Ok(Some(expected)) = tool.get_checksum(version, arch) {
-        println!("Verifying checksum...");
+        println!("{}...", "Verifying checksum".cyan());
         verify_checksum(&archive_path, &expected)?;
-        println!("✓ Checksum verified");
+        println!("{} Checksum verified", "✓".green());
     }
 
     // 3. 解压
-    println!("Extracting...");
+    println!("{}...", "Extracting".cyan());
     fs::create_dir_all(&extract_dir)?;
 
     let tar_gz = fs::File::open(&archive_path)?;
@@ -121,10 +134,11 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     let _ = fs::remove_dir_all(&extract_dir);
 
     println!(
-        "✓ Installed {} {} to {}",
-        tool.name(),
-        version,
-        final_dir.display()
+        "{} Installed {} {} to {}",
+        "✓".green(),
+        tool.name().yellow(),
+        version.yellow(),
+        final_dir.display().to_string().dimmed()
     );
 
     Ok(())
