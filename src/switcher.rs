@@ -150,10 +150,15 @@ mod tests {
         fs::create_dir_all(&clippy_dir).unwrap();
         fs::create_dir_all(&analyzer_dir).unwrap();
         fs::write(rustc_dir.join("rustc"), "fake").unwrap();
+        fs::write(rustc_dir.join("rustdoc"), "fake").unwrap();
+        fs::write(rustc_dir.join("rust-gdb"), "fake").unwrap();
+        fs::write(rustc_dir.join("rust-gdbgui"), "fake").unwrap();
+        fs::write(rustc_dir.join("rust-lldb"), "fake").unwrap();
         fs::write(cargo_dir.join("cargo"), "fake").unwrap();
         fs::write(rustfmt_dir.join("rustfmt"), "fake").unwrap();
         fs::write(rustfmt_dir.join("cargo-fmt"), "fake").unwrap();
         fs::write(clippy_dir.join("cargo-clippy"), "fake").unwrap();
+        fs::write(clippy_dir.join("clippy-driver"), "fake").unwrap();
         fs::write(analyzer_dir.join("rust-analyzer"), "fake").unwrap();
 
         let result = switch_version_in(&RustTool, "1.93.1", &base);
@@ -169,7 +174,12 @@ mod tests {
         assert!(base.join("bin/rustfmt").exists());
         assert!(base.join("bin/cargo-fmt").exists());
         assert!(base.join("bin/cargo-clippy").exists());
+        assert!(base.join("bin/clippy-driver").exists());
         assert!(base.join("bin/rust-analyzer").exists());
+        assert!(base.join("bin/rustdoc").exists());
+        assert!(base.join("bin/rust-gdb").exists());
+        assert!(base.join("bin/rust-gdbgui").exists());
+        assert!(base.join("bin/rust-lldb").exists());
 
         let _ = fs::remove_dir_all(&base);
     }
