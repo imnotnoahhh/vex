@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO_OWNER="imnotnoahhh"
 REPO_NAME="vex"
-INSTALL_DIR="$HOME/.cargo/bin"
+INSTALL_DIR="$HOME/.local/bin"
 INSTALL_PATH="$INSTALL_DIR/vex"
 VERSION=""
 
@@ -119,27 +119,44 @@ mkdir -p "$INSTALL_DIR"
 cp "$VEX_BIN" "$INSTALL_PATH"
 chmod +x "$INSTALL_PATH"
 
-add_path_line_if_missing() {
-  rc_file="$1"
-  path_line='export PATH="$HOME/.cargo/bin:$PATH"'
+# Detect current shell and update appropriate rc file
+CURRENT_SHELL="$(basename "$SHELL")"
+PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
 
-  if [ ! -f "$rc_file" ]; then
-    touch "$rc_file"
+case "$CURRENT_SHELL" in
+  zsh)
+    RC_FILE="$HOME/.zshrc"
+    ;;
+  bash)
+    # On macOS, bash uses .bash_profile for login shells
+    if [ -f "$HOME/.bash_profile" ]; then
+      RC_FILE="$HOME/.bash_profile"
+    else
+      RC_FILE="$HOME/.bashrc"
+    fi
+    ;;
+  *)
+    RC_FILE=""
+    ;;
+esac
+
+if [ -n "$RC_FILE" ]; then
+  if [ ! -f "$RC_FILE" ]; then
+    touch "$RC_FILE"
   fi
 
-  if ! grep -Fqs "$path_line" "$rc_file"; then
-    printf '\n%s\n' "$path_line" >> "$rc_file"
-    log "Updated $rc_file"
+  if ! grep -Fqs "$PATH_LINE" "$RC_FILE"; then
+    printf '\n%s\n' "$PATH_LINE" >> "$RC_FILE"
+    log "Updated $RC_FILE"
   fi
-}
-
-add_path_line_if_missing "$HOME/.zshrc"
-add_path_line_if_missing "$HOME/.bashrc"
-add_path_line_if_missing "$HOME/.bash_profile"
+fi
 
 log "Installed vex $TAG_NAME to $INSTALL_PATH"
 log "Run 'vex --version' to verify installation."
-log "If your current shell cannot find vex yet, reload config:"
-log "  source ~/.zshrc"
-log "or"
-log "  source ~/.bashrc"
+
+if [ -n "$RC_FILE" ]; then
+  log "Reload your shell config to use vex:"
+  log "  source $RC_FILE"
+else
+  log "Add $INSTALL_DIR to your PATH manually to use vex."
+fi
