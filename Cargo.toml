@@ -41,6 +41,9 @@ dialoguer = "0.12"
 # 文件锁
 fs2 = "0.4"
 
+# 终端颜色
+owo-colors = "4"
+
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"

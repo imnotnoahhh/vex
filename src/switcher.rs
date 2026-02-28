@@ -1,5 +1,6 @@
 use crate::error::{Result, VexError};
 use crate::tools::Tool;
+use owo_colors::OwoColorize;
 use std::fs;
 use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
@@ -22,7 +23,12 @@ fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<
         });
     }
 
-    println!("Switching {} to version {}...", tool.name(), version);
+    println!(
+        "{} {} to version {}...",
+        "Switching".cyan(),
+        tool.name().yellow(),
+        version.yellow()
+    );
 
     // 1. 更新 current/ 符号链接
     let current_dir = base_dir.join("current");
@@ -47,14 +53,28 @@ fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<
         unix_fs::symlink(&target, &bin_link)?;
     }
 
-    println!("✓ Switched {} to version {}", tool.name(), version);
+    println!(
+        "{} Switched {} to version {}",
+        "✓".green(),
+        tool.name().yellow(),
+        version.yellow()
+    );
     println!();
     let verify_flag = if tool.name() == "go" {
         "version"
     } else {
         "--version"
     };
-    println!("Verify with: {} {}", tool.bin_names()[0], verify_flag);
+    println!(
+        "{} {}",
+        "Verify with:".dimmed(),
+        format!("{} {}", tool.bin_names()[0], verify_flag).cyan()
+    );
+    println!(
+        "{} {}",
+        "Note:".dimmed(),
+        "If 'which' shows old paths, run: hash -r".dimmed()
+    );
 
     Ok(())
 }
