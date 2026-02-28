@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-03-01
+
+### Added
+
+- **Colorful terminal output** — Enhanced user experience with color-coded messages:
+  - Green for success messages (✓ Installed, ✓ Switched, ✓ Checksum verified)
+  - Cyan for action messages (Installing, Downloading, Switching)
+  - Yellow for tool names and versions
+  - Dimmed for paths and hints
+- **Shell cache hint** — `vex use` now displays a note about running `hash -r` if `which` shows old paths, addressing shell command cache issues
+
+### Changed
+
+- Improved visual hierarchy in terminal output with moderate color usage
+- Added `owo-colors` dependency for terminal styling (auto-detects TTY)
+
 ## [0.1.4] - 2026-03-01
 
 ### Fixed
