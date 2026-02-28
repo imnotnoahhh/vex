@@ -60,9 +60,49 @@ src/
 
 ## Commit and PR Guidelines
 
-- Keep each PR focused on one change.
-- Write concise commit messages that explain what changed and why.
-- If your PR fixes an issue, reference it in the PR description (for example: `Fixes #123`).
+### Branch Strategy
+
+- `main` — production branch, all PRs merge here
+- Feature branches follow conventional commit types:
+  - `feat/xxx` — new features
+  - `fix/xxx` — bug fixes
+  - `docs/xxx` — documentation changes
+  - `chore/xxx` — maintenance tasks (dependencies, configs)
+  - `ci/xxx` — CI/CD changes
+
+### Conventional Commits
+
+All commits must follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>: <description>
+
+[optional body]
+```
+
+**Types:**
+- `feat:` — new feature
+- `fix:` — bug fix
+- `docs:` — documentation only
+- `chore:` — maintenance (deps, configs, etc.)
+- `ci:` — CI/CD changes
+- `deps:` — dependency updates
+
+**Examples:**
+```
+feat: add Python support
+fix: resolve Node.js download checksum mismatch
+docs: clarify installation steps in README
+chore: bump MSRV to 1.89
+```
+
+### Pull Request Process
+
+1. Create a branch from `main` with the appropriate prefix (`feat/`, `fix/`, etc.)
+2. Make your changes and commit with conventional commit messages
+3. Open a PR to `main`
+4. Ensure all CI checks pass
+5. Wait for review and approval
 
 ## Testing
 
