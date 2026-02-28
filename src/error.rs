@@ -30,6 +30,9 @@ pub enum VexError {
 
     #[error("Dialog error: {0}")]
     Dialog(String),
+
+    #[error("Another vex process is installing {tool}@{version}. Please wait and try again.")]
+    LockConflict { tool: String, version: String },
 }
 
 pub type Result<T> = std::result::Result<T, VexError>;
@@ -103,5 +106,17 @@ mod tests {
             path: PathBuf::from("/usr/local/bin"),
         };
         assert_eq!(err.to_string(), "Permission denied: /usr/local/bin");
+    }
+
+    #[test]
+    fn test_error_display_lock_conflict() {
+        let err = VexError::LockConflict {
+            tool: "node".to_string(),
+            version: "20.11.0".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "Another vex process is installing node@20.11.0. Please wait and try again."
+        );
     }
 }

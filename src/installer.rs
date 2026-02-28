@@ -1,5 +1,6 @@
 use crate::downloader::{download_with_retry, verify_checksum};
 use crate::error::{Result, VexError};
+use crate::lock::InstallLock;
 use crate::tools::{Arch, Tool};
 use flate2::read::GzDecoder;
 use std::fs;
@@ -59,6 +60,9 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
         println!("Use 'vex use {}@{}' to switch to it.", tool.name(), version);
         return Ok(());
     }
+
+    // Acquire install lock (fail fast if another process is installing the same version)
+    let _lock = InstallLock::acquire(&vex, tool.name(), version)?;
 
     println!("Installing {} {}...", tool.name(), version);
 
