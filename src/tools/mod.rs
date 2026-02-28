@@ -55,6 +55,12 @@ pub trait Tool: Send + Sync {
     fn resolve_alias(&self, _alias: &str) -> Result<Option<String>> {
         Ok(None)
     }
+
+    /// Post-install hook called after extraction. Used for tool-specific setup.
+    /// Default implementation does nothing.
+    fn post_install(&self, _install_dir: &std::path::Path, _arch: Arch) -> Result<()> {
+        Ok(())
+    }
 }
 
 pub fn get_tool(name: &str) -> Result<Box<dyn Tool>> {
