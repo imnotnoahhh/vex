@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Version aliases** — `latest`, `lts`, `lts-<codename>` (Node), `stable` (Rust), minor version matching (Go `1.23` → latest `1.23.x`)
+- **`vex upgrade <tool>`** — one-command upgrade to the latest version
+- **`vex alias <tool>`** — show all available aliases and their resolved values
+- **Remote version cache** — cache `list_remote()` results to `~/.vex/cache/remote-<tool>.json` with configurable TTL (default 5 min via `cache_ttl_secs` in `config.toml`)
+- **`--no-cache` flag** for `vex list-remote` to force fresh fetch
+- **Concurrent install lock** — file-based exclusive lock (`~/.vex/locks/`) prevents parallel installs of the same tool@version from corrupting state; fail-fast with clear error message
+- **Spinner feedback** during remote API calls (replaces static "Fetching..." text)
+- **Download speed display** (`bytes/sec`) in progress bar
+
 ### Changed
 
 - Revised public-facing documentation for consistency and clarity: fully translated `CONTRIBUTING.md` to English and standardized wording in `README.md` and `SECURITY.md`.
