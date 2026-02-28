@@ -90,7 +90,7 @@ ASSET_URL="$(
     | sed -n 's/.*"browser_download_url" *: *"\([^"]*\)".*/\1/p' \
     | sed 's/\\\//\//g' \
     | grep "$TARGET_TRIPLE" \
-    | grep -E '\\.tar\\.(gz|xz)$' \
+    | grep -E '\.tar\.(gz|xz)$' \
     | head -n 1 \
     || true
 )"
