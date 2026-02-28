@@ -76,7 +76,7 @@ impl Tool for RustTool {
     }
 
     fn bin_names(&self) -> Vec<&str> {
-        vec!["rustc", "cargo"]
+        vec!["rustc", "cargo", "rustfmt", "cargo-fmt", "cargo-clippy"]
     }
 
     fn bin_subpath(&self) -> &str {
@@ -85,7 +85,13 @@ impl Tool for RustTool {
 
     fn bin_paths(&self) -> Vec<(&str, &str)> {
         // Rust tarball 中 rustc 和 cargo 在不同子目录
-        vec![("rustc", "rustc/bin"), ("cargo", "cargo/bin")]
+        vec![
+            ("rustc", "rustc/bin"),
+            ("cargo", "cargo/bin"),
+            ("rustfmt", "rustfmt-preview/bin"),
+            ("cargo-fmt", "rustfmt-preview/bin"),
+            ("cargo-clippy", "clippy-preview/bin"),
+        ]
     }
 
     fn get_checksum(&self, _version: &str, arch: Arch) -> Result<Option<String>> {
@@ -119,6 +125,41 @@ impl Tool for RustTool {
             _ => Ok(None),
         }
     }
+
+    fn post_install(&self, install_dir: &std::path::Path, arch: crate::tools::Arch) -> Result<()> {
+        use std::os::unix::fs as unix_fs;
+
+        let target = match arch {
+            crate::tools::Arch::Arm64 => "aarch64-apple-darwin",
+            crate::tools::Arch::X86_64 => "x86_64-apple-darwin",
+        };
+
+        // 1. 链接 rust-std 到 rustc sysroot
+        let std_src = install_dir
+            .join(format!("rust-std-{}", target))
+            .join("lib/rustlib")
+            .join(target)
+            .join("lib");
+        let std_dst = install_dir
+            .join("rustc/lib/rustlib")
+            .join(target)
+            .join("lib");
+        if std_src.exists() && !std_dst.exists() {
+            unix_fs::symlink(&std_src, &std_dst)?;
+        }
+
+        // 2. 链接 rustc/lib 到 clippy-preview/lib 和 rustfmt-preview/lib
+        //    这些工具通过 @rpath (../lib/) 查找 librustc_driver
+        let rustc_lib = install_dir.join("rustc/lib");
+        for component in &["clippy-preview", "rustfmt-preview"] {
+            let lib_link = install_dir.join(component).join("lib");
+            if rustc_lib.exists() && !lib_link.exists() {
+                unix_fs::symlink(&rustc_lib, &lib_link)?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -133,7 +174,10 @@ mod tests {
 
     #[test]
     fn test_bin_names() {
-        assert_eq!(RustTool.bin_names(), vec!["rustc", "cargo"]);
+        assert_eq!(
+            RustTool.bin_names(),
+            vec!["rustc", "cargo", "rustfmt", "cargo-fmt", "cargo-clippy"]
+        );
     }
 
     #[test]
@@ -144,7 +188,16 @@ mod tests {
     #[test]
     fn test_bin_paths_override() {
         let paths = RustTool.bin_paths();
-        assert_eq!(paths, vec![("rustc", "rustc/bin"), ("cargo", "cargo/bin"),]);
+        assert_eq!(
+            paths,
+            vec![
+                ("rustc", "rustc/bin"),
+                ("cargo", "cargo/bin"),
+                ("rustfmt", "rustfmt-preview/bin"),
+                ("cargo-fmt", "rustfmt-preview/bin"),
+                ("cargo-clippy", "clippy-preview/bin"),
+            ]
+        );
     }
 
     #[test]
