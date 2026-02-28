@@ -49,6 +49,12 @@ pub trait Tool: Send + Sync {
     fn get_checksum(&self, _version: &str, _arch: Arch) -> Result<Option<String>> {
         Ok(None)
     }
+
+    /// Resolve a version alias (e.g., "latest", "lts") to a concrete version.
+    /// Returns Ok(None) if the alias is not recognized.
+    fn resolve_alias(&self, _alias: &str) -> Result<Option<String>> {
+        Ok(None)
+    }
 }
 
 pub fn get_tool(name: &str) -> Result<Box<dyn Tool>> {
@@ -62,18 +68,11 @@ pub fn get_tool(name: &str) -> Result<Box<dyn Tool>> {
 }
 
 /// Resolve a partial version string to a full version by querying remote.
-/// Supports: "20" → latest 20.x, "20.11" → latest 20.11.x, "lts" → latest LTS.
+/// Supports aliases (latest, lts, stable, lts-<codename>), partial versions (20 → 20.x), and exact versions.
 pub fn resolve_fuzzy_version(tool: &dyn Tool, partial: &str) -> Result<String> {
-    // "lts" keyword
-    if partial.eq_ignore_ascii_case("lts") {
-        let versions = tool.list_remote()?;
-        return versions
-            .iter()
-            .find(|v| v.lts.is_some())
-            .map(|v| normalize_version(&v.version))
-            .ok_or_else(|| {
-                crate::error::VexError::Parse(format!("No LTS version found for {}", tool.name()))
-            });
+    // First, try alias resolution
+    if let Some(resolved) = tool.resolve_alias(partial)? {
+        return Ok(resolved);
     }
 
     // Check if it already looks like a full version (has 2+ dots like 20.11.0, or is a single number for java)
@@ -156,5 +155,121 @@ mod tests {
 
         let result = get_tool("");
         assert!(result.is_err());
+    }
+
+    /// A mock tool for testing resolve_fuzzy_version with aliases
+    struct MockTool {
+        versions: Vec<Version>,
+    }
+
+    impl Tool for MockTool {
+        fn name(&self) -> &str {
+            "mock"
+        }
+        fn list_remote(&self) -> Result<Vec<Version>> {
+            Ok(self.versions.clone())
+        }
+        fn download_url(&self, _version: &str, _arch: Arch) -> Result<String> {
+            Ok(String::new())
+        }
+        fn checksum_url(&self, _version: &str, _arch: Arch) -> Option<String> {
+            None
+        }
+        fn bin_names(&self) -> Vec<&str> {
+            vec!["mock"]
+        }
+        fn bin_subpath(&self) -> &str {
+            "bin"
+        }
+        fn resolve_alias(&self, alias: &str) -> Result<Option<String>> {
+            match alias {
+                "latest" => Ok(self.versions.first().map(|v| v.version.clone())),
+                "lts" => Ok(self
+                    .versions
+                    .iter()
+                    .find(|v| v.lts.is_some())
+                    .map(|v| v.version.clone())),
+                _ => Ok(None),
+            }
+        }
+    }
+
+    #[test]
+    fn test_resolve_fuzzy_version_alias_latest() {
+        let tool = MockTool {
+            versions: vec![
+                Version {
+                    version: "22.5.0".to_string(),
+                    lts: None,
+                },
+                Version {
+                    version: "20.11.0".to_string(),
+                    lts: Some("Iron".to_string()),
+                },
+            ],
+        };
+        let result = resolve_fuzzy_version(&tool, "latest").unwrap();
+        assert_eq!(result, "22.5.0");
+    }
+
+    #[test]
+    fn test_resolve_fuzzy_version_alias_lts() {
+        let tool = MockTool {
+            versions: vec![
+                Version {
+                    version: "22.5.0".to_string(),
+                    lts: None,
+                },
+                Version {
+                    version: "20.11.0".to_string(),
+                    lts: Some("Iron".to_string()),
+                },
+            ],
+        };
+        let result = resolve_fuzzy_version(&tool, "lts").unwrap();
+        assert_eq!(result, "20.11.0");
+    }
+
+    #[test]
+    fn test_resolve_fuzzy_version_unknown_alias_falls_through() {
+        let tool = MockTool {
+            versions: vec![Version {
+                version: "22.5.0".to_string(),
+                lts: None,
+            }],
+        };
+        // "22.5.0" is a full version, should pass through
+        let result = resolve_fuzzy_version(&tool, "22.5.0").unwrap();
+        assert_eq!(result, "22.5.0");
+    }
+
+    #[test]
+    fn test_default_resolve_alias_returns_none() {
+        // Test that the default trait implementation returns None
+        struct MinimalTool;
+        impl Tool for MinimalTool {
+            fn name(&self) -> &str {
+                "minimal"
+            }
+            fn list_remote(&self) -> Result<Vec<Version>> {
+                Ok(vec![])
+            }
+            fn download_url(&self, _: &str, _: Arch) -> Result<String> {
+                Ok(String::new())
+            }
+            fn checksum_url(&self, _: &str, _: Arch) -> Option<String> {
+                None
+            }
+            fn bin_names(&self) -> Vec<&str> {
+                vec![]
+            }
+            fn bin_subpath(&self) -> &str {
+                ""
+            }
+        }
+
+        let tool = MinimalTool;
+        assert_eq!(tool.resolve_alias("latest").unwrap(), None);
+        assert_eq!(tool.resolve_alias("lts").unwrap(), None);
     }
 }

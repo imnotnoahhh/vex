@@ -133,6 +133,25 @@ impl Tool for JavaTool {
             Ok(None)
         }
     }
+
+    fn resolve_alias(&self, alias: &str) -> Result<Option<String>> {
+        let versions = self.list_remote()?;
+
+        match alias {
+            "latest" => {
+                // Return the first version (most recent, list is descending)
+                Ok(versions.first().map(|v| v.version.clone()))
+            }
+            "lts" => {
+                // Return the first LTS version
+                Ok(versions
+                    .iter()
+                    .find(|v| v.lts.is_some())
+                    .map(|v| v.version.clone()))
+            }
+            _ => Ok(None),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -188,5 +207,33 @@ mod tests {
         let url = JavaTool.download_url("21", Arch::Arm64).unwrap();
         assert!(url.contains("temurin"));
         assert!(url.ends_with(".tar.gz"));
+    }
+
+    #[test]
+    #[ignore] // 需要网络
+    fn test_resolve_alias_latest() {
+        let result = JavaTool.resolve_alias("latest").unwrap();
+        assert!(result.is_some());
+        // Should be a number
+        assert!(result.unwrap().parse::<u32>().is_ok());
+    }
+
+    #[test]
+    #[ignore] // 需要网络
+    fn test_resolve_alias_lts() {
+        let result = JavaTool.resolve_alias("lts").unwrap();
+        assert!(result.is_some());
+        let version: u32 = result.unwrap().parse().unwrap();
+        // LTS versions are 8, 11, 17, 21, 25...
+        assert!(version >= 8);
+    }
+
+    #[test]
+    fn test_resolve_alias_unknown() {
+        let result = JavaTool.resolve_alias("foobar").unwrap();
+        assert!(result.is_none());
+
+        let result = JavaTool.resolve_alias("stable").unwrap();
+        assert!(result.is_none());
     }
 }

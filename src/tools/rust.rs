@@ -109,11 +109,22 @@ impl Tool for RustTool {
 
         Ok(None)
     }
+
+    fn resolve_alias(&self, alias: &str) -> Result<Option<String>> {
+        match alias {
+            "latest" | "stable" => {
+                let versions = self.list_remote()?;
+                Ok(versions.first().map(|v| v.version.clone()))
+            }
+            _ => Ok(None),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::Tool;
 
     #[test]
     fn test_name() {
@@ -174,5 +185,33 @@ mod tests {
         assert!(!versions.is_empty());
         // Rust 稳定版格式：x.y.z
         assert!(versions[0].version.contains('.'));
+    }
+
+    #[test]
+    #[ignore] // 需要网络
+    fn test_resolve_alias_latest() {
+        let result = RustTool.resolve_alias("latest").unwrap();
+        assert!(result.is_some());
+        assert!(result.unwrap().contains('.'));
+    }
+
+    #[test]
+    #[ignore] // 需要网络
+    fn test_resolve_alias_stable() {
+        let result = RustTool.resolve_alias("stable").unwrap();
+        assert!(result.is_some());
+        // stable and latest should resolve to the same version
+        let latest = RustTool.resolve_alias("latest").unwrap();
+        assert_eq!(result, latest);
+    }
+
+    #[test]
+    fn test_resolve_alias_unknown() {
+        // Unknown aliases don't need network — they return None immediately
+        let result = RustTool.resolve_alias("nightly").unwrap();
+        assert!(result.is_none());
+
+        let result = RustTool.resolve_alias("beta").unwrap();
+        assert!(result.is_none());
     }
 }

@@ -111,6 +111,50 @@ impl Tool for NodeTool {
 
         Ok(None)
     }
+
+    fn resolve_alias(&self, alias: &str) -> Result<Option<String>> {
+        let versions = self.list_remote()?;
+
+        match alias {
+            "latest" => {
+                // Return the first version (most recent)
+                Ok(versions.first().map(|v| {
+                    v.version
+                        .strip_prefix('v')
+                        .unwrap_or(&v.version)
+                        .to_string()
+                }))
+            }
+            "lts" => {
+                // Return the first LTS version
+                Ok(versions.iter().find(|v| v.lts.is_some()).map(|v| {
+                    v.version
+                        .strip_prefix('v')
+                        .unwrap_or(&v.version)
+                        .to_string()
+                }))
+            }
+            _ if alias.starts_with("lts-") => {
+                // lts-<codename> (e.g., lts-iron, lts-hydrogen)
+                let codename = alias.strip_prefix("lts-").unwrap().to_lowercase();
+                Ok(versions
+                    .iter()
+                    .find(|v| {
+                        v.lts
+                            .as_ref()
+                            .map(|lts| lts.to_lowercase() == codename)
+                            .unwrap_or(false)
+                    })
+                    .map(|v| {
+                        v.version
+                            .strip_prefix('v')
+                            .unwrap_or(&v.version)
+                            .to_string()
+                    }))
+            }
+            _ => Ok(None),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -213,5 +257,37 @@ mod tests {
         // 应该至少有一个 LTS 版本
         let has_lts = versions.iter().any(|v| v.lts.is_some());
         assert!(has_lts);
+    }
+
+    #[test]
+    #[ignore] // 需要网络
+    fn test_resolve_alias_latest() {
+        let result = NodeTool.resolve_alias("latest").unwrap();
+        assert!(result.is_some());
+        // Should not have v prefix
+        assert!(!result.as_ref().unwrap().starts_with('v'));
+    }
+
+    #[test]
+    #[ignore] // 需要网络
+    fn test_resolve_alias_lts() {
+        let result = NodeTool.resolve_alias("lts").unwrap();
+        assert!(result.is_some());
+        assert!(!result.as_ref().unwrap().starts_with('v'));
+    }
+
+    #[test]
+    #[ignore] // 需要网络
+    fn test_resolve_alias_lts_codename() {
+        // "iron" is Node 20 LTS codename
+        let result = NodeTool.resolve_alias("lts-iron").unwrap();
+        assert!(result.is_some());
+        assert!(result.unwrap().starts_with("20."));
+    }
+
+    #[test]
+    fn test_resolve_alias_unknown() {
+        let result = NodeTool.resolve_alias("foobar").unwrap();
+        assert!(result.is_none());
     }
 }

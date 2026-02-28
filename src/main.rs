@@ -91,6 +91,18 @@ enum Commands {
         /// Tool and version (e.g., node@20.11.0)
         spec: String,
     },
+
+    /// Upgrade a tool to the latest version
+    Upgrade {
+        /// Tool name (e.g., node)
+        tool: String,
+    },
+
+    /// Show available aliases for a tool
+    Alias {
+        /// Tool name (e.g., node)
+        tool: String,
+    },
 }
 
 fn vex_dir() -> PathBuf {
@@ -486,6 +498,98 @@ fn write_tool_version(file_path: &std::path::Path, tool_name: &str, version: &st
     Ok(())
 }
 
+fn upgrade_tool(tool_name: &str) -> Result<()> {
+    let tool = tools::get_tool(tool_name)?;
+    let latest = tools::resolve_fuzzy_version(tool.as_ref(), "latest")?;
+
+    let vex_dir = dirs::home_dir().unwrap().join(".vex");
+    let version_dir = vex_dir.join("toolchains").join(tool_name).join(&latest);
+
+    // Check if already on the latest
+    let current_link = vex_dir.join("current").join(tool_name);
+    if current_link.exists() {
+        if let Ok(target) = fs::read_link(&current_link) {
+            if let Some(current_ver) = target.file_name() {
+                if current_ver.to_string_lossy() == latest {
+                    println!("Already on the latest version: {} {}", tool_name, latest);
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    if version_dir.exists() {
+        // Already installed but not active — just switch
+        println!(
+            "Latest {} {} is already installed, switching...",
+            tool_name, latest
+        );
+        switcher::switch_version(tool.as_ref(), &latest)?;
+    } else {
+        println!("Upgrading {} to {}...", tool_name, latest);
+        installer::install(tool.as_ref(), &latest)?;
+        switcher::switch_version(tool.as_ref(), &latest)?;
+    }
+
+    Ok(())
+}
+
+fn show_aliases(tool_name: &str) -> Result<()> {
+    let tool = tools::get_tool(tool_name)?;
+
+    println!("{} aliases:", tool_name);
+    println!();
+
+    match tool_name {
+        "node" => {
+            print_alias(&*tool, "latest")?;
+            print_alias(&*tool, "lts")?;
+            // Show known LTS codenames from remote
+            let versions = tool.list_remote()?;
+            let mut seen = std::collections::HashSet::new();
+            for v in &versions {
+                if let Some(lts) = &v.lts {
+                    let codename = lts.to_lowercase();
+                    if seen.insert(codename.clone()) {
+                        let alias = format!("lts-{}", codename);
+                        let ver = v.version.strip_prefix('v').unwrap_or(&v.version);
+                        println!("  {:<16} -> {}", alias, ver);
+                    }
+                }
+            }
+        }
+        "go" => {
+            print_alias(&*tool, "latest")?;
+            println!(
+                "  {:<16}    (minor version matching, e.g., 1.23 -> latest 1.23.x)",
+                "<major>.<minor>"
+            );
+        }
+        "java" => {
+            print_alias(&*tool, "latest")?;
+            print_alias(&*tool, "lts")?;
+        }
+        "rust" => {
+            print_alias(&*tool, "latest")?;
+            print_alias(&*tool, "stable")?;
+        }
+        _ => {
+            println!("  (no aliases available)");
+        }
+    }
+
+    println!();
+    Ok(())
+}
+
+fn print_alias(tool: &dyn tools::Tool, alias: &str) -> Result<()> {
+    match tool.resolve_alias(alias)? {
+        Some(version) => println!("  {:<16} -> {}", alias, version),
+        None => println!("  {:<16} -> (not available)", alias),
+    }
+    Ok(())
+}
+
 fn auto_switch() -> Result<()> {
     let cwd = resolver::current_dir();
     let versions = resolver::resolve_versions(&cwd);
@@ -619,6 +723,12 @@ fn run() -> Result<()> {
             let file_path = dirs::home_dir().unwrap().join(".tool-versions");
             write_tool_version(&file_path, &tool_name, &resolved)?;
             println!("Set {}@{} in {}", tool_name, resolved, file_path.display());
+        }
+        Commands::Upgrade { tool } => {
+            upgrade_tool(&tool)?;
+        }
+        Commands::Alias { tool } => {
+            show_aliases(&tool)?;
         }
     }
 
