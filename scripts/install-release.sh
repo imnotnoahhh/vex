@@ -152,11 +152,30 @@ if [ -n "$RC_FILE" ]; then
 fi
 
 log "Installed vex $TAG_NAME to $INSTALL_PATH"
-log "Run 'vex --version' to verify installation."
 
+# Ask user whether to configure shell integration
 if [ -n "$RC_FILE" ]; then
-  log "Reload your shell config to use vex:"
-  log "  source $RC_FILE"
+  HOOK_LINE="eval \"\$(vex env $CURRENT_SHELL)\""
+
+  if grep -Fqs "$HOOK_LINE" "$RC_FILE"; then
+    log "Shell integration already configured in $RC_FILE"
+  elif [ -t 0 ] || [ -e /dev/tty ]; then
+    printf 'Configure shell integration in %s? [Y/n] ' "$RC_FILE"
+    read -r REPLY < /dev/tty 2>/dev/null || REPLY="n"
+    case "$REPLY" in
+      [nN]*)
+        log "Skipped. Run 'vex init' later to set up shell integration."
+        ;;
+      *)
+        printf '\n%s\n' "$HOOK_LINE" >> "$RC_FILE"
+        log "Added shell integration to $RC_FILE"
+        log "Reload to activate:"
+        log "  source $RC_FILE"
+        ;;
+    esac
+  else
+    log "Run 'vex init' to set up shell integration."
+  fi
 else
-  log "Add $INSTALL_DIR to your PATH manually to use vex."
+  log "Run 'vex init' to set up shell integration."
 fi
