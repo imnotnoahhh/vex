@@ -7,6 +7,7 @@ use std::path::PathBuf;
 mod downloader;
 mod error;
 mod installer;
+mod lock;
 mod resolver;
 mod shell;
 mod switcher;
