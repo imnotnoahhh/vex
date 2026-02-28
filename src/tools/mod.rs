@@ -1,4 +1,5 @@
 use crate::error::Result;
+use owo_colors::OwoColorize;
 
 pub mod go;
 pub mod java;
@@ -92,7 +93,10 @@ pub fn resolve_fuzzy_version(tool: &dyn Tool, partial: &str) -> Result<String> {
     }
 
     // Partial version — query remote and prefix-match
-    println!("Resolving {}@{}...", tool.name(), partial);
+    println!(
+        "{}...",
+        format!("Resolving {}@{}", tool.name(), partial).cyan()
+    );
     let versions = tool.list_remote()?;
     let prefix = format!("{}.", normalized);
 
