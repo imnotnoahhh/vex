@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-02-28
+
 ### Added
 
 - **Version aliases** — `latest`, `lts`, `lts-<codename>` (Node), `stable` (Rust), minor version matching (Go `1.23` → latest `1.23.x`)
@@ -26,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added documentation notes for Go/Rust upstream remote-list limits and contributor-facing doc organization rules.
 - Added GitHub Releases installation guidance to README, alongside the existing source-build installation path.
 - Added a one-line release installer script (`scripts/install-release.sh`) that downloads the matching macOS artifact and updates shell PATH config.
+- Clarified uninstall instructions in README with specific shell config lines to remove and binary cleanup steps.
 
 ## [0.1.0] - 2026-02-27
 
