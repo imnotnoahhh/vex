@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use dialoguer::{theme::ColorfulTheme, Select};
 use indicatif::{ProgressBar, ProgressStyle};
+use owo_colors::OwoColorize;
 use std::fs;
 use std::path::PathBuf;
 
@@ -125,9 +126,16 @@ fn init_vex() -> Result<()> {
         fs::write(&config_path, "# vex configuration\n")?;
     }
 
-    println!("✓ Created directory structure at {}", vex_dir.display());
+    println!(
+        "{} Created directory structure at {}",
+        "✓".green(),
+        vex_dir.display().to_string().dimmed()
+    );
     println!();
-    println!("Run this to activate vex (auto-switching on cd):");
+    println!(
+        "{}",
+        "Run this to activate vex (auto-switching on cd):".dimmed()
+    );
     println!();
     println!("  echo 'eval \"$(vex env zsh)\"' >> ~/.zshrc && source ~/.zshrc");
     println!();
@@ -210,9 +218,9 @@ fn show_current() -> Result<()> {
     let current_dir = vex_dir.join("current");
 
     if !current_dir.exists() {
-        println!("No tools activated yet.");
+        println!("{}", "No tools activated yet.".dimmed());
         println!();
-        println!("Use 'vex install <tool>' to install a tool.");
+        println!("{}", "Use 'vex install <tool>' to install a tool.".dimmed());
         return Ok(());
     }
 
@@ -231,20 +239,20 @@ fn show_current() -> Result<()> {
     }
 
     if tools.is_empty() {
-        println!("No tools activated yet.");
+        println!("{}", "No tools activated yet.".dimmed());
         println!();
-        println!("Use 'vex install <tool>' to install a tool.");
+        println!("{}", "Use 'vex install <tool>' to install a tool.".dimmed());
         return Ok(());
     }
 
     tools.sort_by(|a, b| a.0.cmp(&b.0));
 
     println!();
-    println!("Current active versions:");
+    println!("{}", "Current active versions:".bold());
     println!();
 
     for (tool, version) in tools {
-        println!("  {} → {}", tool, version);
+        println!("  {} → {}", tool.yellow(), version.cyan());
     }
 
     println!();
@@ -292,7 +300,12 @@ fn uninstall(tool_name: &str, version: &str) -> Result<()> {
         }
     }
 
-    println!("✓ Uninstalled {} {}", tool_name, version);
+    println!(
+        "{} Uninstalled {} {}",
+        "✓".green(),
+        tool_name.yellow(),
+        version.yellow()
+    );
 
     Ok(())
 }
@@ -431,7 +444,12 @@ fn list_remote(tool_name: &str, show_all: bool, use_cache: bool) -> Result<()> {
             .unwrap_or(selected_version);
         let resolved = tools::resolve_fuzzy_version(tool.as_ref(), version)?;
         println!();
-        println!("Installing {}@{}...", tool_name, resolved);
+        println!(
+            "{} {}@{}...",
+            "Installing".cyan(),
+            tool_name.yellow(),
+            resolved.yellow()
+        );
         installer::install(tool.as_ref(), &resolved)?;
         switcher::switch_version(tool.as_ref(), &resolved)?;
     }
