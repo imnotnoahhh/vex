@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-03-01
+
+### Fixed
+
+- **Uninstall symlink cleanup** — `vex uninstall` now removes stale `current/` and `bin/` symlinks when uninstalling the active version, preventing dangling links
+- **Go verify hint** — `vex use go@x` now prints `go version` instead of incorrect `go --version`
+- **Rust complete toolchain** — Rust installation now includes all components (rustc, rustdoc, cargo, rustfmt, cargo-fmt, cargo-clippy, clippy-driver, rust-analyzer, rust-gdb, rust-gdbgui, rust-lldb) with proper `post_install` hook that links rust-std to sysroot and shared libraries for clippy/rustfmt/rust-analyzer
+- **Java complete binaries** — Expanded Java `bin_names()` from 3 to all 30 JDK executables shipped by Eclipse Temurin
+- **Rust missing binaries** — Added rustdoc, clippy-driver, rust-gdb, rust-gdbgui, rust-lldb to Rust `bin_names()` and `bin_paths()`
+
+### Added
+
+- **`post_install` hook** — Tool trait now supports a `post_install()` method for tool-specific setup after extraction (used by Rust for sysroot and library linking)
+
 ## [0.1.3] - 2026-03-01
 
 ### Added
