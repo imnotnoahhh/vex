@@ -267,21 +267,30 @@ fn uninstall(tool_name: &str, version: &str) -> Result<()> {
 
     // 检查是否是当前激活的版本
     let current_link = vex_dir.join("current").join(tool_name);
-    if current_link.exists() {
+    let is_active = if current_link.exists() {
         if let Ok(target) = fs::read_link(&current_link) {
-            if target == version_dir {
-                println!("Warning: This is the currently active version.");
-                println!("The symlinks in ~/.vex/bin/ will be broken after uninstall.");
-                println!(
-                    "Use 'vex use {}@<version>' to switch to another version.",
-                    tool_name
-                );
-            }
+            target == version_dir
+        } else {
+            false
         }
-    }
+    } else {
+        false
+    };
 
     // 删除版本目录
     fs::remove_dir_all(&version_dir)?;
+
+    // 清理当前激活版本的符号链接
+    if is_active {
+        let _ = fs::remove_file(&current_link);
+
+        let tool = tools::get_tool(tool_name)?;
+        let bin_dir = vex_dir.join("bin");
+        for (bin_name, _) in tool.bin_paths() {
+            let bin_link = bin_dir.join(bin_name);
+            let _ = fs::remove_file(&bin_link);
+        }
+    }
 
     println!("✓ Uninstalled {} {}", tool_name, version);
 
