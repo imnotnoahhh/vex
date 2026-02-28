@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-02-28
+
+### Fixed
+
+- **Node.js corepack support** — Added `corepack` to `bin_names()` so vex now creates symlinks for the corepack binary shipped with Node.js v16+, enabling `corepack enable pnpm/yarn`
+- **Install script JSON parsing** — Fixed sed patterns to handle spaces in GitHub API JSON responses (`"key": "value"` instead of `"key":"value"`)
+- **Install script archive format** — Updated grep pattern to match both `.tar.gz` and `.tar.xz` files (cargo-dist produces `.tar.xz`)
+- **Install script silent exit** — Added `|| true` to grep pipeline to prevent `pipefail` from causing silent script termination when no assets match
+
+### Changed
+
+- **Install path** — Changed default installation directory from `~/.cargo/bin` to `~/.local/bin` following XDG standard, avoiding semantic confusion with Rust toolchain
+- **Shell detection** — Install script now detects current shell (`$SHELL`) and only updates the appropriate rc file (`.zshrc` for zsh, `.bash_profile`/`.bashrc` for bash) instead of modifying all shell configs
+
 ## [0.1.1] - 2026-02-28
 
 ### Added
