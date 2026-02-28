@@ -54,7 +54,7 @@
 
 #### One-line installer (Recommended)
 
-Automatically downloads the correct prebuilt binary for your macOS architecture (`arm64`/`x86_64`), installs to `~/.cargo/bin/vex`, and updates shell PATH in `~/.zshrc`, `~/.bashrc`, and `~/.bash_profile`:
+Automatically downloads the correct prebuilt binary for your macOS architecture (`arm64`/`x86_64`), installs to `~/.local/bin/vex`, and updates your shell PATH configuration:
 
 ```bash
 # Latest release
@@ -83,12 +83,12 @@ Extract and install:
 
 ```bash
 tar -xzf vex-*.tar.gz
-mkdir -p ~/.cargo/bin
-cp vex-*/vex ~/.cargo/bin/vex
-chmod +x ~/.cargo/bin/vex
+mkdir -p ~/.local/bin
+cp vex-*/vex ~/.local/bin/vex
+chmod +x ~/.local/bin/vex
 
 # Add to PATH if not already present
-echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.zshrc
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
@@ -97,7 +97,7 @@ source ~/.zshrc
 ```bash
 git clone https://github.com/imnotnoahhh/vex.git
 cd vex
-cargo build --release && cp target/release/vex ~/.cargo/bin/vex
+cargo build --release && cp target/release/vex ~/.local/bin/vex
 ```
 
 Verify installation:
