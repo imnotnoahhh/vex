@@ -281,9 +281,13 @@ macOS only for now.
 **How to uninstall vex?**
 
 ```bash
-# Remove shell hook from ~/.zshrc
-# Then:
+# 1. Remove these lines from ~/.zshrc (or ~/.bashrc):
+#    eval "$(vex env zsh)"
+#    export PATH="$HOME/.vex/bin:$PATH"
+
+# 2. Remove vex data and binary
 rm -rf ~/.vex
+rm -f ~/.cargo/bin/vex
 ```
 
 ## Development
