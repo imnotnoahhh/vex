@@ -112,6 +112,9 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     fs::create_dir_all(&toolchains_dir)?;
     fs::rename(&extracted_dir, &final_dir)?;
 
+    // 5.5. 运行 post-install 钩子
+    tool.post_install(&final_dir, arch)?;
+
     // 6. 安装成功，解除清理守卫并手动清理临时文件
     guard.disarm();
     let _ = fs::remove_file(&archive_path);
