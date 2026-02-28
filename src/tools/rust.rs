@@ -76,7 +76,14 @@ impl Tool for RustTool {
     }
 
     fn bin_names(&self) -> Vec<&str> {
-        vec!["rustc", "cargo", "rustfmt", "cargo-fmt", "cargo-clippy"]
+        vec![
+            "rustc",
+            "cargo",
+            "rustfmt",
+            "cargo-fmt",
+            "cargo-clippy",
+            "rust-analyzer",
+        ]
     }
 
     fn bin_subpath(&self) -> &str {
@@ -84,13 +91,13 @@ impl Tool for RustTool {
     }
 
     fn bin_paths(&self) -> Vec<(&str, &str)> {
-        // Rust tarball 中 rustc 和 cargo 在不同子目录
         vec![
             ("rustc", "rustc/bin"),
             ("cargo", "cargo/bin"),
             ("rustfmt", "rustfmt-preview/bin"),
             ("cargo-fmt", "rustfmt-preview/bin"),
             ("cargo-clippy", "clippy-preview/bin"),
+            ("rust-analyzer", "rust-analyzer-preview/bin"),
         ]
     }
 
@@ -148,10 +155,10 @@ impl Tool for RustTool {
             unix_fs::symlink(&std_src, &std_dst)?;
         }
 
-        // 2. 链接 rustc/lib 到 clippy-preview/lib 和 rustfmt-preview/lib
-        //    这些工具通过 @rpath (../lib/) 查找 librustc_driver
+        // 2. 链接 rustc/lib 到各组件目录
+        //    clippy/rustfmt/rust-analyzer 通过 @rpath (../lib/) 查找 librustc_driver
         let rustc_lib = install_dir.join("rustc/lib");
-        for component in &["clippy-preview", "rustfmt-preview"] {
+        for component in &["clippy-preview", "rustfmt-preview", "rust-analyzer-preview"] {
             let lib_link = install_dir.join(component).join("lib");
             if rustc_lib.exists() && !lib_link.exists() {
                 unix_fs::symlink(&rustc_lib, &lib_link)?;
@@ -176,7 +183,14 @@ mod tests {
     fn test_bin_names() {
         assert_eq!(
             RustTool.bin_names(),
-            vec!["rustc", "cargo", "rustfmt", "cargo-fmt", "cargo-clippy"]
+            vec![
+                "rustc",
+                "cargo",
+                "rustfmt",
+                "cargo-fmt",
+                "cargo-clippy",
+                "rust-analyzer",
+            ]
         );
     }
 
@@ -196,6 +210,7 @@ mod tests {
                 ("rustfmt", "rustfmt-preview/bin"),
                 ("cargo-fmt", "rustfmt-preview/bin"),
                 ("cargo-clippy", "clippy-preview/bin"),
+                ("rust-analyzer", "rust-analyzer-preview/bin"),
             ]
         );
     }
