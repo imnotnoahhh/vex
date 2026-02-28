@@ -49,7 +49,12 @@ fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<
 
     println!("✓ Switched {} to version {}", tool.name(), version);
     println!();
-    println!("Verify with: {} --version", tool.bin_names()[0]);
+    let verify_flag = if tool.name() == "go" {
+        "version"
+    } else {
+        "--version"
+    };
+    println!("Verify with: {} {}", tool.bin_names()[0], verify_flag);
 
     Ok(())
 }
@@ -133,13 +138,20 @@ mod tests {
     fn test_switch_rust_separate_bin_paths() {
         let base = make_temp_dir("rust_paths");
 
-        // Rust 的 rustc 和 cargo 在不同子目录
+        // Rust 的各组件在不同子目录
         let rustc_dir = base.join("toolchains/rust/1.93.1/rustc/bin");
         let cargo_dir = base.join("toolchains/rust/1.93.1/cargo/bin");
+        let rustfmt_dir = base.join("toolchains/rust/1.93.1/rustfmt-preview/bin");
+        let clippy_dir = base.join("toolchains/rust/1.93.1/clippy-preview/bin");
         fs::create_dir_all(&rustc_dir).unwrap();
         fs::create_dir_all(&cargo_dir).unwrap();
+        fs::create_dir_all(&rustfmt_dir).unwrap();
+        fs::create_dir_all(&clippy_dir).unwrap();
         fs::write(rustc_dir.join("rustc"), "fake").unwrap();
         fs::write(cargo_dir.join("cargo"), "fake").unwrap();
+        fs::write(rustfmt_dir.join("rustfmt"), "fake").unwrap();
+        fs::write(rustfmt_dir.join("cargo-fmt"), "fake").unwrap();
+        fs::write(clippy_dir.join("cargo-clippy"), "fake").unwrap();
 
         let result = switch_version_in(&RustTool, "1.93.1", &base);
         assert!(result.is_ok());
@@ -149,6 +161,11 @@ mod tests {
         let cargo_target = fs::read_link(base.join("bin/cargo")).unwrap();
         assert!(rustc_target.to_string_lossy().contains("rustc/bin/rustc"));
         assert!(cargo_target.to_string_lossy().contains("cargo/bin/cargo"));
+
+        // 验证 clippy 和 rustfmt 链接
+        assert!(base.join("bin/rustfmt").exists());
+        assert!(base.join("bin/cargo-fmt").exists());
+        assert!(base.join("bin/cargo-clippy").exists());
 
         let _ = fs::remove_dir_all(&base);
     }
