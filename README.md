@@ -174,10 +174,10 @@ vex install
 
 | Tool | Binaries | Source |
 |------|----------|--------|
-| Node.js | node, npm, npx | Official binaries |
+| Node.js | node, npm, npx, corepack | Official binaries |
 | Go | go, gofmt | Official binaries |
-| Java | java, javac, jar | Eclipse Temurin JDK |
-| Rust | rustc, cargo | Official stable binaries |
+| Java | java, javac, jar + 27 more JDK tools | Eclipse Temurin JDK |
+| Rust | rustc, rustdoc, cargo, rustfmt, clippy, rust-analyzer + 5 more | Official stable binaries |
 
 ## Fuzzy Version Matching
 
@@ -287,7 +287,7 @@ macOS only for now.
 
 # 2. Remove vex data and binary
 rm -rf ~/.vex
-rm -f ~/.cargo/bin/vex
+rm -f ~/.local/bin/vex
 ```
 
 ## Development
