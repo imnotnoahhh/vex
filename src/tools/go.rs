@@ -112,6 +112,43 @@ impl Tool for GoTool {
 
         Ok(None)
     }
+
+    fn resolve_alias(&self, alias: &str) -> Result<Option<String>> {
+        let versions = self.list_remote()?;
+
+        match alias {
+            "latest" => {
+                // Return the first version (most recent)
+                Ok(versions.first().map(|v| v.version.clone()))
+            }
+            _ => {
+                // Check if it's a minor version pattern (e.g., "1.23" or "1.x")
+                if alias.contains('.') {
+                    let parts: Vec<&str> = alias.split('.').collect();
+                    if parts.len() == 2 {
+                        let major = parts[0];
+                        let minor = parts[1];
+
+                        // Match "1.23" or "1.x"
+                        if minor == "x" || minor.chars().all(|c| c.is_ascii_digit()) {
+                            let prefix = if minor == "x" {
+                                format!("{}.", major)
+                            } else {
+                                format!("{}.{}.", major, minor)
+                            };
+
+                            // Find the first version matching the prefix
+                            return Ok(versions
+                                .iter()
+                                .find(|v| v.version.starts_with(&prefix))
+                                .map(|v| v.version.clone()));
+                        }
+                    }
+                }
+                Ok(None)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -170,5 +207,31 @@ mod tests {
         // 版本号应该不带 "go" 前缀（如 1.23.5）
         assert!(!versions[0].version.starts_with("go"));
         assert!(versions[0].version.contains('.'));
+    }
+
+    #[test]
+    #[ignore] // 需要网络
+    fn test_resolve_alias_latest() {
+        let result = GoTool.resolve_alias("latest").unwrap();
+        assert!(result.is_some());
+        assert!(result.unwrap().contains('.'));
+    }
+
+    #[test]
+    #[ignore] // 需要网络
+    fn test_resolve_alias_minor_version() {
+        // "1.23" should resolve to latest 1.23.x
+        let result = GoTool.resolve_alias("1.23").unwrap();
+        assert!(result.is_some());
+        assert!(result.unwrap().starts_with("1.23."));
+    }
+
+    #[test]
+    fn test_resolve_alias_unknown() {
+        let result = GoTool.resolve_alias("foobar").unwrap();
+        assert!(result.is_none());
+
+        let result = GoTool.resolve_alias("lts").unwrap();
+        assert!(result.is_none());
     }
 }
