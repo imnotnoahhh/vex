@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-03-01
+
+### Added
+
+- **Shell integration prompt** — Install script now asks whether to configure shell hook (`eval "$(vex env ...)"`) after installation, eliminating the need for a separate `vex init` step
+
 ## [0.1.2] - 2026-02-28
 
 ### Fixed
