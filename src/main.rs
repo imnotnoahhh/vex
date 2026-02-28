@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use dialoguer::{theme::ColorfulTheme, Select};
+use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
 use std::path::PathBuf;
 
@@ -135,8 +136,17 @@ fn parse_spec(spec: &str) -> Result<(String, String)> {
 fn interactive_install(tool_name: &str) -> Result<()> {
     let tool = tools::get_tool(tool_name)?;
 
-    println!("Fetching available versions of {}...", tool_name);
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .unwrap(),
+    );
+    spinner.set_message(format!("Fetching available versions of {}...", tool_name));
+    spinner.enable_steady_tick(std::time::Duration::from_millis(100));
+
     let versions = tool.list_remote()?;
+    spinner.finish_and_clear();
 
     println!();
     println!("Select a version to install:");
@@ -313,8 +323,17 @@ fn list_installed(tool_name: &str) -> Result<()> {
 fn list_remote(tool_name: &str, show_all: bool) -> Result<()> {
     let tool = tools::get_tool(tool_name)?;
 
-    println!("Fetching available versions of {}...", tool_name);
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .unwrap(),
+    );
+    spinner.set_message(format!("Fetching available versions of {}...", tool_name));
+    spinner.enable_steady_tick(std::time::Duration::from_millis(100));
+
     let versions = tool.list_remote()?;
+    spinner.finish_and_clear();
 
     if show_all {
         println!();
