@@ -4,6 +4,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
 use std::path::PathBuf;
 
+mod cache;
 mod downloader;
 mod error;
 mod installer;
@@ -58,6 +59,10 @@ enum Commands {
         /// Show all versions (default: interactive top 20)
         #[arg(long)]
         all: bool,
+
+        /// Skip cache and fetch fresh data
+        #[arg(long)]
+        no_cache: bool,
     },
 
     /// Show current active versions
@@ -146,7 +151,7 @@ fn interactive_install(tool_name: &str) -> Result<()> {
     spinner.set_message(format!("Fetching available versions of {}...", tool_name));
     spinner.enable_steady_tick(std::time::Duration::from_millis(100));
 
-    let versions = tool.list_remote()?;
+    let versions = fetch_versions_cached(tool.as_ref(), true)?;
     spinner.finish_and_clear();
 
     println!();
@@ -321,7 +326,25 @@ fn list_installed(tool_name: &str) -> Result<()> {
     Ok(())
 }
 
-fn list_remote(tool_name: &str, show_all: bool) -> Result<()> {
+/// Fetch remote versions with optional cache support.
+/// When use_cache is true, checks the cache first and writes back on miss.
+fn fetch_versions_cached(tool: &dyn tools::Tool, use_cache: bool) -> Result<Vec<tools::Version>> {
+    let vex = vex_dir();
+    let remote_cache = cache::RemoteCache::new(&vex);
+    let ttl = cache::read_cache_ttl(&vex);
+
+    if use_cache {
+        if let Some(cached) = remote_cache.get_cached_versions(tool.name(), ttl) {
+            return Ok(cached);
+        }
+    }
+
+    let versions = tool.list_remote()?;
+    remote_cache.set_cached_versions(tool.name(), &versions);
+    Ok(versions)
+}
+
+fn list_remote(tool_name: &str, show_all: bool, use_cache: bool) -> Result<()> {
     let tool = tools::get_tool(tool_name)?;
 
     let spinner = ProgressBar::new_spinner();
@@ -333,7 +356,7 @@ fn list_remote(tool_name: &str, show_all: bool) -> Result<()> {
     spinner.set_message(format!("Fetching available versions of {}...", tool_name));
     spinner.enable_steady_tick(std::time::Duration::from_millis(100));
 
-    let versions = tool.list_remote()?;
+    let versions = fetch_versions_cached(tool.as_ref(), use_cache)?;
     spinner.finish_and_clear();
 
     if show_all {
@@ -548,8 +571,12 @@ fn run() -> Result<()> {
         Commands::List { tool } => {
             list_installed(&tool)?;
         }
-        Commands::ListRemote { tool, all } => {
-            list_remote(&tool, all)?;
+        Commands::ListRemote {
+            tool,
+            all,
+            no_cache,
+        } => {
+            list_remote(&tool, all, !no_cache)?;
         }
         Commands::Current => {
             show_current()?;
