@@ -62,13 +62,26 @@ src/
 
 ### Branch Strategy
 
-- `main` — production branch, all PRs merge here
-- Feature branches follow conventional commit types:
-  - `feat/xxx` — new features
-  - `fix/xxx` — bug fixes
-  - `docs/xxx` — documentation changes
-  - `chore/xxx` — maintenance tasks (dependencies, configs)
-  - `ci/xxx` — CI/CD changes
+**Permanent Branch:**
+- `main` — production branch, protected, only accepts PRs
+  - Every merge to `main` should be release-ready
+  - Tagged with version numbers (e.g., `v0.1.1`)
+  - CI runs on every push
+
+**Temporary Branches:**
+Feature branches are created from `main` and deleted after merging. Branch names must match conventional commit types:
+
+- `feat/xxx` — new features (e.g., `feat/add-python-support`)
+- `fix/xxx` — bug fixes (e.g., `fix/node-checksum-validation`)
+- `docs/xxx` — documentation changes (e.g., `docs/update-installation-guide`)
+- `chore/xxx` — maintenance tasks (e.g., `chore/bump-dependencies`)
+- `ci/xxx` — CI/CD changes (e.g., `ci/add-coverage-report`)
+
+**Workflow:**
+1. Create a branch from `main`: `git checkout -b feat/your-feature`
+2. Make changes and commit with conventional commit messages
+3. Push and open a PR to `main`
+4. After merge, the branch is automatically deleted
 
 ### Conventional Commits
 
