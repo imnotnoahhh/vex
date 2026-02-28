@@ -143,15 +143,18 @@ mod tests {
         let cargo_dir = base.join("toolchains/rust/1.93.1/cargo/bin");
         let rustfmt_dir = base.join("toolchains/rust/1.93.1/rustfmt-preview/bin");
         let clippy_dir = base.join("toolchains/rust/1.93.1/clippy-preview/bin");
+        let analyzer_dir = base.join("toolchains/rust/1.93.1/rust-analyzer-preview/bin");
         fs::create_dir_all(&rustc_dir).unwrap();
         fs::create_dir_all(&cargo_dir).unwrap();
         fs::create_dir_all(&rustfmt_dir).unwrap();
         fs::create_dir_all(&clippy_dir).unwrap();
+        fs::create_dir_all(&analyzer_dir).unwrap();
         fs::write(rustc_dir.join("rustc"), "fake").unwrap();
         fs::write(cargo_dir.join("cargo"), "fake").unwrap();
         fs::write(rustfmt_dir.join("rustfmt"), "fake").unwrap();
         fs::write(rustfmt_dir.join("cargo-fmt"), "fake").unwrap();
         fs::write(clippy_dir.join("cargo-clippy"), "fake").unwrap();
+        fs::write(analyzer_dir.join("rust-analyzer"), "fake").unwrap();
 
         let result = switch_version_in(&RustTool, "1.93.1", &base);
         assert!(result.is_ok());
@@ -162,10 +165,11 @@ mod tests {
         assert!(rustc_target.to_string_lossy().contains("rustc/bin/rustc"));
         assert!(cargo_target.to_string_lossy().contains("cargo/bin/cargo"));
 
-        // 验证 clippy 和 rustfmt 链接
+        // 验证 clippy、rustfmt、rust-analyzer 链接
         assert!(base.join("bin/rustfmt").exists());
         assert!(base.join("bin/cargo-fmt").exists());
         assert!(base.join("bin/cargo-clippy").exists());
+        assert!(base.join("bin/rust-analyzer").exists());
 
         let _ = fs::remove_dir_all(&base);
     }

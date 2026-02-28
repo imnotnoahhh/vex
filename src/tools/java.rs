@@ -105,7 +105,38 @@ impl Tool for JavaTool {
     }
 
     fn bin_names(&self) -> Vec<&str> {
-        vec!["java", "javac", "jar"]
+        vec![
+            "java",
+            "javac",
+            "jar",
+            "javadoc",
+            "javap",
+            "jcmd",
+            "jconsole",
+            "jdb",
+            "jdeprscan",
+            "jdeps",
+            "jfr",
+            "jhsdb",
+            "jimage",
+            "jinfo",
+            "jlink",
+            "jmap",
+            "jmod",
+            "jnativescan",
+            "jpackage",
+            "jps",
+            "jrunscript",
+            "jshell",
+            "jstack",
+            "jstat",
+            "jstatd",
+            "jwebserver",
+            "keytool",
+            "rmiregistry",
+            "serialver",
+            "jarsigner",
+        ]
     }
 
     fn bin_subpath(&self) -> &str {
@@ -165,7 +196,14 @@ mod tests {
 
     #[test]
     fn test_bin_names() {
-        assert_eq!(JavaTool.bin_names(), vec!["java", "javac", "jar"]);
+        let names = JavaTool.bin_names();
+        assert!(names.contains(&"java"));
+        assert!(names.contains(&"javac"));
+        assert!(names.contains(&"jar"));
+        assert!(names.contains(&"javadoc"));
+        assert!(names.contains(&"jshell"));
+        assert!(names.contains(&"keytool"));
+        assert_eq!(names.len(), 30);
     }
 
     #[test]
@@ -176,14 +214,11 @@ mod tests {
     #[test]
     fn test_bin_paths_default() {
         let paths = JavaTool.bin_paths();
-        assert_eq!(
-            paths,
-            vec![
-                ("java", "Contents/Home/bin"),
-                ("javac", "Contents/Home/bin"),
-                ("jar", "Contents/Home/bin"),
-            ]
-        );
+        // All binaries share the same subpath
+        assert_eq!(paths.len(), 30);
+        for (_, subpath) in &paths {
+            assert_eq!(*subpath, "Contents/Home/bin");
+        }
     }
 
     #[test]
