@@ -49,7 +49,12 @@ fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<
 
     println!("✓ Switched {} to version {}", tool.name(), version);
     println!();
-    println!("Verify with: {} --version", tool.bin_names()[0]);
+    let verify_flag = if tool.name() == "go" {
+        "version"
+    } else {
+        "--version"
+    };
+    println!("Verify with: {} {}", tool.bin_names()[0], verify_flag);
 
     Ok(())
 }
