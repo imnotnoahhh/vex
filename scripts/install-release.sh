@@ -81,17 +81,18 @@ fi
 log "Fetching release metadata..."
 RELEASE_JSON="$(curl -fsSL "$RELEASE_API_URL")" || fail "Failed to fetch release metadata from GitHub API"
 
-TAG_NAME="$(printf '%s' "$RELEASE_JSON" | tr ',' '\n' | sed -n 's/.*"tag_name":"\([^"]*\)".*/\1/p' | head -n 1)"
+TAG_NAME="$(printf '%s' "$RELEASE_JSON" | tr ',' '\n' | sed -n 's/.*"tag_name" *: *"\([^"]*\)".*/\1/p' | head -n 1)"
 [ -n "$TAG_NAME" ] || TAG_NAME="(unknown)"
 
 ASSET_URL="$(
   printf '%s' "$RELEASE_JSON" \
     | tr ',' '\n' \
-    | sed -n 's/.*"browser_download_url":"\([^"]*\)".*/\1/p' \
+    | sed -n 's/.*"browser_download_url" *: *"\([^"]*\)".*/\1/p' \
     | sed 's/\\\//\//g' \
     | grep "$TARGET_TRIPLE" \
-    | grep -E '\\.tar\\.gz$' \
-    | head -n 1
+    | grep -E '\\.tar\\.(gz|xz)$' \
+    | head -n 1 \
+    || true
 )"
 
 if [ -z "$ASSET_URL" ]; then
@@ -109,7 +110,7 @@ curl -fL --retry 3 --retry-delay 1 --output "$ARCHIVE_PATH" "$ASSET_URL" \
   || fail "Failed to download release asset"
 
 log "Extracting archive..."
-tar -xzf "$ARCHIVE_PATH" -C "$EXTRACT_DIR" || fail "Failed to extract archive"
+tar -xf "$ARCHIVE_PATH" -C "$EXTRACT_DIR" || fail "Failed to extract archive"
 
 VEX_BIN="$(find "$EXTRACT_DIR" -type f -name vex | head -n 1)"
 [ -n "$VEX_BIN" ] || fail "Could not find vex binary in extracted archive"
