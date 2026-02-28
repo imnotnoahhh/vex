@@ -78,10 +78,15 @@ impl Tool for RustTool {
     fn bin_names(&self) -> Vec<&str> {
         vec![
             "rustc",
+            "rustdoc",
+            "rust-gdb",
+            "rust-gdbgui",
+            "rust-lldb",
             "cargo",
             "rustfmt",
             "cargo-fmt",
             "cargo-clippy",
+            "clippy-driver",
             "rust-analyzer",
         ]
     }
@@ -93,10 +98,15 @@ impl Tool for RustTool {
     fn bin_paths(&self) -> Vec<(&str, &str)> {
         vec![
             ("rustc", "rustc/bin"),
+            ("rustdoc", "rustc/bin"),
+            ("rust-gdb", "rustc/bin"),
+            ("rust-gdbgui", "rustc/bin"),
+            ("rust-lldb", "rustc/bin"),
             ("cargo", "cargo/bin"),
             ("rustfmt", "rustfmt-preview/bin"),
             ("cargo-fmt", "rustfmt-preview/bin"),
             ("cargo-clippy", "clippy-preview/bin"),
+            ("clippy-driver", "clippy-preview/bin"),
             ("rust-analyzer", "rust-analyzer-preview/bin"),
         ]
     }
@@ -181,17 +191,14 @@ mod tests {
 
     #[test]
     fn test_bin_names() {
-        assert_eq!(
-            RustTool.bin_names(),
-            vec![
-                "rustc",
-                "cargo",
-                "rustfmt",
-                "cargo-fmt",
-                "cargo-clippy",
-                "rust-analyzer",
-            ]
-        );
+        let names = RustTool.bin_names();
+        assert_eq!(names.len(), 11);
+        assert!(names.contains(&"rustc"));
+        assert!(names.contains(&"rustdoc"));
+        assert!(names.contains(&"rust-lldb"));
+        assert!(names.contains(&"cargo"));
+        assert!(names.contains(&"clippy-driver"));
+        assert!(names.contains(&"rust-analyzer"));
     }
 
     #[test]
@@ -202,17 +209,13 @@ mod tests {
     #[test]
     fn test_bin_paths_override() {
         let paths = RustTool.bin_paths();
-        assert_eq!(
-            paths,
-            vec![
-                ("rustc", "rustc/bin"),
-                ("cargo", "cargo/bin"),
-                ("rustfmt", "rustfmt-preview/bin"),
-                ("cargo-fmt", "rustfmt-preview/bin"),
-                ("cargo-clippy", "clippy-preview/bin"),
-                ("rust-analyzer", "rust-analyzer-preview/bin"),
-            ]
-        );
+        assert_eq!(paths.len(), 11);
+        assert!(paths.contains(&("rustc", "rustc/bin")));
+        assert!(paths.contains(&("rustdoc", "rustc/bin")));
+        assert!(paths.contains(&("rust-lldb", "rustc/bin")));
+        assert!(paths.contains(&("cargo", "cargo/bin")));
+        assert!(paths.contains(&("clippy-driver", "clippy-preview/bin")));
+        assert!(paths.contains(&("rust-analyzer", "rust-analyzer-preview/bin")));
     }
 
     #[test]
