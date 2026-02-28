@@ -39,8 +39,12 @@
 - **Symlink-based switching** — version changes take effect instantly, no shim overhead
 - **Multi-language** — manage Node.js, Go, Java (Eclipse Temurin), Rust from one tool
 - **Fuzzy version matching** — `node@20` resolves to latest 20.x, `node@lts` to latest LTS
+- **Version aliases** — `latest`, `lts`, `lts-<codename>`, `stable`, minor version matching
+- **One-command upgrade** — `vex upgrade node` installs and switches to the latest version
 - **`.tool-versions` support** — per-project pinning, auto-switch on `cd`, batch install
 - **Interactive selection** — `vex install node` lets you pick from a version list
+- **Remote version cache** — cached for 5 min by default, configurable via `config.toml`
+- **Concurrent install protection** — file-based locking prevents parallel install corruption
 - **Checksum verification** — Node.js uses official SHA256 verification; Go/Java/Rust follow upstream checksum metadata availability
 - **macOS native** — supports both Apple Silicon and Intel macOS environments
 
@@ -123,6 +127,17 @@ vex install node@20          # → latest 20.x
 vex install node@lts         # → latest LTS
 vex install node@20.11.0     # → exact version
 
+# Version aliases
+vex install node@lts-iron    # → specific LTS codename
+vex install go@1.23          # → latest 1.23.x
+vex install rust@stable      # → latest stable
+
+# Upgrade to latest
+vex upgrade node
+
+# Show available aliases
+vex alias node
+
 # Switch versions
 vex use node@22
 
@@ -148,6 +163,9 @@ vex install
 | `vex list <tool>` | List installed versions | `vex list node` |
 | `vex list-remote <tool>` | List remote versions (interactive, latest 20) | `vex list-remote node` |
 | `vex list-remote <tool> --all` | List all remote versions | `vex list-remote node --all` |
+| `vex list-remote <tool> --no-cache` | List remote versions (skip cache) | `vex list-remote node --no-cache` |
+| `vex upgrade <tool>` | Upgrade to latest version | `vex upgrade node` |
+| `vex alias <tool>` | Show available version aliases | `vex alias node` |
 | `vex current` | Show active versions | `vex current` |
 | `vex uninstall <tool@version>` | Uninstall a version | `vex uninstall node@20.11.0` |
 | `vex env <shell>` | Output shell hook script | `vex env zsh` |
@@ -168,9 +186,21 @@ Version specs don't need to be exact:
 ```bash
 vex install node@20       # latest 20.x.x
 vex install node@20.11    # latest 20.11.x
-vex install node@lts      # latest LTS release
 vex install node@20.11.0  # exact version
 vex install java@21       # exact (Java uses single numbers)
+```
+
+## Version Aliases
+
+| Tool | Aliases |
+|------|---------|
+| Node.js | `latest`, `lts`, `lts-<codename>` (e.g. `lts-iron`) |
+| Go | `latest`, `<major>.<minor>` (e.g. `1.23` → latest 1.23.x) |
+| Java | `latest`, `lts` |
+| Rust | `latest`, `stable` |
+
+```bash
+vex alias node    # show all aliases and their resolved values
 ```
 
 ## `.tool-versions` Workflow
@@ -226,8 +256,9 @@ Switching versions just updates symlinks — instant and shell-restart-free.
 │   ├── java/
 │   └── rust/
 ├── current/        # Active version symlinks
-├── cache/          # Download cache
-└── config.toml
+├── cache/          # Download cache + remote version cache
+├── locks/          # Install lock files (concurrent protection)
+└── config.toml     # Configuration (e.g. cache_ttl_secs)
 ```
 
 ## FAQ
@@ -238,8 +269,8 @@ Go remote listings are constrained by upstream API policy and usually focus on a
 **Why does `vex list-remote rust` show limited choices?**
 Current Rust support reads `channel-rust-stable.toml` and only targets the stable channel's current release.
 
-**Why no `update` command?**
-vex is a version manager, not a package manager. Version numbers are immutable. To use a newer version, just install it: `vex install node@22`.
+**How do I upgrade to the latest version of a tool?**
+Use `vex upgrade <tool>`. It installs the latest version and switches to it automatically.
 
 **Can it coexist with nvm/fnm?**
 Technically yes, but not recommended — PATH conflicts are likely.
