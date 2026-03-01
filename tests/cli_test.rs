@@ -203,10 +203,20 @@ fn test_init_shows_eval_hint() {
 
 #[test]
 fn test_install_no_args_no_version_file() {
-    let output = vex_bin().arg("install").output().unwrap();
+    let temp_dir = std::env::temp_dir().join("vex_test_install_no_args");
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    std::fs::create_dir_all(&temp_dir).unwrap();
+
+    let output = vex_bin()
+        .arg("install")
+        .current_dir(&temp_dir)
+        .output()
+        .unwrap();
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("No version files found"));
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 // --- local / global 测试 ---
