@@ -33,6 +33,9 @@ pub enum VexError {
 
     #[error("Another vex process is installing {tool}@{version}. Please wait and try again.")]
     LockConflict { tool: String, version: String },
+
+    #[error("Could not determine home directory. Please set the HOME environment variable.")]
+    HomeDirectoryNotFound,
 }
 
 pub type Result<T> = std::result::Result<T, VexError>;
@@ -117,6 +120,15 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "Another vex process is installing node@20.11.0. Please wait and try again."
+        );
+    }
+
+    #[test]
+    fn test_error_display_home_directory_not_found() {
+        let err = VexError::HomeDirectoryNotFound;
+        assert_eq!(
+            err.to_string(),
+            "Could not determine home directory. Please set the HOME environment variable."
         );
     }
 }
