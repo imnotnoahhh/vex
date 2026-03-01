@@ -112,7 +112,31 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     let tar_gz = fs::File::open(&archive_path)?;
     let tar = GzDecoder::new(tar_gz);
     let mut archive = Archive::new(tar);
-    archive.unpack(&extract_dir)?;
+
+    // Validate and extract entries to prevent path traversal attacks
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?;
+
+        // Check for path traversal attempts (e.g., "../../../etc/passwd")
+        if path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+            return Err(VexError::Parse(format!(
+                "Archive contains unsafe path: {}. Path traversal detected.",
+                path.display()
+            )));
+        }
+
+        // Check for absolute paths
+        if path.is_absolute() {
+            return Err(VexError::Parse(format!(
+                "Archive contains absolute path: {}. Only relative paths are allowed.",
+                path.display()
+            )));
+        }
+
+        // Extract to the designated directory
+        entry.unpack_in(&extract_dir)?;
+    }
 
     // 4. 找到解压后的目录
     let entries = fs::read_dir(&extract_dir)?;
@@ -144,4 +168,57 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    #[test]
+    fn test_path_component_validation_parent_dir() {
+        // Test that we can detect parent directory components
+        let path = Path::new("../../../etc/passwd");
+        let has_parent_dir = path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir));
+        assert!(has_parent_dir, "Should detect parent directory component");
+    }
+
+    #[test]
+    fn test_path_component_validation_safe_relative() {
+        // Test that safe relative paths pass
+        let path = Path::new("node-v20.11.0/bin/node");
+        let has_parent_dir = path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir));
+        assert!(!has_parent_dir, "Safe relative path should not have ..");
+        assert!(!path.is_absolute(), "Should be relative");
+    }
+
+    #[test]
+    fn test_path_component_validation_absolute() {
+        // Test that absolute paths are detected
+        let path = Path::new("/etc/passwd");
+        assert!(path.is_absolute(), "Should detect absolute path");
+    }
+
+    #[test]
+    fn test_path_component_validation_mixed() {
+        // Test path with .. in the middle
+        let path = Path::new("foo/../bar/baz");
+        let has_parent_dir = path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir));
+        assert!(has_parent_dir, "Should detect .. in middle of path");
+    }
+
+    #[test]
+    fn test_path_component_validation_current_dir_ok() {
+        // Test that current directory (.) is allowed
+        let path = Path::new("./foo/bar");
+        let has_parent_dir = path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir));
+        assert!(!has_parent_dir, "Current directory component should be allowed");
+    }
 }
