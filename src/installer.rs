@@ -117,7 +117,10 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
         let path = entry.path()?;
 
         // Check for path traversal attempts (e.g., "../../../etc/passwd")
-        if path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        if path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
             return Err(VexError::Parse(format!(
                 "Archive contains unsafe path: {}. Path traversal detected.",
                 path.display()
@@ -217,6 +220,9 @@ mod tests {
         let has_parent_dir = path
             .components()
             .any(|c| matches!(c, std::path::Component::ParentDir));
-        assert!(!has_parent_dir, "Current directory component should be allowed");
+        assert!(
+            !has_parent_dir,
+            "Current directory component should be allowed"
+        );
     }
 }
