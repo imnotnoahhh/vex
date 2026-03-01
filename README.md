@@ -302,6 +302,29 @@ cargo build
 cargo test --all-features
 ```
 
+### Running Benchmarks
+
+Performance benchmarks are available to measure key operations:
+
+```bash
+# Run all benchmarks
+cargo bench
+
+# Run specific benchmark
+cargo bench bench_parse_tool_versions
+
+# Generate detailed reports (saved to target/criterion/)
+cargo bench -- --verbose
+```
+
+Benchmarked operations:
+- Version file parsing (`.tool-versions`)
+- Directory traversal for version resolution
+- Symlink creation and updates (version switching)
+- Cache read/write operations
+
+Note: Benchmarks are not run in CI to keep build times fast. Run them locally to measure performance improvements.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## License
