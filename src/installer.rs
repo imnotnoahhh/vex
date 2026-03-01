@@ -8,8 +8,10 @@ use std::fs;
 use std::path::PathBuf;
 use tar::Archive;
 
-fn vex_dir() -> PathBuf {
-    dirs::home_dir().unwrap().join(".vex")
+fn vex_dir() -> Result<PathBuf> {
+    dirs::home_dir()
+        .map(|p| p.join(".vex"))
+        .ok_or(VexError::HomeDirectoryNotFound)
 }
 
 /// 清理守卫：在安装失败时自动清理临时文件
@@ -52,7 +54,7 @@ impl Drop for CleanupGuard {
 
 pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     let arch = Arch::detect();
-    let vex = vex_dir();
+    let vex = vex_dir()?;
 
     // 0. 检查是否已安装
     let final_dir = vex.join("toolchains").join(tool.name()).join(version);

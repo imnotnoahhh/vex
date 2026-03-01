@@ -5,12 +5,14 @@ use std::fs;
 use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 
-fn vex_dir() -> PathBuf {
-    dirs::home_dir().unwrap().join(".vex")
+fn vex_dir() -> Result<PathBuf> {
+    dirs::home_dir()
+        .map(|p| p.join(".vex"))
+        .ok_or(VexError::HomeDirectoryNotFound)
 }
 
 pub fn switch_version(tool: &dyn Tool, version: &str) -> Result<()> {
-    switch_version_in(tool, version, &vex_dir())
+    switch_version_in(tool, version, &vex_dir()?)
 }
 
 fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<()> {

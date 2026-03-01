@@ -106,12 +106,14 @@ enum Commands {
     },
 }
 
-fn vex_dir() -> PathBuf {
-    dirs::home_dir().unwrap().join(".vex")
+fn vex_dir() -> Result<PathBuf> {
+    dirs::home_dir()
+        .map(|p| p.join(".vex"))
+        .ok_or(error::VexError::HomeDirectoryNotFound)
 }
 
 fn init_vex() -> Result<()> {
-    let vex_dir = vex_dir();
+    let vex_dir = vex_dir()?;
 
     // 创建目录结构
     fs::create_dir_all(vex_dir.join("cache"))?;
@@ -214,7 +216,7 @@ fn interactive_install(tool_name: &str) -> Result<()> {
 }
 
 fn show_current() -> Result<()> {
-    let vex_dir = dirs::home_dir().unwrap().join(".vex");
+    let vex_dir = vex_dir()?;
     let current_dir = vex_dir.join("current");
 
     if !current_dir.exists() {
@@ -261,7 +263,7 @@ fn show_current() -> Result<()> {
 }
 
 fn uninstall(tool_name: &str, version: &str) -> Result<()> {
-    let vex_dir = dirs::home_dir().unwrap().join(".vex");
+    let vex_dir = vex_dir()?;
     let version_dir = vex_dir.join("toolchains").join(tool_name).join(version);
 
     if !version_dir.exists() {
@@ -311,7 +313,7 @@ fn uninstall(tool_name: &str, version: &str) -> Result<()> {
 }
 
 fn list_installed(tool_name: &str) -> Result<()> {
-    let vex_dir = dirs::home_dir().unwrap().join(".vex");
+    let vex_dir = vex_dir()?;
     let toolchains_dir = vex_dir.join("toolchains").join(tool_name);
 
     if !toolchains_dir.exists() {
@@ -363,7 +365,7 @@ fn list_installed(tool_name: &str) -> Result<()> {
 /// Fetch remote versions with optional cache support.
 /// When use_cache is true, checks the cache first and writes back on miss.
 fn fetch_versions_cached(tool: &dyn tools::Tool, use_cache: bool) -> Result<Vec<tools::Version>> {
-    let vex = vex_dir();
+    let vex = vex_dir()?;
     let remote_cache = cache::RemoteCache::new(&vex);
     let ttl = cache::read_cache_ttl(&vex);
 
@@ -466,7 +468,7 @@ fn install_from_version_files() -> Result<()> {
         return Ok(());
     }
 
-    let vex_dir = dirs::home_dir().unwrap().join(".vex");
+    let vex_dir = vex_dir()?;
 
     for (tool_name, version) in &versions {
         let tool = match tools::get_tool(tool_name) {
@@ -529,7 +531,7 @@ fn upgrade_tool(tool_name: &str) -> Result<()> {
     let tool = tools::get_tool(tool_name)?;
     let latest = tools::resolve_fuzzy_version(tool.as_ref(), "latest")?;
 
-    let vex_dir = dirs::home_dir().unwrap().join(".vex");
+    let vex_dir = vex_dir()?;
     let version_dir = vex_dir.join("toolchains").join(tool_name).join(&latest);
 
     // Check if already on the latest
@@ -625,7 +627,7 @@ fn auto_switch() -> Result<()> {
         return Ok(());
     }
 
-    let vex_dir = dirs::home_dir().unwrap().join(".vex");
+    let vex_dir = vex_dir()?;
 
     for (tool_name, version) in &versions {
         // 检查工具是否支持
@@ -747,7 +749,9 @@ fn run() -> Result<()> {
             }
             let tool = tools::get_tool(&tool_name)?;
             let resolved = tools::resolve_fuzzy_version(tool.as_ref(), &version)?;
-            let file_path = dirs::home_dir().unwrap().join(".tool-versions");
+            let file_path = dirs::home_dir()
+                .ok_or(error::VexError::HomeDirectoryNotFound)?
+                .join(".tool-versions");
             write_tool_version(&file_path, &tool_name, &resolved)?;
             println!("Set {}@{} in {}", tool_name, resolved, file_path.display());
         }
@@ -830,7 +834,14 @@ mod tests {
 
     #[test]
     fn test_vex_dir() {
-        let dir = vex_dir();
+        let dir = vex_dir().unwrap();
         assert!(dir.ends_with(".vex"));
+    }
+
+    #[test]
+    fn test_vex_dir_error_handling() {
+        // This test verifies that vex_dir() returns Result
+        // In normal circumstances, it should succeed
+        assert!(vex_dir().is_ok());
     }
 }
