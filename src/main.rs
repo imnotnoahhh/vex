@@ -717,7 +717,10 @@ fn run_doctor() -> Result<()> {
         } else {
             println!("{}", "⚠ vex/bin not in PATH".yellow());
             println!("  Add this to your shell config:");
-            println!("  {}", "export PATH=\"$HOME/.vex/bin:$PATH\"".to_string().cyan());
+            println!(
+                "  {}",
+                "export PATH=\"$HOME/.vex/bin:$PATH\"".to_string().cyan()
+            );
             warnings += 1;
         }
     } else {
@@ -812,7 +815,8 @@ fn run_doctor() -> Result<()> {
             for entry in entries.filter_map(|e| e.ok()) {
                 if let Ok(target) = fs::read_link(entry.path()) {
                     if !target.exists() {
-                        broken_links.push(format!("current/{}", entry.file_name().to_string_lossy()));
+                        broken_links
+                            .push(format!("current/{}", entry.file_name().to_string_lossy()));
                     }
                 }
             }
