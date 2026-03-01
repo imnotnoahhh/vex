@@ -1,3 +1,8 @@
+//! 工具安装模块
+//!
+//! 负责下载、校验、解压和安装工具版本到 `~/.vex/toolchains/`。
+//! 包含磁盘空间检查、路径遍历防护和 `CleanupGuard` 自动清理机制。
+
 use crate::downloader::{download_with_retry, verify_checksum};
 use crate::error::{Result, VexError};
 use crate::lock::InstallLock;
@@ -9,7 +14,7 @@ use std::path::{Path, PathBuf};
 use sysinfo::Disks;
 use tar::Archive;
 
-/// Minimum required free space in bytes (500 MB)
+/// 安装前最低可用磁盘空间（500 MB）
 const MIN_FREE_SPACE_BYTES: u64 = 500 * 1024 * 1024;
 
 fn vex_dir() -> Result<PathBuf> {
@@ -18,7 +23,11 @@ fn vex_dir() -> Result<PathBuf> {
         .ok_or(VexError::HomeDirectoryNotFound)
 }
 
-/// Check if there is enough disk space available
+/// 检查磁盘可用空间是否充足
+///
+/// # 参数
+/// - `path` - 检查路径所在的磁盘
+/// - `required_bytes` - 需要的最小字节数
 fn check_disk_space(path: &Path, required_bytes: u64) -> Result<()> {
     let disks = Disks::new_with_refreshed_list();
 
@@ -40,7 +49,9 @@ fn check_disk_space(path: &Path, required_bytes: u64) -> Result<()> {
     Ok(())
 }
 
-/// 清理守卫：在安装失败时自动清理临时文件
+/// 清理守卫：安装失败时自动清理临时文件（RAII 模式）
+///
+/// 安装成功后调用 `disarm()` 解除守卫，否则在 `Drop` 时自动删除注册的临时路径。
 struct CleanupGuard {
     paths: Vec<PathBuf>,
     disarmed: bool,
@@ -78,6 +89,19 @@ impl Drop for CleanupGuard {
     }
 }
 
+/// 安装指定工具版本
+///
+/// 完整安装流程：检查重复 → 获取锁 → 检查磁盘 → 下载 → 校验 → 解压 → 移动 → post_install。
+///
+/// # 参数
+/// - `tool` - 工具实现
+/// - `version` - 版本号
+///
+/// # 错误
+/// - `VexError::LockConflict` - 另一个进程正在安装
+/// - `VexError::DiskSpace` - 磁盘空间不足
+/// - `VexError::Network` - 下载失败
+/// - `VexError::ChecksumMismatch` - 校验和不匹配
 pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     let arch = Arch::detect();
     let vex = vex_dir()?;

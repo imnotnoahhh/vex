@@ -1,18 +1,32 @@
+//! 安装锁模块
+//!
+//! 基于文件的排他锁，防止多个 vex 进程同时安装相同的工具版本。
+//! 使用 RAII 模式，锁在 [`InstallLock`] 销毁时自动释放并清理锁文件。
+
 use crate::error::{Result, VexError};
 use fs2::FileExt;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
-/// RAII-based install lock using file-based exclusive locking.
-/// Automatically releases the lock and cleans up the lock file on drop.
+/// RAII 风格的安装排他锁
+///
+/// 使用 `flock` 非阻塞排他锁，锁文件位于 `~/.vex/locks/<tool>-<version>.lock`。
+/// `Drop` 时自动释放锁并删除锁文件。
 pub struct InstallLock {
     file: File,
     path: PathBuf,
 }
 
 impl InstallLock {
-    /// Acquire an exclusive lock for installing a specific tool version.
-    /// Fails fast with LockConflict if another process holds the lock.
+    /// 获取指定工具版本的排他锁（非阻塞）
+    ///
+    /// # 参数
+    /// - `vex_dir` - vex 根目录（`~/.vex`）
+    /// - `tool` - 工具名称
+    /// - `version` - 版本号
+    ///
+    /// # 错误
+    /// - `VexError::LockConflict` - 锁已被其他进程占用
     pub fn acquire(vex_dir: &Path, tool: &str, version: &str) -> Result<Self> {
         let locks_dir = vex_dir.join("locks");
         fs::create_dir_all(&locks_dir)?;
