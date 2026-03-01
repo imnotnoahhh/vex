@@ -1,7 +1,13 @@
+//! Java (Eclipse Temurin JDK) 工具实现
+//!
+//! 使用 Adoptium API v3 查询版本，仅支持 JDK + HotSpot 组合。
+//! macOS JDK 目录结构特殊：`Contents/Home/bin/`。
+
 use crate::error::{Result, VexError};
 use crate::tools::{Arch, Tool, Version};
 use serde::Deserialize;
 
+/// Java (Eclipse Temurin JDK) 工具
 pub struct JavaTool;
 
 #[derive(Deserialize, Debug)]

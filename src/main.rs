@@ -1,3 +1,8 @@
+//! vex - macOS 二进制版本管理器
+//!
+//! 管理 Node.js、Go、Java、Rust 等语言的官方二进制发行版。
+//! 通过符号链接 + PATH 前置实现快速版本切换。
+
 use clap::{Parser, Subcommand};
 use dialoguer::{theme::ColorfulTheme, Select};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -17,6 +22,7 @@ mod tools;
 
 use error::Result;
 
+/// vex CLI 主结构体
 #[derive(Parser)]
 #[command(name = "vex", version)]
 #[command(about = "A fast version manager for macOS", long_about = None)]
@@ -25,6 +31,7 @@ struct Cli {
     command: Commands,
 }
 
+/// CLI 子命令定义
 #[derive(Subcommand)]
 enum Commands {
     /// Initialize vex directory structure
@@ -109,12 +116,14 @@ enum Commands {
     Doctor,
 }
 
+/// 获取 vex 根目录（~/.vex）
 fn vex_dir() -> Result<PathBuf> {
     dirs::home_dir()
         .map(|p| p.join(".vex"))
         .ok_or(error::VexError::HomeDirectoryNotFound)
 }
 
+/// 初始化 vex 目录结构和配置文件
 fn init_vex() -> Result<()> {
     let vex_dir = vex_dir()?;
 
@@ -148,6 +157,7 @@ fn init_vex() -> Result<()> {
     Ok(())
 }
 
+/// 解析 tool@version 格式的规格字符串
 fn parse_spec(spec: &str) -> Result<(String, String)> {
     let parts: Vec<&str> = spec.split('@').collect();
     if parts.len() == 2 {

@@ -1,3 +1,8 @@
+//! HTTP 下载与校验和验证模块
+//!
+//! 提供文件下载（带进度条）、SHA256 校验和验证、自动重试功能。
+//! 4xx 客户端错误不重试，服务端/网络错误最多重试 3 次。
+
 use crate::error::{Result, VexError};
 use indicatif::{ProgressBar, ProgressStyle};
 use sha2::{Digest, Sha256};
@@ -6,22 +11,22 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-/// HTTP connection timeout (30 seconds)
+/// HTTP 连接超时（30 秒）
 const CONNECT_TIMEOUT_SECS: u64 = 30;
 
-/// HTTP read timeout (5 minutes for large downloads)
+/// HTTP 读取超时（5 分钟，适用于大文件下载）
 const READ_TIMEOUT_SECS: u64 = 300;
 
-/// Download buffer size (64 KB for better performance)
+/// 下载缓冲区大小（64 KB）
 const DOWNLOAD_BUFFER_SIZE: usize = 65536;
 
-/// Checksum verification buffer size (64 KB)
+/// 校验和计算缓冲区大小（64 KB）
 const CHECKSUM_BUFFER_SIZE: usize = 65536;
 
-/// Retry delay in seconds
+/// 重试间隔（秒）
 const RETRY_DELAY_SECS: u64 = 2;
 
-/// Create a configured HTTP client with timeouts
+/// 创建带超时配置的 HTTP 客户端
 fn create_http_client() -> Result<reqwest::blocking::Client> {
     reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
@@ -31,6 +36,15 @@ fn create_http_client() -> Result<reqwest::blocking::Client> {
         .map_err(VexError::Network)
 }
 
+/// 下载文件到指定路径，显示进度条
+///
+/// # 参数
+/// - `url` - 下载地址
+/// - `dest` - 目标文件路径
+///
+/// # 错误
+/// - `VexError::Network` - HTTP 请求失败
+/// - `VexError::Io` - 文件写入失败
 pub fn download_file(url: &str, dest: &Path) -> Result<()> {
     let client = create_http_client()?;
     let mut response = client.get(url).send()?;
@@ -69,6 +83,15 @@ pub fn download_file(url: &str, dest: &Path) -> Result<()> {
     Ok(())
 }
 
+/// 验证文件的 SHA256 校验和
+///
+/// # 参数
+/// - `file_path` - 待验证文件路径
+/// - `expected` - 期望的 SHA256 十六进制字符串
+///
+/// # 返回
+/// - `Ok(true)` - 校验和匹配
+/// - `Err(VexError::ChecksumMismatch)` - 校验和不匹配
 pub fn verify_checksum(file_path: &Path, expected: &str) -> Result<bool> {
     let mut file = File::open(file_path)?;
     let mut hasher = Sha256::new();
@@ -95,6 +118,14 @@ pub fn verify_checksum(file_path: &Path, expected: &str) -> Result<bool> {
     }
 }
 
+/// 带自动重试的文件下载
+///
+/// 下载失败时自动重试，4xx 客户端错误（如 404）不重试。
+///
+/// # 参数
+/// - `url` - 下载地址
+/// - `dest` - 目标文件路径
+/// - `retries` - 最大重试次数
 pub fn download_with_retry(url: &str, dest: &Path, retries: u32) -> Result<()> {
     let mut attempts = 0;
 

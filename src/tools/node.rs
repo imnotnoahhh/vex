@@ -1,7 +1,13 @@
+//! Node.js 工具实现
+//!
+//! 使用 nodejs.org 官方 API 查询版本，支持 LTS 别名（`lts`、`lts-iron` 等）。
+//! 校验和通过 SHASUMS256.txt 文件获取。
+
 use crate::error::Result;
 use crate::tools::{Arch, Tool, Version};
 use serde::Deserialize;
 
+/// Node.js 工具（nodejs.org 官方发行版）
 pub struct NodeTool;
 
 #[derive(Deserialize, Debug)]
