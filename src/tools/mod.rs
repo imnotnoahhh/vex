@@ -1,3 +1,8 @@
+//! 工具适配层模块
+//!
+//! 定义 [`Tool`] trait 和各语言工具实现（Node.js、Go、Java、Rust）。
+//! 提供架构检测、版本别名解析和模糊版本匹配功能。
+
 use crate::error::Result;
 use owo_colors::OwoColorize;
 
@@ -6,14 +11,18 @@ pub mod java;
 pub mod node;
 pub mod rust;
 
+/// CPU 架构枚举（macOS 支持 ARM64 和 x86_64）
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
 pub enum Arch {
+    /// Apple Silicon (aarch64)
     Arm64,
+    /// Intel (x86_64)
     X86_64,
 }
 
 impl Arch {
+    /// 自动检测当前 CPU 架构
     pub fn detect() -> Self {
         #[cfg(target_arch = "aarch64")]
         return Arch::Arm64;
@@ -23,21 +32,33 @@ impl Arch {
     }
 }
 
+/// 工具版本信息
 #[derive(Debug, Clone)]
 pub struct Version {
+    /// 版本号（如 "v20.11.0"、"1.23.5"）
     pub version: String,
+    /// LTS 代号（如 Node.js 的 "Iron"，Java 的 "LTS"）
     pub lts: Option<String>,
 }
 
+/// 工具 trait，所有语言工具必须实现此接口
+///
+/// 提供版本查询、下载 URL 构造、校验和获取、二进制文件路径映射等功能。
 pub trait Tool: Send + Sync {
+    /// 返回工具名称（如 "node"、"go"、"java"、"rust"）
     fn name(&self) -> &str;
+    /// 查询远程可用版本列表（按发布时间降序）
     fn list_remote(&self) -> Result<Vec<Version>>;
+    /// 构造指定版本和架构的下载 URL
     fn download_url(&self, version: &str, arch: Arch) -> Result<String>;
+    /// 构造校验和文件 URL，返回 `None` 表示校验和在 API 中
     fn checksum_url(&self, version: &str, arch: Arch) -> Option<String>;
+    /// 返回工具提供的可执行文件名列表
     fn bin_names(&self) -> Vec<&str>;
+    /// 返回 bin 目录相对于安装目录的路径
     fn bin_subpath(&self) -> &str;
 
-    /// Returns (bin_name, subpath) pairs. Override when binaries live in different subdirectories.
+    /// 返回 (二进制名, 子路径) 对，当二进制文件在不同子目录时覆写（如 Rust）
     fn bin_paths(&self) -> Vec<(&str, &str)> {
         let subpath = self.bin_subpath();
         self.bin_names()
@@ -46,24 +67,23 @@ pub trait Tool: Send + Sync {
             .collect()
     }
 
-    /// Get the expected SHA256 checksum for a version. Returns None if not available.
+    /// 获取指定版本的 SHA256 校验和，默认返回 `None`
     fn get_checksum(&self, _version: &str, _arch: Arch) -> Result<Option<String>> {
         Ok(None)
     }
 
-    /// Resolve a version alias (e.g., "latest", "lts") to a concrete version.
-    /// Returns Ok(None) if the alias is not recognized.
+    /// 解析版本别名（如 "latest"、"lts"、"stable"），默认返回 `None`
     fn resolve_alias(&self, _alias: &str) -> Result<Option<String>> {
         Ok(None)
     }
 
-    /// Post-install hook called after extraction. Used for tool-specific setup.
-    /// Default implementation does nothing.
+    /// 安装后钩子，用于工具特定的设置（如 Rust 的 sysroot 链接），默认无操作
     fn post_install(&self, _install_dir: &std::path::Path, _arch: Arch) -> Result<()> {
         Ok(())
     }
 }
 
+/// 根据名称获取工具实现，支持 node、go、java、rust
 pub fn get_tool(name: &str) -> Result<Box<dyn Tool>> {
     match name {
         "node" => Ok(Box::new(node::NodeTool)),
@@ -74,8 +94,7 @@ pub fn get_tool(name: &str) -> Result<Box<dyn Tool>> {
     }
 }
 
-/// Resolve a partial version string to a full version by querying remote.
-/// Supports aliases (latest, lts, stable, lts-<codename>), partial versions (20 → 20.x), and exact versions.
+/// 模糊版本解析：支持别名（latest/lts/stable）、部分版本号（20→20.x）和精确版本
 pub fn resolve_fuzzy_version(tool: &dyn Tool, partial: &str) -> Result<String> {
     // First, try alias resolution
     if let Some(resolved) = tool.resolve_alias(partial)? {
@@ -113,7 +132,7 @@ pub fn resolve_fuzzy_version(tool: &dyn Tool, partial: &str) -> Result<String> {
         })
 }
 
-/// Strip "v" prefix from version string
+/// 去除版本号的 "v" 前缀
 fn normalize_version(version: &str) -> String {
     version.strip_prefix('v').unwrap_or(version).to_string()
 }

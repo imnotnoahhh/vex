@@ -1,3 +1,8 @@
+//! 版本切换模块
+//!
+//! 通过原子更新符号链接实现工具版本切换。
+//! 更新 `~/.vex/current/<tool>` 和 `~/.vex/bin/` 下的可执行文件链接。
+
 use crate::error::{Result, VexError};
 use crate::tools::Tool;
 use owo_colors::OwoColorize;
@@ -11,6 +16,17 @@ fn vex_dir() -> Result<PathBuf> {
         .ok_or(VexError::HomeDirectoryNotFound)
 }
 
+/// 切换工具到指定版本
+///
+/// 原子更新 `~/.vex/current/<tool>` 符号链接和 `~/.vex/bin/` 下的可执行文件链接。
+///
+/// # 参数
+/// - `tool` - 工具实现
+/// - `version` - 目标版本号（必须已安装）
+///
+/// # 错误
+/// - `VexError::VersionNotFound` - 版本未安装
+/// - `VexError::Io` - 符号链接操作失败
 pub fn switch_version(tool: &dyn Tool, version: &str) -> Result<()> {
     switch_version_in(tool, version, &vex_dir()?)
 }

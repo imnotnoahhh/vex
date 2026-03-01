@@ -1,7 +1,14 @@
+//! Rust 工具实现
+//!
+//! 解析 `channel-rust-stable.toml` 获取稳定版信息。
+//! 安装完整工具链（rustc、cargo、clippy、rustfmt、rust-analyzer 等 11 个二进制），
+//! `post_install` 负责链接 rust-std 到 sysroot 和动态库路径修复。
+
 use crate::error::{Result, VexError};
 use crate::tools::{Arch, Tool, Version};
 use serde::Deserialize;
 
+/// Rust 工具（官方稳定版工具链）
 pub struct RustTool;
 
 #[derive(Deserialize, Debug)]
