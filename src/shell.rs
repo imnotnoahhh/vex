@@ -3,8 +3,10 @@ pub fn generate_hook(shell: &str) -> Result<String, String> {
     match shell {
         "zsh" => Ok(generate_zsh_hook()),
         "bash" => Ok(generate_bash_hook()),
+        "fish" => Ok(generate_fish_hook()),
+        "nu" | "nushell" => Ok(generate_nushell_hook()),
         _ => Err(format!(
-            "Unsupported shell: {}. Supported: zsh, bash",
+            "Unsupported shell: {}. Supported: zsh, bash, fish, nu",
             shell
         )),
     }
@@ -63,6 +65,69 @@ __vex_use_if_found
     )
 }
 
+fn generate_fish_hook() -> String {
+    r#"# vex shell integration
+set -gx PATH $HOME/.vex/bin $PATH
+
+function __vex_use_if_found
+    set -l dir $PWD
+    while test "$dir" != ""
+        if test -f "$dir/.tool-versions"; or \
+           test -f "$dir/.node-version"; or \
+           test -f "$dir/.go-version"; or \
+           test -f "$dir/.java-version"; or \
+           test -f "$dir/.rust-toolchain"
+            vex use --auto 2>/dev/null
+            return
+        end
+        set dir (string replace -r '/[^/]*$' '' "$dir")
+    end
+end
+
+function __vex_on_pwd --on-variable PWD
+    __vex_use_if_found
+end
+
+__vex_use_if_found
+"#
+    .to_string()
+}
+
+fn generate_nushell_hook() -> String {
+    r#"# vex shell integration
+$env.PATH = ($env.PATH | prepend $"($env.HOME)/.vex/bin")
+
+def --env __vex_use_if_found [] {
+    mut dir = $env.PWD
+    while $dir != "" {
+        if (
+            ($dir | path join ".tool-versions" | path exists) or
+            ($dir | path join ".node-version" | path exists) or
+            ($dir | path join ".go-version" | path exists) or
+            ($dir | path join ".java-version" | path exists) or
+            ($dir | path join ".rust-toolchain" | path exists)
+        ) {
+            vex use --auto | ignore
+            return
+        }
+        $dir = ($dir | path dirname)
+        if $dir == "/" {
+            break
+        }
+    }
+}
+
+$env.config = ($env.config | upsert hooks {
+    pre_prompt: ($env.config.hooks.pre_prompt | append {||
+        __vex_use_if_found
+    })
+})
+
+__vex_use_if_found
+"#
+    .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,8 +150,33 @@ mod tests {
     }
 
     #[test]
+    fn test_generate_fish_hook() {
+        let hook = generate_hook("fish").unwrap();
+        assert!(hook.contains("function __vex_use_if_found"));
+        assert!(hook.contains("on-variable PWD"));
+        assert!(hook.contains(".tool-versions"));
+        assert!(hook.contains("$HOME/.vex/bin"));
+    }
+
+    #[test]
+    fn test_generate_nushell_hook() {
+        let hook = generate_hook("nu").unwrap();
+        assert!(hook.contains("def --env __vex_use_if_found"));
+        assert!(hook.contains("pre_prompt"));
+        assert!(hook.contains(".tool-versions"));
+        assert!(hook.contains("$env.PATH"));
+    }
+
+    #[test]
+    fn test_generate_nushell_hook_alias() {
+        let hook = generate_hook("nushell").unwrap();
+        assert!(hook.contains("def --env __vex_use_if_found"));
+    }
+
+    #[test]
     fn test_unsupported_shell() {
-        let result = generate_hook("fish");
+        let result = generate_hook("powershell");
         assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsupported shell"));
     }
 }

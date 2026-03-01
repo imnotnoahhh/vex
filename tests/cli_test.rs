@@ -155,10 +155,26 @@ fn test_env_bash() {
 
 #[test]
 fn test_env_unsupported_shell() {
-    let output = vex_bin().args(["env", "fish"]).output().unwrap();
+    let output = vex_bin().args(["env", "powershell"]).output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Unsupported shell"));
+}
+
+#[test]
+fn test_env_fish() {
+    let output = vex_bin().args(["env", "fish"]).output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("function __vex_use_if_found"));
+}
+
+#[test]
+fn test_env_nushell() {
+    let output = vex_bin().args(["env", "nu"]).output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("def --env __vex_use_if_found"));
 }
 
 // --- use --auto 测试 ---
