@@ -280,10 +280,7 @@ fn test_e2e_global_command() {
     };
 
     // 执行 global 命令
-    let output = vex_bin()
-        .args(["global", "node@20.11.0"])
-        .output()
-        .unwrap();
+    let output = vex_bin().args(["global", "node@20.11.0"]).output().unwrap();
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
