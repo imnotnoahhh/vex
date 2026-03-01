@@ -264,6 +264,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires network access
     fn test_resolve_alias_unknown() {
         let result = JavaTool.resolve_alias("foobar").unwrap();
         assert!(result.is_none());
