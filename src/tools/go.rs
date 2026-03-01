@@ -1,7 +1,12 @@
+//! Go 工具实现
+//!
+//! 使用 go.dev JSON API 查询版本，校验和直接包含在 API 响应中。
+
 use crate::error::Result;
 use crate::tools::{Arch, Tool, Version};
 use serde::Deserialize;
 
+/// Go 工具（go.dev 官方发行版）
 pub struct GoTool;
 
 #[derive(Deserialize, Debug)]

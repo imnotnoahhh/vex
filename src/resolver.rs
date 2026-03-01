@@ -1,9 +1,20 @@
+//! 版本文件解析模块
+//!
+//! 从项目目录向上遍历查找版本文件（`.tool-versions`、`.node-version` 等），
+//! `.tool-versions` 优先级高于语言专用文件。
+
 use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// 从当前目录向上查找版本文件，返回 tool→version 映射
+/// 从起始目录向上遍历，查找所有工具的版本映射
+///
+/// `.tool-versions` 优先级高于语言专用文件（`.node-version` 等）。
+/// 先找到的版本优先（子目录优先于父目录）。
+///
+/// # 参数
+/// - `start_dir` - 开始查找的目录
 pub fn resolve_versions(start_dir: &Path) -> HashMap<String, String> {
     let mut versions = HashMap::new();
     let mut dir = start_dir.to_path_buf();
@@ -41,7 +52,15 @@ pub fn resolve_versions(start_dir: &Path) -> HashMap<String, String> {
     versions
 }
 
-/// 解析单个工具的版本（从当前目录向上查找）
+/// 查询单个工具的版本（从起始目录向上遍历）
+///
+/// # 参数
+/// - `tool_name` - 工具名称（如 "node"、"go"）
+/// - `start_dir` - 开始查找的目录
+///
+/// # 返回
+/// - `Some(String)` - 找到的版本号
+/// - `None` - 未找到版本文件
 #[allow(dead_code)]
 pub fn resolve_version(tool_name: &str, start_dir: &Path) -> Option<String> {
     let mut dir = start_dir.to_path_buf();
@@ -82,7 +101,7 @@ pub fn resolve_version(tool_name: &str, start_dir: &Path) -> Option<String> {
     None
 }
 
-/// 获取查找起始目录
+/// 获取当前工作目录，失败时回退到 "."
 pub fn current_dir() -> PathBuf {
     env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
