@@ -5,13 +5,39 @@ use crate::tools::{Arch, Tool};
 use flate2::read::GzDecoder;
 use owo_colors::OwoColorize;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use sysinfo::Disks;
 use tar::Archive;
+
+/// Minimum required free space in bytes (500 MB)
+const MIN_FREE_SPACE_BYTES: u64 = 500 * 1024 * 1024;
 
 fn vex_dir() -> Result<PathBuf> {
     dirs::home_dir()
         .map(|p| p.join(".vex"))
         .ok_or(VexError::HomeDirectoryNotFound)
+}
+
+/// Check if there is enough disk space available
+fn check_disk_space(path: &Path, required_bytes: u64) -> Result<()> {
+    let disks = Disks::new_with_refreshed_list();
+
+    // Find the disk that contains the path
+    for disk in &disks {
+        if path.starts_with(disk.mount_point()) {
+            let available = disk.available_space();
+            if available < required_bytes {
+                return Err(VexError::DiskSpace {
+                    need: required_bytes / (1024 * 1024 * 1024),
+                    available: available / (1024 * 1024 * 1024),
+                });
+            }
+            return Ok(());
+        }
+    }
+
+    // If we can't find the disk, proceed anyway (better than failing)
+    Ok(())
 }
 
 /// 清理守卫：在安装失败时自动清理临时文件
@@ -73,6 +99,9 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
 
     // Acquire install lock (fail fast if another process is installing the same version)
     let _lock = InstallLock::acquire(&vex, tool.name(), version)?;
+
+    // Check disk space before downloading
+    check_disk_space(&vex, MIN_FREE_SPACE_BYTES)?;
 
     println!(
         "{} {} {}...",
@@ -173,9 +202,12 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     Ok(())
 }
 
+
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::path::Path;
+    use tempfile::TempDir;
 
     #[test]
     fn test_path_component_validation_parent_dir() {
@@ -226,5 +258,32 @@ mod tests {
             !has_parent_dir,
             "Current directory component should be allowed"
         );
+    }
+
+    #[test]
+    fn test_check_disk_space_sufficient() {
+        let temp_dir = TempDir::new().unwrap();
+        // Request 1 byte - should always succeed
+        let result = check_disk_space(temp_dir.path(), 1);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_check_disk_space_insufficient() {
+        let temp_dir = TempDir::new().unwrap();
+        // Request an impossibly large amount (1 PB)
+        let result = check_disk_space(temp_dir.path(), 1024 * 1024 * 1024 * 1024 * 1024);
+        assert!(result.is_err());
+        if let Err(VexError::DiskSpace { need, available }) = result {
+            assert!(need > available);
+        } else {
+            panic!("Expected DiskSpace error");
+        }
+    }
+
+    #[test]
+    fn test_min_free_space_constant() {
+        // Verify the constant is set to 500 MB
+        assert_eq!(MIN_FREE_SPACE_BYTES, 500 * 1024 * 1024);
     }
 }
