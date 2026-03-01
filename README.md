@@ -12,6 +12,9 @@
   <a href="https://github.com/imnotnoahhh/vex/actions/workflows/ci.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/imnotnoahhh/vex/ci.yml?style=flat-square&label=CI" alt="CI">
   </a>
+  <a href="https://codecov.io/gh/imnotnoahhh/vex">
+    <img src="https://img.shields.io/codecov/c/github/imnotnoahhh/vex?style=flat-square" alt="Coverage">
+  </a>
   <a href="https://github.com/imnotnoahhh/vex/releases">
     <img src="https://img.shields.io/github/v/release/imnotnoahhh/vex?style=flat-square" alt="Release">
   </a>

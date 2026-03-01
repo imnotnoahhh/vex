@@ -4,14 +4,36 @@ updates:
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "09:00"
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - rust
     commit-message:
-      prefix: "deps"
+      prefix: "chore"
+      include: "scope"
+    reviewers:
+      - imnotnoahhh
+    assignees:
+      - imnotnoahhh
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "09:00"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
     commit-message:
       prefix: "ci"
+      include: "scope"
+    reviewers:
+      - imnotnoahhh
+    assignees:
+      - imnotnoahhh
     ignore:
       # These versions are managed by cargo-dist
       - dependency-name: "actions/download-artifact"
