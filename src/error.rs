@@ -126,7 +126,9 @@ mod tests {
     #[test]
     fn test_error_display_home_directory_not_found() {
         let err = VexError::HomeDirectoryNotFound;
-        assert!(err.to_string().contains("Could not determine home directory"));
+        assert!(err
+            .to_string()
+            .contains("Could not determine home directory"));
         assert!(err.to_string().contains("HOME environment variable"));
     }
 }
