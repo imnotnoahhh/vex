@@ -49,6 +49,10 @@
 - **Remote version cache** — cached for 5 min by default, configurable via `config.toml`
 - **Concurrent install protection** — file-based locking prevents parallel install corruption
 - **Checksum verification** — Node.js uses official SHA256 verification; Go/Java/Rust follow upstream checksum metadata availability
+- **Health check** — `vex doctor` validates installation, PATH, shell hooks, and provides actionable fixes
+- **Disk space check** — prevents installation when less than 500 MB free space available
+- **Security hardening** — path traversal protection for tar extraction, HTTP timeouts with retry logic
+- **Multi-shell support** — zsh, bash, fish, and nushell integration for auto-switching
 - **macOS native** — supports both Apple Silicon and Intel macOS environments
 
 ## Quick Start
@@ -114,9 +118,21 @@ vex --version
 ```bash
 vex init
 
-# Add shell hook to ~/.zshrc (auto-switch on cd)
+# Add shell hook to your shell config (auto-switch on cd)
+# For zsh:
 echo 'eval "$(vex env zsh)"' >> ~/.zshrc
 source ~/.zshrc
+
+# For bash:
+echo 'eval "$(vex env bash)"' >> ~/.bashrc
+source ~/.bashrc
+
+# For fish:
+echo 'vex env fish | source' >> ~/.config/fish/config.fish
+
+# For nushell:
+vex env nu | save -f ~/.config/nushell/vex.nu
+echo 'source ~/.config/nushell/vex.nu' >> ~/.config/nushell/config.nu
 ```
 
 ### Usage
@@ -171,6 +187,7 @@ vex install
 | `vex alias <tool>` | Show available version aliases | `vex alias node` |
 | `vex current` | Show active versions | `vex current` |
 | `vex uninstall <tool@version>` | Uninstall a version | `vex uninstall node@20.11.0` |
+| `vex doctor` | Run health check and diagnostics | `vex doctor` |
 | `vex env <shell>` | Output shell hook script | `vex env zsh` |
 
 ## Supported Tools
@@ -265,6 +282,14 @@ Switching versions just updates symlinks — instant and shell-restart-free.
 ```
 
 ## FAQ
+
+**How do I troubleshoot installation or PATH issues?**
+Run `vex doctor` to perform a comprehensive health check. It validates:
+- vex installation and PATH configuration
+- Shell hook setup (auto-switch on cd)
+- Installed tool versions and activation status
+- Binary symlinks integrity
+- Provides actionable suggestions for fixing issues
 
 **Why does `vex list-remote go` not show every historical Go release?**
 Go remote listings are constrained by upstream API policy and usually focus on active maintenance lines.

@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-03-02
+
+### Added
+
+- **`vex doctor` command** — Health check command that validates:
+  - vex installation and PATH configuration
+  - Shell hook setup (auto-switch on cd)
+  - Installed tool versions and their activation status
+  - Binary symlinks integrity
+  - Provides actionable suggestions for fixing issues
+- **Disk space check** — Installation now checks for at least 500 MB free disk space before downloading, preventing partial installs on full disks
+- **Path traversal protection** — Archive extraction now validates all paths to prevent malicious tar files from writing outside the installation directory
+- **HTTP timeout configuration** — Network requests now have configurable timeouts:
+  - Connection timeout: 30 seconds
+  - Total timeout: 5 minutes (suitable for large downloads like JDK)
+  - Automatic retry on failure (3 attempts with 2-second intervals)
+  - 4xx client errors (e.g., 404) are not retried
+- **Fish and Nushell shell support** — Added shell integration for Fish and Nushell:
+  - `vex env fish` outputs Fish shell hook
+  - `vex env nu` outputs Nushell hook
+  - Auto-switch on directory change works in all supported shells
+- **Enhanced error messages** — All error types now include actionable troubleshooting suggestions:
+  - Network errors suggest checking internet connection and firewall
+  - Disk space errors show required vs available space
+  - Permission errors provide chmod/chown commands
+  - Version not found errors suggest using `vex list-remote`
+- **Performance benchmarks** — Added criterion-based benchmarks for:
+  - Version file parsing (.tool-versions)
+  - Directory traversal for version resolution
+  - Symlink creation and updates (version switching)
+  - Cache read/write operations
+  - Run with `cargo bench` (not executed in CI)
+- **Comprehensive Rustdoc documentation** — All 14 modules now have detailed Chinese documentation:
+  - Module-level docs explaining purpose and architecture
+  - Function docs with parameters, returns, and errors
+  - Type docs for structs, enums, and traits
+  - Examples and usage notes
+- **End-to-end integration tests** — Added 11 comprehensive E2E tests covering:
+  - Full workflow: install → activate → uninstall
+  - Node.js and Go installation flows
+  - Version switching between multiple installed versions
+  - Version alias resolution (lts, latest)
+  - .tool-versions file parsing and auto-activation
+  - local/global command functionality
+  - Concurrent installation protection
+  - Network-dependent tests marked with `#[ignore]` for CI performance
+
+### Changed
+
+- **64KB buffer size** — Download and checksum calculation now use 64KB buffers for improved performance
+- **User-Agent header** — HTTP requests now identify as `vex/<version>` for better upstream analytics
+- **Home directory error handling** — Replaced `home_dir().unwrap()` with proper error handling using `VexError::HomeDirectoryNotFound`
+
+### Fixed
+
+- **Network-dependent tests** — Marked Java alias resolution test as `#[ignore]` to prevent CI failures when network is unavailable
+
 ## [0.1.5] - 2026-03-01
 
 ### Added
