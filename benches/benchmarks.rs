@@ -82,7 +82,8 @@ fn bench_parse_tool_versions(c: &mut Criterion) {
 /// Benchmark: Resolve version from nested directories
 fn bench_resolve_version_deep_tree(c: &mut Criterion) {
     let tmp = setup_version_files(10); // 10 levels deep
-    let deepest = tmp.path()
+    let deepest = tmp
+        .path()
         .join("level0/level1/level2/level3/level4/level5/level6/level7/level8/level9");
 
     c.bench_function("resolve_version_deep_tree", |b| {
@@ -140,7 +141,9 @@ fn bench_resolve_all_versions(c: &mut Criterion) {
                             }
                             let mut parts = line.split_whitespace();
                             if let (Some(tool), Some(version)) = (parts.next(), parts.next()) {
-                                versions.entry(tool.to_string()).or_insert(version.to_string());
+                                versions
+                                    .entry(tool.to_string())
+                                    .or_insert(version.to_string());
                             }
                         }
                     }
