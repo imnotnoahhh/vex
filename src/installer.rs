@@ -173,7 +173,6 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
