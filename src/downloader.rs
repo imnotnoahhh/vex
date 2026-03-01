@@ -204,4 +204,3 @@ mod tests {
         assert_eq!(RETRY_DELAY_SECS, 2);
     }
 }
-
