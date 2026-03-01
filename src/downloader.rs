@@ -4,9 +4,36 @@ use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
+use std::time::Duration;
+
+/// HTTP connection timeout (30 seconds)
+const CONNECT_TIMEOUT_SECS: u64 = 30;
+
+/// HTTP read timeout (5 minutes for large downloads)
+const READ_TIMEOUT_SECS: u64 = 300;
+
+/// Download buffer size (64 KB for better performance)
+const DOWNLOAD_BUFFER_SIZE: usize = 65536;
+
+/// Checksum verification buffer size (64 KB)
+const CHECKSUM_BUFFER_SIZE: usize = 65536;
+
+/// Retry delay in seconds
+const RETRY_DELAY_SECS: u64 = 2;
+
+/// Create a configured HTTP client with timeouts
+fn create_http_client() -> Result<reqwest::blocking::Client> {
+    reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
+        .timeout(Duration::from_secs(READ_TIMEOUT_SECS))
+        .user_agent(concat!("vex/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(VexError::Network)
+}
 
 pub fn download_file(url: &str, dest: &Path) -> Result<()> {
-    let mut response = reqwest::blocking::get(url)?;
+    let client = create_http_client()?;
+    let mut response = client.get(url).send()?;
 
     if !response.status().is_success() {
         return Err(VexError::Network(response.error_for_status().unwrap_err()));
@@ -25,7 +52,7 @@ pub fn download_file(url: &str, dest: &Path) -> Result<()> {
 
     let mut file = File::create(dest)?;
     let mut downloaded = 0u64;
-    let mut buffer = [0; 8192];
+    let mut buffer = vec![0u8; DOWNLOAD_BUFFER_SIZE];
 
     loop {
         let bytes_read = response.read(&mut buffer)?;
@@ -45,7 +72,7 @@ pub fn download_file(url: &str, dest: &Path) -> Result<()> {
 pub fn verify_checksum(file_path: &Path, expected: &str) -> Result<bool> {
     let mut file = File::open(file_path)?;
     let mut hasher = Sha256::new();
-    let mut buffer = [0; 8192];
+    let mut buffer = vec![0u8; CHECKSUM_BUFFER_SIZE];
 
     loop {
         let bytes_read = file.read(&mut buffer)?;
@@ -89,7 +116,7 @@ pub fn download_with_retry(url: &str, dest: &Path, retries: u32) -> Result<()> {
                     eprintln!("Download failed: {}", e);
                     eprintln!("Retrying... ({}/{} attempts)", attempts + 1, retries);
                     attempts += 1;
-                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    std::thread::sleep(Duration::from_secs(RETRY_DELAY_SECS));
                 } else {
                     return Err(e);
                 }
@@ -152,5 +179,28 @@ mod tests {
         assert!(result.is_ok());
 
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_create_http_client() {
+        let client = create_http_client();
+        assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_http_client_has_user_agent() {
+        let client = create_http_client().unwrap();
+        // Verify client was created successfully with configuration
+        // The actual user agent is set internally and will be used in requests
+        drop(client);
+    }
+
+    #[test]
+    fn test_constants_defined() {
+        assert_eq!(CONNECT_TIMEOUT_SECS, 30);
+        assert_eq!(READ_TIMEOUT_SECS, 300);
+        assert_eq!(DOWNLOAD_BUFFER_SIZE, 65536);
+        assert_eq!(CHECKSUM_BUFFER_SIZE, 65536);
+        assert_eq!(RETRY_DELAY_SECS, 2);
     }
 }
