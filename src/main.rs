@@ -104,6 +104,9 @@ enum Commands {
         /// Tool name (e.g., node)
         tool: String,
     },
+
+    /// Check vex installation health
+    Doctor,
 }
 
 fn vex_dir() -> Result<PathBuf> {
@@ -665,6 +668,240 @@ fn auto_switch() -> Result<()> {
     Ok(())
 }
 
+fn run_doctor() -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::Command;
+
+    println!();
+    println!("{}", "vex doctor - Health Check".bold());
+    println!();
+
+    let vex_dir = dirs::home_dir().unwrap().join(".vex");
+    let mut issues = 0;
+    let mut warnings = 0;
+
+    // 1. Check vex directory exists
+    print!("Checking vex directory... ");
+    if vex_dir.exists() {
+        println!("{}", "✓".green());
+    } else {
+        println!("{}", "✗ Not found".red());
+        println!("  Run {} to initialize", "'vex init'".cyan());
+        issues += 1;
+    }
+
+    // 2. Check directory structure
+    print!("Checking directory structure... ");
+    let required_dirs = ["cache", "locks", "toolchains", "current", "bin"];
+    let mut missing_dirs = Vec::new();
+    for dir in &required_dirs {
+        if !vex_dir.join(dir).exists() {
+            missing_dirs.push(*dir);
+        }
+    }
+    if missing_dirs.is_empty() {
+        println!("{}", "✓".green());
+    } else {
+        println!("{}", "✗ Missing directories".red());
+        for dir in missing_dirs {
+            println!("  Missing: {}", dir.yellow());
+        }
+        println!("  Run {} to fix", "'vex init'".cyan());
+        issues += 1;
+    }
+
+    // 3. Check PATH configuration
+    print!("Checking PATH configuration... ");
+    if let Ok(path_var) = std::env::var("PATH") {
+        let vex_bin = vex_dir.join("bin");
+        if path_var.contains(&vex_bin.to_string_lossy().to_string()) {
+            println!("{}", "✓".green());
+        } else {
+            println!("{}", "⚠ vex/bin not in PATH".yellow());
+            println!("  Add this to your shell config:");
+            println!("  {}", "export PATH=\"$HOME/.vex/bin:$PATH\"".to_string().cyan());
+            warnings += 1;
+        }
+    } else {
+        println!("{}", "✗ PATH not set".red());
+        issues += 1;
+    }
+
+    // 4. Check shell hook
+    print!("Checking shell hook... ");
+    let shell = std::env::var("SHELL").unwrap_or_default();
+    if shell.contains("zsh") {
+        if let Ok(home) = std::env::var("HOME") {
+            let zshrc = PathBuf::from(home).join(".zshrc");
+            if zshrc.exists() {
+                if let Ok(content) = fs::read_to_string(&zshrc) {
+                    if content.contains("vex env zsh") {
+                        println!("{}", "✓".green());
+                    } else {
+                        println!("{}", "⚠ Shell hook not configured".yellow());
+                        println!("  Add this to ~/.zshrc:");
+                        println!("  {}", "eval \"$(vex env zsh)\"".cyan());
+                        warnings += 1;
+                    }
+                } else {
+                    println!("{}", "⚠ Cannot read .zshrc".yellow());
+                    warnings += 1;
+                }
+            } else {
+                println!("{}", "⚠ .zshrc not found".yellow());
+                warnings += 1;
+            }
+        }
+    } else if shell.contains("bash") {
+        if let Ok(home) = std::env::var("HOME") {
+            let bashrc = PathBuf::from(home).join(".bashrc");
+            if bashrc.exists() {
+                if let Ok(content) = fs::read_to_string(&bashrc) {
+                    if content.contains("vex env bash") {
+                        println!("{}", "✓".green());
+                    } else {
+                        println!("{}", "⚠ Shell hook not configured".yellow());
+                        println!("  Add this to ~/.bashrc:");
+                        println!("  {}", "eval \"$(vex env bash)\"".cyan());
+                        warnings += 1;
+                    }
+                } else {
+                    println!("{}", "⚠ Cannot read .bashrc".yellow());
+                    warnings += 1;
+                }
+            } else {
+                println!("{}", "⚠ .bashrc not found".yellow());
+                warnings += 1;
+            }
+        }
+    } else {
+        println!("{}", "⚠ Unknown shell".yellow());
+        warnings += 1;
+    }
+
+    // 5. Check installed tools
+    print!("Checking installed tools... ");
+    let toolchains_dir = vex_dir.join("toolchains");
+    if toolchains_dir.exists() {
+        let mut tool_count = 0;
+        if let Ok(entries) = fs::read_dir(&toolchains_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if entry.file_type().ok().map(|t| t.is_dir()).unwrap_or(false) {
+                    tool_count += 1;
+                }
+            }
+        }
+        if tool_count > 0 {
+            println!("{} ({} tools)", "✓".green(), tool_count);
+        } else {
+            println!("{}", "⚠ No tools installed".yellow());
+            println!("  Run {} to install a tool", "'vex install <tool>'".cyan());
+            warnings += 1;
+        }
+    } else {
+        println!("{}", "✗ toolchains directory missing".red());
+        issues += 1;
+    }
+
+    // 6. Check symlinks integrity
+    print!("Checking symlinks integrity... ");
+    let current_dir = vex_dir.join("current");
+    let bin_dir = vex_dir.join("bin");
+    let mut broken_links = Vec::new();
+
+    if current_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&current_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if let Ok(target) = fs::read_link(entry.path()) {
+                    if !target.exists() {
+                        broken_links.push(format!("current/{}", entry.file_name().to_string_lossy()));
+                    }
+                }
+            }
+        }
+    }
+
+    if bin_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&bin_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if let Ok(target) = fs::read_link(entry.path()) {
+                    if !target.exists() {
+                        broken_links.push(format!("bin/{}", entry.file_name().to_string_lossy()));
+                    }
+                }
+            }
+        }
+    }
+
+    if broken_links.is_empty() {
+        println!("{}", "✓".green());
+    } else {
+        println!("{}", "⚠ Broken symlinks found".yellow());
+        for link in &broken_links {
+            println!("  {}", link.yellow());
+        }
+        warnings += 1;
+    }
+
+    // 7. Check binary executability
+    print!("Checking binary executability... ");
+    let mut non_executable = Vec::new();
+    if bin_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&bin_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if let Ok(metadata) = entry.metadata() {
+                    let permissions = metadata.permissions();
+                    if !metadata.is_symlink() && (permissions.mode() & 0o111) == 0 {
+                        non_executable.push(entry.file_name().to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    if non_executable.is_empty() {
+        println!("{}", "✓".green());
+    } else {
+        println!("{}", "⚠ Non-executable binaries".yellow());
+        for bin in &non_executable {
+            println!("  {}", bin.yellow());
+        }
+        warnings += 1;
+    }
+
+    // 8. Check network connectivity
+    print!("Checking network connectivity... ");
+    match Command::new("ping")
+        .args(["-c", "1", "-W", "2", "nodejs.org"])
+        .output()
+    {
+        Ok(output) if output.status.success() => {
+            println!("{}", "✓".green());
+        }
+        _ => {
+            println!("{}", "⚠ Cannot reach nodejs.org".yellow());
+            println!("  Check your internet connection");
+            warnings += 1;
+        }
+    }
+
+    // Summary
+    println!();
+    if issues == 0 && warnings == 0 {
+        println!("{}", "✓ All checks passed!".green().bold());
+    } else {
+        if issues > 0 {
+            println!("{} {} issue(s) found", "✗".red(), issues);
+        }
+        if warnings > 0 {
+            println!("{} {} warning(s)", "⚠".yellow(), warnings);
+        }
+    }
+    println!();
+
+    Ok(())
+}
+
 fn run() -> Result<()> {
     let cli = Cli::parse();
 
@@ -760,6 +997,9 @@ fn run() -> Result<()> {
         }
         Commands::Alias { tool } => {
             show_aliases(&tool)?;
+        }
+        Commands::Doctor => {
+            run_doctor()?;
         }
     }
 
