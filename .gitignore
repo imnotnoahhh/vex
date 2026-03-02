@@ -8,3 +8,8 @@
 *.iml
 docs/archive/
 CLAUDE.md
+
+# Coverage reports
+cobertura.xml
+coverage_output.txt
+coverage_summary.md

@@ -327,6 +327,26 @@ cargo build
 cargo test --all-features
 ```
 
+### Documentation
+
+Generate comprehensive API documentation with custom styling:
+
+```bash
+# Quick command
+make docs
+
+# Or manually
+RUSTDOCFLAGS="--html-in-header docs/header.html" cargo doc --no-deps
+cp docs/custom.css target/doc/
+open target/doc/vex/index.html
+```
+
+The documentation includes:
+- Pure English documentation for all modules
+- Custom theme with improved readability
+- Enhanced code highlighting and styling
+- Comprehensive module and function documentation
+
 ### Running Benchmarks
 
 Performance benchmarks are available to measure key operations:

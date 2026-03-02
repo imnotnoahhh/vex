@@ -1,13 +1,13 @@
-//! Node.js 工具实现
+//! Node.js tool implementation
 //!
-//! 使用 nodejs.org 官方 API 查询版本，支持 LTS 别名（`lts`、`lts-iron` 等）。
-//! 校验和通过 SHASUMS256.txt 文件获取。
+//! Uses nodejs.org official API to query versions, supports LTS aliases (`lts`, `lts-iron`, etc.).
+//! Checksums obtained via SHASUMS256.txt file.
 
 use crate::error::Result;
 use crate::tools::{Arch, Tool, Version};
 use serde::Deserialize;
 
-/// Node.js 工具（nodejs.org 官方发行版）
+/// Node.js tool (nodejs.org official distribution)
 pub struct NodeTool;
 
 #[derive(Deserialize, Debug)]
@@ -45,7 +45,7 @@ impl Tool for NodeTool {
     }
 
     fn download_url(&self, version: &str, arch: Arch) -> Result<String> {
-        // 确保版本号有 v 前缀
+        // Ensure version has v prefix
         let version = if version.starts_with('v') {
             version.to_string()
         } else {
@@ -251,12 +251,12 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // 需要网络
+    #[ignore] // Requires network
     fn test_list_remote() {
         let tool = NodeTool;
         let versions = tool.list_remote().unwrap();
         assert!(!versions.is_empty());
-        // 第一个版本应该有 v 前缀
+        // First version should have v prefix
         assert!(versions[0].version.starts_with('v'));
     }
 
@@ -265,13 +265,13 @@ mod tests {
     fn test_list_remote_has_lts() {
         let tool = NodeTool;
         let versions = tool.list_remote().unwrap();
-        // 应该至少有一个 LTS 版本
+        // Should have at least one LTS version
         let has_lts = versions.iter().any(|v| v.lts.is_some());
         assert!(has_lts);
     }
 
     #[test]
-    #[ignore] // 需要网络
+    #[ignore] // Requires network
     fn test_resolve_alias_latest() {
         let result = NodeTool.resolve_alias("latest").unwrap();
         assert!(result.is_some());
@@ -280,7 +280,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // 需要网络
+    #[ignore] // Requires network
     fn test_resolve_alias_lts() {
         let result = NodeTool.resolve_alias("lts").unwrap();
         assert!(result.is_some());
@@ -288,7 +288,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // 需要网络
+    #[ignore] // Requires network
     fn test_resolve_alias_lts_codename() {
         // "iron" is Node 20 LTS codename
         let result = NodeTool.resolve_alias("lts-iron").unwrap();

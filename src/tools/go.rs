@@ -1,12 +1,12 @@
-//! Go 工具实现
+//! Go tool implementation
 //!
-//! 使用 go.dev JSON API 查询版本，校验和直接包含在 API 响应中。
+//! Uses go.dev JSON API to query versions, checksums directly included in API response.
 
 use crate::error::Result;
 use crate::tools::{Arch, Tool, Version};
 use serde::Deserialize;
 
-/// Go 工具（go.dev 官方发行版）
+/// Go tool (go.dev official distribution)
 pub struct GoTool;
 
 #[derive(Deserialize, Debug)]
@@ -42,15 +42,15 @@ impl Tool for GoTool {
 
         let versions = releases
             .into_iter()
-            .filter(|r| r.stable) // 只显示稳定版本
+            .filter(|r| r.stable) // Only show stable versions
             .map(|r| Version {
-                // 去掉 "go" 前缀，保持与其他工具一致（如 1.23.5 而非 go1.23.5）
+                // Remove "go" prefix to keep consistent with other tools (e.g., 1.23.5 instead of go1.23.5)
                 version: r
                     .version
                     .strip_prefix("go")
                     .unwrap_or(&r.version)
                     .to_string(),
-                lts: None, // Go 没有 LTS 概念
+                lts: None, // Go has no LTS concept
             })
             .collect();
 
@@ -58,7 +58,7 @@ impl Tool for GoTool {
     }
 
     fn download_url(&self, version: &str, arch: Arch) -> Result<String> {
-        // 确保版本号有 go 前缀
+        // Ensure version has go prefix
         let version = if version.starts_with("go") {
             version.to_string()
         } else {
@@ -67,7 +67,7 @@ impl Tool for GoTool {
 
         let arch_str = match arch {
             Arch::Arm64 => "arm64",
-            Arch::X86_64 => "amd64", // Go 使用 amd64 而不是 x64
+            Arch::X86_64 => "amd64", // Go uses amd64 instead of x64
         };
 
         Ok(format!(
@@ -77,7 +77,7 @@ impl Tool for GoTool {
     }
 
     fn checksum_url(&self, _version: &str, _arch: Arch) -> Option<String> {
-        // Go 的 SHA256 直接在 JSON API 中，不需要单独的 checksum URL
+        // Go's SHA256 is directly in JSON API, no separate checksum URL needed
         None
     }
 
@@ -205,17 +205,17 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // 需要网络
+    #[ignore] // Requires network
     fn test_list_remote() {
         let versions = GoTool.list_remote().unwrap();
         assert!(!versions.is_empty());
-        // 版本号应该不带 "go" 前缀（如 1.23.5）
+        // Version should not have "go" prefix (e.g., 1.23.5)
         assert!(!versions[0].version.starts_with("go"));
         assert!(versions[0].version.contains('.'));
     }
 
     #[test]
-    #[ignore] // 需要网络
+    #[ignore] // Requires network
     fn test_resolve_alias_latest() {
         let result = GoTool.resolve_alias("latest").unwrap();
         assert!(result.is_some());
@@ -223,12 +223,12 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // 需要网络
+    #[ignore] // Requires network
     fn test_resolve_alias_minor_version() {
-        // "1.23" should resolve to latest 1.23.x
-        let result = GoTool.resolve_alias("1.23").unwrap();
+        // "1.25" should resolve to latest 1.25.x
+        let result = GoTool.resolve_alias("1.25").unwrap();
         assert!(result.is_some());
-        assert!(result.unwrap().starts_with("1.23."));
+        assert!(result.unwrap().starts_with("1.25."));
     }
 
     #[test]

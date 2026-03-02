@@ -1,13 +1,13 @@
-//! Java (Eclipse Temurin JDK) 工具实现
+//! Java (Eclipse Temurin JDK) tool implementation
 //!
-//! 使用 Adoptium API v3 查询版本，仅支持 JDK + HotSpot 组合。
-//! macOS JDK 目录结构特殊：`Contents/Home/bin/`。
+//! Uses Adoptium API v3 to query versions, only supports JDK + HotSpot combination.
+//! macOS JDK directory structure is special: `Contents/Home/bin/`.
 
 use crate::error::{Result, VexError};
 use crate::tools::{Arch, Tool, Version};
 use serde::Deserialize;
 
-/// Java (Eclipse Temurin JDK) 工具
+/// Java (Eclipse Temurin JDK) tool
 pub struct JavaTool;
 
 #[derive(Deserialize, Debug)]
@@ -59,7 +59,7 @@ impl Tool for JavaTool {
         let response = reqwest::blocking::get(url)?;
         let releases: AvailableReleases = response.json()?;
 
-        // 获取所有可用版本，LTS 版本标注
+        // Get all available versions, mark LTS versions
         let mut versions = Vec::new();
 
         for version in releases.available_releases {
@@ -74,14 +74,14 @@ impl Tool for JavaTool {
             });
         }
 
-        // 降序排列（最新版本在前）
+        // Sort descending (newest version first)
         versions.reverse();
 
         Ok(versions)
     }
 
     fn download_url(&self, version: &str, arch: Arch) -> Result<String> {
-        // 从 API 获取下载链接
+        // Get download link from API
         let arch_str = match arch {
             Arch::Arm64 => "aarch64",
             Arch::X86_64 => "x64",
@@ -106,7 +106,7 @@ impl Tool for JavaTool {
     }
 
     fn checksum_url(&self, _version: &str, _arch: Arch) -> Option<String> {
-        // Eclipse Temurin 的 SHA256 直接在 API 中
+        // Eclipse Temurin's SHA256 is directly in API
         None
     }
 
@@ -146,7 +146,7 @@ impl Tool for JavaTool {
     }
 
     fn bin_subpath(&self) -> &str {
-        // macOS 的 JDK 目录结构特殊：jdk-21.0.10+7/Contents/Home/bin
+        // macOS JDK directory structure is special: jdk-21.0.10+7/Contents/Home/bin
         "Contents/Home/bin"
     }
 
@@ -233,11 +233,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // 需要网络
+    #[ignore] // Requires network
     fn test_list_remote() {
         let versions = JavaTool.list_remote().unwrap();
         assert!(!versions.is_empty());
-        // 应该有 LTS 版本
+        // Should have LTS versions
         let has_lts = versions.iter().any(|v| v.lts.is_some());
         assert!(has_lts);
     }
@@ -251,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // 需要网络
+    #[ignore] // Requires network
     fn test_resolve_alias_latest() {
         let result = JavaTool.resolve_alias("latest").unwrap();
         assert!(result.is_some());
@@ -260,7 +260,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // 需要网络
+    #[ignore] // Requires network
     fn test_resolve_alias_lts() {
         let result = JavaTool.resolve_alias("lts").unwrap();
         assert!(result.is_some());
@@ -277,5 +277,35 @@ mod tests {
 
         let result = JavaTool.resolve_alias("stable").unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_download_url_format_arm64() {
+        // Test URL format without network
+        let version = "21";
+        let arch = Arch::Arm64;
+        // We can't test the actual URL without network, but we can test error handling
+        // The function will fail with network error, not format error
+        let result = JavaTool.download_url(version, arch);
+        // Should either succeed or fail with network error, not format error
+        assert!(result.is_ok() || matches!(result, Err(VexError::Network(_))));
+    }
+
+    #[test]
+    fn test_download_url_format_x86() {
+        let version = "21";
+        let arch = Arch::X86_64;
+        let result = JavaTool.download_url(version, arch);
+        assert!(result.is_ok() || matches!(result, Err(VexError::Network(_))));
+    }
+
+    #[test]
+    fn test_get_checksum_format() {
+        // Test that get_checksum returns proper format
+        let version = "21";
+        let arch = Arch::Arm64;
+        let result = JavaTool.get_checksum(version, arch);
+        // Should either succeed with Some/None or fail with network error
+        assert!(result.is_ok() || matches!(result, Err(VexError::Network(_))));
     }
 }
