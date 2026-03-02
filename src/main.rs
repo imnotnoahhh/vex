@@ -1,7 +1,7 @@
-//! vex - macOS 二进制版本管理器
+//! vex - macOS binary version manager
 //!
-//! 管理 Node.js、Go、Java、Rust 等语言的官方二进制发行版。
-//! 通过符号链接 + PATH 前置实现快速版本切换。
+//! Manages official binary distributions of Node.js, Go, Java, Rust, and other languages.
+//! Implements fast version switching via symlinks + PATH prepending.
 
 use clap::{Parser, Subcommand};
 use dialoguer::{theme::ColorfulTheme, Select};
@@ -22,7 +22,7 @@ mod tools;
 
 use error::Result;
 
-/// vex CLI 主结构体
+/// vex CLI main structure
 #[derive(Parser)]
 #[command(name = "vex", version)]
 #[command(about = "A fast version manager for macOS", long_about = None)]
@@ -31,7 +31,7 @@ struct Cli {
     command: Commands,
 }
 
-/// CLI 子命令定义
+/// CLI subcommand definitions
 #[derive(Subcommand)]
 enum Commands {
     /// Initialize vex directory structure
@@ -84,7 +84,7 @@ enum Commands {
 
     /// Output shell hook for auto-switching
     Env {
-        /// Shell type (zsh or bash)
+        /// Shell type (zsh, bash, fish, or nu)
         shell: String,
     },
 
@@ -116,25 +116,25 @@ enum Commands {
     Doctor,
 }
 
-/// 获取 vex 根目录（~/.vex）
+/// Get vex root directory (~/.vex)
 fn vex_dir() -> Result<PathBuf> {
     dirs::home_dir()
         .map(|p| p.join(".vex"))
         .ok_or(error::VexError::HomeDirectoryNotFound)
 }
 
-/// 初始化 vex 目录结构和配置文件
+/// Initialize vex directory structure and configuration files
 fn init_vex() -> Result<()> {
     let vex_dir = vex_dir()?;
 
-    // 创建目录结构
+    // Create directory structure
     fs::create_dir_all(vex_dir.join("cache"))?;
     fs::create_dir_all(vex_dir.join("locks"))?;
     fs::create_dir_all(vex_dir.join("toolchains"))?;
     fs::create_dir_all(vex_dir.join("current"))?;
     fs::create_dir_all(vex_dir.join("bin"))?;
 
-    // 创建配置文件
+    // Create configuration file
     let config_path = vex_dir.join("config.toml");
     if !config_path.exists() {
         fs::write(&config_path, "# vex configuration\n")?;
@@ -157,14 +157,14 @@ fn init_vex() -> Result<()> {
     Ok(())
 }
 
-/// 解析 tool@version 格式的规格字符串
+/// Parse tool@version format spec string
 fn parse_spec(spec: &str) -> Result<(String, String)> {
     let parts: Vec<&str> = spec.split('@').collect();
     if parts.len() == 2 {
-        // 格式：tool@version
+        // Format: tool@version
         Ok((parts[0].to_string(), parts[1].to_string()))
     } else if parts.len() == 1 {
-        // 格式：tool（只有工具名，需要交互式选择版本）
+        // Format: tool (tool name only, requires interactive version selection)
         Ok((parts[0].to_string(), String::new()))
     } else {
         Err(error::VexError::Parse(format!(
@@ -213,7 +213,7 @@ fn interactive_install(tool_name: &str) -> Result<()> {
 
     if let Some(index) = selection {
         let selected_version = &versions[index].version;
-        // 移除 v 前缀（如果有）
+        // Remove v prefix (if present)
         let version = selected_version
             .strip_prefix('v')
             .unwrap_or(selected_version);
@@ -288,7 +288,7 @@ fn uninstall(tool_name: &str, version: &str) -> Result<()> {
 
     println!("Uninstalling {} {}...", tool_name, version);
 
-    // 检查是否是当前激活的版本
+    // Check if it's the currently active version
     let current_link = vex_dir.join("current").join(tool_name);
     let is_active = if current_link.exists() {
         if let Ok(target) = fs::read_link(&current_link) {
@@ -300,10 +300,10 @@ fn uninstall(tool_name: &str, version: &str) -> Result<()> {
         false
     };
 
-    // 删除版本目录
+    // Delete version directory
     fs::remove_dir_all(&version_dir)?;
 
-    // 清理当前激活版本的符号链接
+    // Clean up symlinks for currently active version
     if is_active {
         let _ = fs::remove_file(&current_link);
 
@@ -348,7 +348,7 @@ fn list_installed(tool_name: &str) -> Result<()> {
 
     versions.sort();
 
-    // 检查当前激活的版本
+    // Check currently active version
     let current_link = vex_dir.join("current").join(tool_name);
     let current_version = if current_link.exists() {
         fs::read_link(&current_link)
@@ -422,7 +422,7 @@ fn list_remote(tool_name: &str, show_all: bool, use_cache: bool) -> Result<()> {
         return Ok(());
     }
 
-    // 默认只展示最近 20 个，支持上下键滚动
+    // Default: show only the latest 20, support scrolling with arrow keys
     let recent: Vec<_> = versions.iter().take(20).cloned().collect();
     let items: Vec<String> = recent
         .iter()
@@ -643,13 +643,13 @@ fn auto_switch() -> Result<()> {
     let vex_dir = vex_dir()?;
 
     for (tool_name, version) in &versions {
-        // 检查工具是否支持
+        // Check tool support
         let tool = match tools::get_tool(tool_name) {
             Ok(t) => t,
             Err(_) => continue,
         };
 
-        // 检查版本是否已安装
+        // Check if version is installed
         let version_dir = vex_dir.join("toolchains").join(tool_name).join(version);
         if !version_dir.exists() {
             eprintln!(
@@ -659,7 +659,7 @@ fn auto_switch() -> Result<()> {
             continue;
         }
 
-        // 检查是否已经是当前版本（避免重复切换）
+        // Check if already the current version (avoid redundant switching)
         let current_link = vex_dir.join("current").join(tool_name);
         if current_link.exists() {
             if let Ok(target) = fs::read_link(&current_link) {
@@ -671,7 +671,7 @@ fn auto_switch() -> Result<()> {
             }
         }
 
-        // 静默切换
+        // Silent switch
         switcher::switch_version(tool.as_ref(), version)?;
     }
 
@@ -1097,5 +1097,104 @@ mod tests {
         // This test verifies that vex_dir() returns Result
         // In normal circumstances, it should succeed
         assert!(vex_dir().is_ok());
+    }
+
+    #[test]
+    fn test_write_tool_version_new_file() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join(".tool-versions");
+
+        write_tool_version(&file_path, "node", "20.11.0").unwrap();
+
+        let content = fs::read_to_string(&file_path).unwrap();
+        assert_eq!(content, "node 20.11.0\n");
+    }
+
+    #[test]
+    fn test_write_tool_version_update_existing() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join(".tool-versions");
+
+        // Write initial version
+        fs::write(&file_path, "node 20.11.0\ngo 1.23.5\n").unwrap();
+
+        // Update node version
+        write_tool_version(&file_path, "node", "22.0.0").unwrap();
+
+        let content = fs::read_to_string(&file_path).unwrap();
+        assert!(content.contains("node 22.0.0"));
+        assert!(content.contains("go 1.23.5"));
+        assert!(!content.contains("20.11.0"));
+    }
+
+    #[test]
+    fn test_write_tool_version_add_new_tool() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join(".tool-versions");
+
+        // Write initial version
+        fs::write(&file_path, "node 20.11.0\n").unwrap();
+
+        // Add go version
+        write_tool_version(&file_path, "go", "1.23.5").unwrap();
+
+        let content = fs::read_to_string(&file_path).unwrap();
+        assert!(content.contains("node 20.11.0"));
+        assert!(content.contains("go 1.23.5"));
+    }
+
+    #[test]
+    fn test_write_tool_version_sorted() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join(".tool-versions");
+
+        // Write in unsorted order
+        fs::write(&file_path, "rust 1.93.1\ngo 1.23.5\n").unwrap();
+
+        // Add node (should be sorted alphabetically)
+        write_tool_version(&file_path, "node", "20.11.0").unwrap();
+
+        let content = fs::read_to_string(&file_path).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines[0], "go 1.23.5");
+        assert_eq!(lines[1], "node 20.11.0");
+        assert_eq!(lines[2], "rust 1.93.1");
+    }
+
+    #[test]
+    fn test_write_tool_version_ignores_comments() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join(".tool-versions");
+
+        // Write with comments
+        fs::write(&file_path, "# Comment\nnode 20.11.0\n# Another comment\n").unwrap();
+
+        // Update node version
+        write_tool_version(&file_path, "node", "22.0.0").unwrap();
+
+        let content = fs::read_to_string(&file_path).unwrap();
+        assert_eq!(content, "node 22.0.0\n");
+        assert!(!content.contains("Comment"));
+    }
+
+    #[test]
+    fn test_write_tool_version_empty_lines() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join(".tool-versions");
+
+        // Write with empty lines
+        fs::write(&file_path, "\n\nnode 20.11.0\n\n").unwrap();
+
+        // Update node version
+        write_tool_version(&file_path, "node", "22.0.0").unwrap();
+
+        let content = fs::read_to_string(&file_path).unwrap();
+        assert_eq!(content, "node 22.0.0\n");
     }
 }

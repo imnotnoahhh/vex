@@ -1,7 +1,7 @@
-//! 工具安装模块
+//! Tool installation module
 //!
-//! 负责下载、校验、解压和安装工具版本到 `~/.vex/toolchains/`。
-//! 包含磁盘空间检查、路径遍历防护和 `CleanupGuard` 自动清理机制。
+//! Responsible for downloading, verifying, extracting, and installing tool versions to `~/.vex/toolchains/`.
+//! Includes disk space checking, path traversal protection, and `CleanupGuard` automatic cleanup mechanism.
 
 use crate::downloader::{download_with_retry, verify_checksum};
 use crate::error::{Result, VexError};
@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use sysinfo::Disks;
 use tar::Archive;
 
-/// 安装前最低可用磁盘空间（500 MB）
+/// Minimum free disk space before installation (500 MB)
 const MIN_FREE_SPACE_BYTES: u64 = 500 * 1024 * 1024;
 
 fn vex_dir() -> Result<PathBuf> {
@@ -23,11 +23,11 @@ fn vex_dir() -> Result<PathBuf> {
         .ok_or(VexError::HomeDirectoryNotFound)
 }
 
-/// 检查磁盘可用空间是否充足
+/// Check if sufficient disk space is available
 ///
-/// # 参数
-/// - `path` - 检查路径所在的磁盘
-/// - `required_bytes` - 需要的最小字节数
+/// # Arguments
+/// - `path` - Path to check disk space for
+/// - `required_bytes` - Minimum required bytes
 fn check_disk_space(path: &Path, required_bytes: u64) -> Result<()> {
     let disks = Disks::new_with_refreshed_list();
 
@@ -49,9 +49,10 @@ fn check_disk_space(path: &Path, required_bytes: u64) -> Result<()> {
     Ok(())
 }
 
-/// 清理守卫：安装失败时自动清理临时文件（RAII 模式）
+/// Cleanup guard: automatically cleans up temporary files on installation failure (RAII pattern)
 ///
-/// 安装成功后调用 `disarm()` 解除守卫，否则在 `Drop` 时自动删除注册的临时路径。
+/// Call `disarm()` after successful installation to disable the guard, otherwise registered temporary paths
+/// are automatically deleted on `Drop`.
 struct CleanupGuard {
     paths: Vec<PathBuf>,
     disarmed: bool,
@@ -89,24 +90,24 @@ impl Drop for CleanupGuard {
     }
 }
 
-/// 安装指定工具版本
+/// Install specified tool version
 ///
-/// 完整安装流程：检查重复 → 获取锁 → 检查磁盘 → 下载 → 校验 → 解压 → 移动 → post_install。
+/// Complete installation flow: check duplicates → acquire lock → check disk → download → verify → extract → move → post_install.
 ///
-/// # 参数
-/// - `tool` - 工具实现
-/// - `version` - 版本号
+/// # Arguments
+/// - `tool` - Tool implementation
+/// - `version` - Version number
 ///
-/// # 错误
-/// - `VexError::LockConflict` - 另一个进程正在安装
-/// - `VexError::DiskSpace` - 磁盘空间不足
-/// - `VexError::Network` - 下载失败
-/// - `VexError::ChecksumMismatch` - 校验和不匹配
+/// # Errors
+/// - `VexError::LockConflict` - Another process is installing
+/// - `VexError::DiskSpace` - Insufficient disk space
+/// - `VexError::Network` - Download failed
+/// - `VexError::ChecksumMismatch` - Checksum mismatch
 pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     let arch = Arch::detect();
     let vex = vex_dir()?;
 
-    // 0. 检查是否已安装
+    // 0. Check if already installed
     let final_dir = vex.join("toolchains").join(tool.name()).join(version);
     if final_dir.exists() {
         println!(
@@ -141,24 +142,24 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     let archive_path = cache_dir.join(&archive_name);
     let extract_dir = cache_dir.join(format!("{}-{}-extract", tool.name(), version));
 
-    // 设置清理守卫
+    // Set up cleanup guard
     let mut guard = CleanupGuard::new();
     guard.add(archive_path.clone());
     guard.add(extract_dir.clone());
 
-    // 1. 下载
+    // 1. Download
     let download_url = tool.download_url(version, arch)?;
     println!("{} from {}...", "Downloading".cyan(), download_url.dimmed());
     download_with_retry(&download_url, &archive_path, 3)?;
 
-    // 2. 验证 checksum
+    // 2. Verify checksum
     if let Ok(Some(expected)) = tool.get_checksum(version, arch) {
         println!("{}...", "Verifying checksum".cyan());
         verify_checksum(&archive_path, &expected)?;
         println!("{} Checksum verified", "✓".green());
     }
 
-    // 3. 解压
+    // 3. Extract
     println!("{}...", "Extracting".cyan());
     fs::create_dir_all(&extract_dir)?;
 
@@ -194,7 +195,7 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
         entry.unpack_in(&extract_dir)?;
     }
 
-    // 4. 找到解压后的目录
+    // 4. Find extracted directory
     let entries = fs::read_dir(&extract_dir)?;
     let extracted_dir = entries
         .filter_map(|e| e.ok())
@@ -202,15 +203,15 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
         .ok_or_else(|| VexError::Parse("No directory found after extraction".to_string()))?
         .path();
 
-    // 5. 移动到最终位置
+    // 5. Move to final location
     let toolchains_dir = vex.join("toolchains").join(tool.name());
     fs::create_dir_all(&toolchains_dir)?;
     fs::rename(&extracted_dir, &final_dir)?;
 
-    // 5.5. 运行 post-install 钩子
+    // 5.5. Run post-install hook
     tool.post_install(&final_dir, arch)?;
 
-    // 6. 安装成功，解除清理守卫并手动清理临时文件
+    // 6. Installation successful, disarm cleanup guard and manually clean up temporary files
     guard.disarm();
     let _ = fs::remove_file(&archive_path);
     let _ = fs::remove_dir_all(&extract_dir);
@@ -308,5 +309,82 @@ mod tests {
     fn test_min_free_space_constant() {
         // Verify the constant is set to 500 MB
         assert_eq!(MIN_FREE_SPACE_BYTES, 500 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_cleanup_guard_new() {
+        let guard = CleanupGuard::new();
+        assert_eq!(guard.paths.len(), 0);
+        assert!(!guard.disarmed);
+    }
+
+    #[test]
+    fn test_cleanup_guard_add() {
+        let mut guard = CleanupGuard::new();
+        guard.add(PathBuf::from("/tmp/test"));
+        assert_eq!(guard.paths.len(), 1);
+    }
+
+    #[test]
+    fn test_cleanup_guard_disarm() {
+        let mut guard = CleanupGuard::new();
+        guard.add(PathBuf::from("/tmp/test"));
+        guard.disarm();
+        assert!(guard.disarmed);
+    }
+
+    #[test]
+    fn test_cleanup_guard_drop_disarmed() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.txt");
+        std::fs::write(&test_file, "test").unwrap();
+
+        {
+            let mut guard = CleanupGuard::new();
+            guard.add(test_file.clone());
+            guard.disarm();
+        }
+
+        // File should still exist because guard was disarmed
+        assert!(test_file.exists());
+    }
+
+    #[test]
+    fn test_cleanup_guard_drop_armed_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.txt");
+        std::fs::write(&test_file, "test").unwrap();
+
+        {
+            let mut guard = CleanupGuard::new();
+            guard.add(test_file.clone());
+        }
+
+        // File should be deleted
+        assert!(!test_file.exists());
+    }
+
+    #[test]
+    fn test_cleanup_guard_drop_armed_dir() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_dir = temp_dir.path().join("testdir");
+        std::fs::create_dir(&test_dir).unwrap();
+        std::fs::write(test_dir.join("file.txt"), "test").unwrap();
+
+        {
+            let mut guard = CleanupGuard::new();
+            guard.add(test_dir.clone());
+        }
+
+        // Directory should be deleted
+        assert!(!test_dir.exists());
+    }
+
+    #[test]
+    fn test_vex_dir_success() {
+        // This should succeed on normal systems
+        let result = vex_dir();
+        assert!(result.is_ok());
+        assert!(result.unwrap().ends_with(".vex"));
     }
 }

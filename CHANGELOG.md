@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Test coverage improvement** — Increased test coverage from 46.99% to 68.03% (+21.04%):
+  - Added 25 new unit tests covering core logic (version resolution, file operations, cleanup guards)
+  - Added 10 new CLI integration tests for install, global, use --auto, and doctor commands
+  - Achieved 100% coverage for 5 core modules (cache, resolver, shell, switcher, tools/mod)
+  - Total test count: 183 tests (135 unit + 43 CLI + 5 E2E)
+- **Documentation translation** — Translated all Rustdoc comments from Chinese to English across 14 modules for better international accessibility
+
 ## [0.1.6] - 2026-03-02
 
 ### Added

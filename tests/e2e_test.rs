@@ -330,7 +330,10 @@ fn test_e2e_list_command() {
 #[ignore] // 需要网络
 fn test_e2e_list_remote_command() {
     // 测试 list-remote 命令
-    let output = vex_bin().args(["list-remote", "node"]).output().unwrap();
+    let output = vex_bin()
+        .args(["list-remote", "node", "--all"])
+        .output()
+        .unwrap();
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
