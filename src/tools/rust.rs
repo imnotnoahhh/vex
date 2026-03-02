@@ -344,12 +344,13 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires network
     fn test_get_checksum_format() {
         // Test that get_checksum returns proper format
         let version = "1.93.1";
         let arch = Arch::Arm64;
         let result = RustTool.get_checksum(version, arch);
-        // Should either succeed with Some/None or fail with network/parse error
-        assert!(result.is_ok() || result.is_err());
+        assert!(result.is_ok());
+        // Should return Some(hash) or None
     }
 }

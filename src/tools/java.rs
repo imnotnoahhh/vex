@@ -300,12 +300,12 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires network
     fn test_get_checksum_format() {
         // Test that get_checksum returns proper format
         let version = "21";
         let arch = Arch::Arm64;
         let result = JavaTool.get_checksum(version, arch);
-        // Should either succeed with Some/None or fail with network error
-        assert!(result.is_ok() || matches!(result, Err(VexError::Network(_))));
+        assert!(result.is_ok());
     }
 }
