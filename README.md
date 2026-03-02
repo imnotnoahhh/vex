@@ -196,7 +196,7 @@ vex install
 |------|----------|--------|
 | Node.js | node, npm, npx, corepack | Official binaries |
 | Go | go, gofmt | Official binaries |
-| Java | java, javac, jar + 27 more JDK tools | Eclipse Temurin JDK |
+| Java | java, javac, jar, javadoc + 26 more JDK tools | Eclipse Temurin JDK |
 | Rust | rustc, rustdoc, cargo, rustfmt, clippy, rust-analyzer + 5 more | Official stable binaries |
 
 ## Fuzzy Version Matching
@@ -371,6 +371,38 @@ Benchmarked operations:
 Note: Benchmarks are not run in CI to keep build times fast. Run them locally to measure performance improvements.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+## Roadmap
+
+### Planned Features
+
+- **Python support** — Manage Python versions via python-build-standalone or uv
+- **Linux support** — Extend to Linux distributions (Ubuntu, Debian, Fedora, Arch)
+- **Windows support** — Windows compatibility with junction points
+- **Plugin system** — Allow community-contributed tool adapters
+- **Version constraints** — Support version ranges in `.tool-versions` (e.g., `node >=20.0.0 <21.0.0`)
+- **Global default versions** — Set default versions without `.tool-versions` file
+- **Parallel installations** — Install multiple tools concurrently
+- **Update notifications** — Notify when new tool versions are available
+
+### Future Considerations
+
+- **Additional languages**: Ruby, PHP, Elixir, Zig
+- **Custom binary sources**: Support for private registries
+- **Version pinning strategies**: Lock files for reproducible builds
+- **Integration with CI/CD**: GitHub Actions, GitLab CI support
+
+See [GitHub Issues](https://github.com/imnotnoahhh/vex/issues) for detailed feature requests and discussions.
+
+## Contributors
+
+Thanks to everyone who has contributed to vex!
+
+<!-- ALL-CONTRIBUTORS-LIST:START -->
+- [Noah Qin](https://github.com/imnotnoahhh) - Creator and maintainer
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+Want to contribute? Check out [CONTRIBUTING.md](CONTRIBUTING.md) to get started!
 
 ## License
 
