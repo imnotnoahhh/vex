@@ -1,23 +1,28 @@
-## 改动说明
+## Description
 
-<!-- 简要描述这个 PR 做了什么 -->
+<!-- Briefly describe what this PR does -->
 
-## 类型
+## Type
 
-- [ ] Bug 修复
-- [ ] 新功能
-- [ ] 重构
-- [ ] 文档更新
-- [ ] CI/构建相关
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Refactoring
+- [ ] Documentation update
+- [ ] CI/Build related
 
-## 检查清单
+## Checklist
 
-- [ ] `cargo fmt --all -- --check` 通过
-- [ ] `cargo clippy -- -D warnings` 通过
-- [ ] `cargo test --all-features` 通过
-- [ ] 如果添加了新功能，已添加对应测试
-- [ ] 如果修改了命令行接口，已更新 README
+- [ ] `cargo fmt --all -- --check` passes
+- [ ] `cargo clippy -- -D warnings` passes
+- [ ] `cargo test --all-features` passes
+- [ ] Added tests for new features (if applicable)
+- [ ] Updated README if CLI interface changed
+- [ ] Updated CHANGELOG.md with changes
 
-## 关联 Issue
+## Related Issue
 
-<!-- 如有关联的 Issue，请引用：Fixes #123 -->
+<!-- If this PR fixes an issue, reference it: Fixes #123 -->
+
+## Testing
+
+<!-- Describe how you tested these changes -->

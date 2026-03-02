@@ -36,19 +36,21 @@ CI runs fmt, clippy, test, and audit checks.
 
 ```
 src/
-├── main.rs          # CLI entry, command routing, local/global/install flows
+├── main.rs          # CLI entry, command routing, local/global/install flows, doctor command
 ├── tools/           # Tool adapters (download URL, remote versions, fuzzy matching)
 │   ├── mod.rs       # Tool trait, get_tool(), resolve_fuzzy_version()
-│   ├── node.rs
-│   ├── go.rs
-│   ├── java.rs
-│   └── rust.rs
-├── downloader.rs    # HTTP download, SHA256 verification, retry logic
-├── installer.rs     # Extract tar.gz and create version directory
+│   ├── node.rs      # Node.js with LTS support
+│   ├── go.rs        # Go with minor version matching
+│   ├── java.rs      # Java (Eclipse Temurin JDK)
+│   └── rust.rs      # Rust with complete toolchain
+├── downloader.rs    # HTTP download, SHA256 verification, retry logic, timeout configuration
+├── installer.rs     # Extract tar.gz, disk space check, path traversal protection
 ├── switcher.rs      # Symlink management for bin/ and current/
-├── resolver.rs      # Version file resolution (.tool-versions / .node-version)
-├── shell.rs         # zsh/bash hook generation
-└── error.rs         # Unified error types
+├── resolver.rs      # Version file resolution (.tool-versions / .node-version / etc.)
+├── shell.rs         # Shell hook generation (zsh, bash, fish, nushell)
+├── cache.rs         # Remote version list caching with TTL
+├── lock.rs          # Installation lock mechanism
+└── error.rs         # Unified error types with actionable suggestions
 ```
 
 ## Adding Support for a New Tool
@@ -119,6 +121,45 @@ chore: bump MSRV to 1.89
 
 ## Testing
 
-- Put unit tests in each module under `#[cfg(test)] mod tests`.
-- CLI integration tests live in `tests/cli_test.rs`.
-- Mark network-dependent tests with `#[ignore]` so CI does not run them by default.
+### Test Organization
+
+- **Unit tests**: Put in each module under `#[cfg(test)] mod tests`
+- **CLI integration tests**: Live in `tests/cli_test.rs`
+- **End-to-end tests**: Live in `tests/e2e_test.rs`
+- **Benchmarks**: Live in `benches/benchmarks.rs`
+
+### Running Tests
+
+```bash
+# Run all tests (excluding ignored)
+cargo test --all-features
+
+# Run all tests including network-dependent ones
+cargo test --all-features -- --ignored
+
+# Run specific test
+cargo test test_name
+
+# Run benchmarks
+cargo bench
+```
+
+### Test Guidelines
+
+- Mark network-dependent tests with `#[ignore]` so CI does not run them by default
+- Add tests for new features and bug fixes
+- Ensure tests are deterministic and don't depend on external state
+- Use `tempfile` crate for temporary directories in tests
+- Test both success and error cases
+
+### Security Testing
+
+When adding security features, ensure comprehensive test coverage:
+
+- **Path traversal protection**: Test with malicious paths (`../`, absolute paths)
+- **Disk space checks**: Test with insufficient space scenarios
+- **HTTP timeouts**: Test timeout and retry logic
+- **Checksum verification**: Test with corrupted downloads
+- **Lock mechanism**: Test concurrent installation attempts
+
+See `TESTING.md` for detailed testing guidelines.
