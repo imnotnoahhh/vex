@@ -1,0 +1,25 @@
+/* vex Rustdoc style enhancements - minimal overrides only */
+
+/* Better font for documentation text */
+.docblock {
+    font-size: 15px;
+    line-height: 1.65;
+}
+
+/* Slightly better code block appearance */
+.item-decl {
+    border-radius: 6px;
+}
+
+pre.rust {
+    border-radius: 6px;
+}
+
+/* Improve item table spacing */
+.item-table dt {
+    padding-top: 6px;
+}
+
+.item-table dd {
+    padding-bottom: 8px;
+}

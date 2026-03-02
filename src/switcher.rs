@@ -1,7 +1,7 @@
-//! 版本切换模块
+//! Version switching module
 //!
-//! 通过原子更新符号链接实现工具版本切换。
-//! 更新 `~/.vex/current/<tool>` 和 `~/.vex/bin/` 下的可执行文件链接。
+//! Implements tool version switching via atomic symlink updates.
+//! Updates `~/.vex/current/<tool>` and executable links in `~/.vex/bin/`.
 
 use crate::error::{Result, VexError};
 use crate::tools::Tool;
@@ -16,17 +16,17 @@ fn vex_dir() -> Result<PathBuf> {
         .ok_or(VexError::HomeDirectoryNotFound)
 }
 
-/// 切换工具到指定版本
+/// Switch tool to specified version
 ///
-/// 原子更新 `~/.vex/current/<tool>` 符号链接和 `~/.vex/bin/` 下的可执行文件链接。
+/// Atomically updates `~/.vex/current/<tool>` symlink and executable links in `~/.vex/bin/`.
 ///
-/// # 参数
-/// - `tool` - 工具实现
-/// - `version` - 目标版本号（必须已安装）
+/// # Arguments
+/// - `tool` - Tool implementation
+/// - `version` - Target version number (must be installed)
 ///
-/// # 错误
-/// - `VexError::VersionNotFound` - 版本未安装
-/// - `VexError::Io` - 符号链接操作失败
+/// # Errors
+/// - `VexError::VersionNotFound` - Version not installed
+/// - `VexError::Io` - Symlink operation failed
 pub fn switch_version(tool: &dyn Tool, version: &str) -> Result<()> {
     switch_version_in(tool, version, &vex_dir()?)
 }
@@ -48,7 +48,7 @@ fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<
         version.yellow()
     );
 
-    // 1. 更新 current/ 符号链接
+    // 1. Update current/ symlink
     let current_dir = base_dir.join("current");
     fs::create_dir_all(&current_dir)?;
 
@@ -59,7 +59,7 @@ fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<
     unix_fs::symlink(&toolchain_dir, &temp_link)?;
     fs::rename(&temp_link, &current_link)?;
 
-    // 2. 更新 bin/ 下的可执行文件链接
+    // 2. Update executable links in bin/
     let bin_dir = base_dir.join("bin");
     fs::create_dir_all(&bin_dir)?;
 
@@ -129,10 +129,10 @@ mod tests {
     fn test_switch_creates_current_symlink() {
         let base = make_temp_dir("current_link");
 
-        // 创建假的 toolchain 目录
+        // Create fake toolchain directory
         let tc = base.join("toolchains/node/20.11.0/bin");
         fs::create_dir_all(&tc).unwrap();
-        // 创建假的二进制文件
+        // Create fake binary files
         for name in &["node", "npm", "npx"] {
             fs::write(tc.join(name), "fake").unwrap();
         }
@@ -140,13 +140,13 @@ mod tests {
         let result = switch_version_in(&NodeTool, "20.11.0", &base);
         assert!(result.is_ok());
 
-        // 验证 current/node 符号链接存在且指向正确
+        // Verify current/node symlink exists and points correctly
         let current_link = base.join("current/node");
         assert!(current_link.exists());
         let target = fs::read_link(&current_link).unwrap();
         assert!(target.ends_with("toolchains/node/20.11.0"));
 
-        // 验证 bin/ 下的链接
+        // Verify links in bin/
         assert!(base.join("bin/node").exists());
         assert!(base.join("bin/npm").exists());
         assert!(base.join("bin/npx").exists());
@@ -176,7 +176,7 @@ mod tests {
     fn test_switch_rust_separate_bin_paths() {
         let base = make_temp_dir("rust_paths");
 
-        // Rust 的各组件在不同子目录
+        // Rust components in different subdirectories
         let rustc_dir = base.join("toolchains/rust/1.93.1/rustc/bin");
         let cargo_dir = base.join("toolchains/rust/1.93.1/cargo/bin");
         let rustfmt_dir = base.join("toolchains/rust/1.93.1/rustfmt-preview/bin");
@@ -202,13 +202,13 @@ mod tests {
         let result = switch_version_in(&RustTool, "1.93.1", &base);
         assert!(result.is_ok());
 
-        // 验证 bin 链接指向不同的子目录
+        // Verify bin links point to different subdirectories
         let rustc_target = fs::read_link(base.join("bin/rustc")).unwrap();
         let cargo_target = fs::read_link(base.join("bin/cargo")).unwrap();
         assert!(rustc_target.to_string_lossy().contains("rustc/bin/rustc"));
         assert!(cargo_target.to_string_lossy().contains("cargo/bin/cargo"));
 
-        // 验证 clippy、rustfmt、rust-analyzer 链接
+        // Verify clippy, rustfmt, rust-analyzer links
         assert!(base.join("bin/rustfmt").exists());
         assert!(base.join("bin/cargo-fmt").exists());
         assert!(base.join("bin/cargo-clippy").exists());
@@ -226,7 +226,7 @@ mod tests {
     fn test_switch_replaces_existing_links() {
         let base = make_temp_dir("replace_links");
 
-        // 先创建 v1
+        // First create v1
         let tc_v1 = base.join("toolchains/node/1.0.0/bin");
         fs::create_dir_all(&tc_v1).unwrap();
         for name in &["node", "npm", "npx"] {
@@ -234,7 +234,7 @@ mod tests {
         }
         switch_version_in(&NodeTool, "1.0.0", &base).unwrap();
 
-        // 再切换到 v2
+        // Then switch to v2
         let tc_v2 = base.join("toolchains/node/2.0.0/bin");
         fs::create_dir_all(&tc_v2).unwrap();
         for name in &["node", "npm", "npx"] {
@@ -242,7 +242,7 @@ mod tests {
         }
         switch_version_in(&NodeTool, "2.0.0", &base).unwrap();
 
-        // current 应该指向 v2
+        // current should point to v2
         let target = fs::read_link(base.join("current/node")).unwrap();
         assert!(target.ends_with("toolchains/node/2.0.0"));
 

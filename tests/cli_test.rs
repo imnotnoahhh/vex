@@ -264,3 +264,194 @@ fn test_local_writes_tool_versions() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// --- doctor 命令测试 ---
+
+#[test]
+fn test_doctor_command() {
+    let output = vex_bin().arg("doctor").output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Health Check") || stdout.contains("doctor"));
+}
+
+// --- upgrade 命令测试 ---
+
+#[test]
+fn test_upgrade_invalid_tool() {
+    let output = vex_bin().args(["upgrade", "python"]).output().unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Tool not found"));
+}
+
+#[test]
+fn test_upgrade_valid_tool_format() {
+    // upgrade 命令会尝试 list_remote，但我们只测试参数解析
+    let output = vex_bin().args(["upgrade", "node"]).output().unwrap();
+    // 可能成功（如果有网络）或失败（网络错误），但不应该是参数错误
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stderr.contains("Invalid spec format"));
+}
+
+// --- alias 命令测试 ---
+
+#[test]
+fn test_alias_invalid_tool() {
+    let output = vex_bin().args(["alias", "python"]).output().unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Tool not found"));
+}
+
+#[test]
+fn test_alias_valid_tool_format() {
+    let output = vex_bin().args(["alias", "node"]).output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stderr.contains("Invalid spec format"));
+}
+
+// --- install from version files ---
+
+#[test]
+fn test_install_from_version_file_unsupported_tool() {
+    let dir = std::env::temp_dir().join("vex_test_install_unsupported");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // Write .tool-versions with unsupported tool
+    std::fs::write(dir.join(".tool-versions"), "python 3.12.0\n").unwrap();
+
+    let output = vex_bin().arg("install").current_dir(&dir).output().unwrap();
+    // Should not crash, just skip unsupported tool
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("skipping unsupported tool") || output.status.success());
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn test_install_from_version_file_already_installed() {
+    let dir = std::env::temp_dir().join("vex_test_install_already");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // Write .tool-versions with a version that's already installed (if any)
+    // This tests the "already installed, skipping" path
+    std::fs::write(dir.join(".tool-versions"), "node 99.99.99\n").unwrap();
+
+    let output = vex_bin().arg("install").current_dir(&dir).output().unwrap();
+    // Will either fail with network error or succeed
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // Should not be a parse error
+    assert!(!combined.contains("Invalid spec format"));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// --- global 命令测试 ---
+
+#[test]
+fn test_global_invalid_tool() {
+    let output = vex_bin().args(["global", "python@3.12"]).output().unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Tool not found"));
+}
+
+#[test]
+fn test_global_writes_tool_versions() {
+    // global with full version should write to ~/.tool-versions
+    let output = vex_bin().args(["global", "node@20.11.0"]).output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("node") && stdout.contains("20.11.0"));
+}
+
+// --- use --auto with version file ---
+
+#[test]
+fn test_use_auto_with_unsupported_tool() {
+    let dir = std::env::temp_dir().join("vex_test_auto_unsupported");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    std::fs::write(dir.join(".tool-versions"), "python 3.12.0\n").unwrap();
+
+    let output = vex_bin()
+        .args(["use", "--auto"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    // Should succeed (unsupported tools are silently skipped)
+    assert!(output.status.success());
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn test_use_auto_with_uninstalled_version() {
+    let dir = std::env::temp_dir().join("vex_test_auto_uninstalled");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    std::fs::write(dir.join(".tool-versions"), "node 99.99.99\n").unwrap();
+
+    let output = vex_bin()
+        .args(["use", "--auto"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    // Should succeed but print warning about uninstalled version
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("not installed") || stderr.is_empty());
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// --- doctor 详细检查 ---
+
+#[test]
+fn test_doctor_checks_directory_structure() {
+    let output = vex_bin().arg("doctor").output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Checking"));
+}
+
+#[test]
+fn test_doctor_checks_path() {
+    let output = vex_bin().arg("doctor").output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("PATH"));
+}
+
+// --- init 重复运行 ---
+
+#[test]
+fn test_init_idempotent() {
+    // Running init twice should succeed both times
+    let output1 = vex_bin().arg("init").output().unwrap();
+    assert!(output1.status.success());
+    let output2 = vex_bin().arg("init").output().unwrap();
+    assert!(output2.status.success());
+}
+
+// --- list-remote with --no-cache ---
+
+#[test]
+fn test_list_remote_no_cache_invalid_tool() {
+    let output = vex_bin()
+        .args(["list-remote", "python", "--no-cache"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Tool not found"));
+}

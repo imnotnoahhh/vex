@@ -1,7 +1,7 @@
-//! 远程版本列表缓存模块
+//! Remote version list cache module
 //!
-//! 缓存工具的远程版本列表到 `~/.vex/cache/remote-<tool>.json`，
-//! 默认 TTL 300 秒，可通过 `~/.vex/config.toml` 的 `cache_ttl_secs` 配置。
+//! Caches tool remote version lists to `~/.vex/cache/remote-<tool>.json`,
+//! default TTL 300 seconds, configurable via `cache_ttl_secs` in `~/.vex/config.toml`.
 
 use crate::tools::Version;
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// 默认缓存 TTL（300 秒 = 5 分钟）
+/// Default cache TTL (300 seconds = 5 minutes)
 const DEFAULT_TTL_SECS: u64 = 300;
 
 #[derive(Serialize, Deserialize)]
@@ -24,18 +24,18 @@ struct CacheFile {
     cached_at: u64,
 }
 
-/// 远程版本列表缓存管理器
+/// Remote version list cache manager
 ///
-/// 将工具版本列表序列化为 JSON 存储在 `~/.vex/cache/remote-<tool>.json`。
+/// Serializes tool version lists as JSON and stores them in `~/.vex/cache/remote-<tool>.json`.
 pub struct RemoteCache {
     cache_dir: PathBuf,
 }
 
 impl RemoteCache {
-    /// 创建缓存管理器
+    /// Create cache manager
     ///
-    /// # 参数
-    /// - `vex_dir` - vex 根目录（`~/.vex`）
+    /// # Arguments
+    /// - `vex_dir` - vex root directory (`~/.vex`)
     pub fn new(vex_dir: &std::path::Path) -> Self {
         Self {
             cache_dir: vex_dir.join("cache"),
@@ -53,11 +53,11 @@ impl RemoteCache {
             .as_secs()
     }
 
-    /// 获取缓存的版本列表，超过 TTL 返回 `None`
+    /// Get cached version list, returns `None` if TTL exceeded
     ///
-    /// # 参数
-    /// - `tool_name` - 工具名称
-    /// - `ttl_secs` - 缓存有效期（秒）
+    /// # Arguments
+    /// - `tool_name` - Tool name
+    /// - `ttl_secs` - Cache validity period (seconds)
     pub fn get_cached_versions(&self, tool_name: &str, ttl_secs: u64) -> Option<Vec<Version>> {
         let path = self.cache_path(tool_name);
         let data = fs::read_to_string(&path).ok()?;
@@ -80,11 +80,11 @@ impl RemoteCache {
         Some(versions)
     }
 
-    /// 写入版本列表到缓存（静默忽略写入失败）
+    /// Write version list to cache (silently ignores write failures)
     ///
-    /// # 参数
-    /// - `tool_name` - 工具名称
-    /// - `versions` - 版本列表
+    /// # Arguments
+    /// - `tool_name` - Tool name
+    /// - `versions` - Version list
     pub fn set_cached_versions(&self, tool_name: &str, versions: &[Version]) {
         let entries: Vec<CachedVersionEntry> = versions
             .iter()
@@ -107,7 +107,7 @@ impl RemoteCache {
     }
 }
 
-/// 从 `~/.vex/config.toml` 读取缓存 TTL，失败时返回默认值 300 秒
+/// Read cache TTL from `~/.vex/config.toml`, returns default value 300 seconds on failure
 pub fn read_cache_ttl(vex_dir: &std::path::Path) -> u64 {
     let config_path = vex_dir.join("config.toml");
     let content = match fs::read_to_string(&config_path) {

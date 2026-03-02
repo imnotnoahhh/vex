@@ -1,16 +1,16 @@
-//! Shell 集成脚本生成模块
+//! Shell integration script generation module
 //!
-//! 生成 shell hook 脚本，在 `cd` 时自动检测版本文件并切换工具版本。
-//! 支持 zsh（chpwd）、bash（PROMPT_COMMAND）、fish（PWD 变量监听）、nushell（pre_prompt）。
+//! Generates shell hook scripts that automatically detect version files and switch tool versions on `cd`.
+//! Supports zsh (chpwd), bash (PROMPT_COMMAND), fish (PWD variable monitoring), nushell (pre_prompt).
 
-/// 生成指定 shell 的 hook 脚本
+/// Generate hook script for specified shell
 ///
-/// # 参数
-/// - `shell` - Shell 类型：`"zsh"`、`"bash"`、`"fish"`、`"nu"` / `"nushell"`
+/// # Arguments
+/// - `shell` - Shell type: `"zsh"`, `"bash"`, `"fish"`, `"nu"` / `"nushell"`
 ///
-/// # 返回
-/// - `Ok(String)` - hook 脚本内容
-/// - `Err(String)` - 不支持的 shell 类型
+/// # Returns
+/// - `Ok(String)` - Hook script content
+/// - `Err(String)` - Unsupported shell type
 pub fn generate_hook(shell: &str) -> Result<String, String> {
     match shell {
         "zsh" => Ok(generate_zsh_hook()),

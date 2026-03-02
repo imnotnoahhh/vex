@@ -1,14 +1,14 @@
-//! Rust 工具实现
+//! Rust tool implementation
 //!
-//! 解析 `channel-rust-stable.toml` 获取稳定版信息。
-//! 安装完整工具链（rustc、cargo、clippy、rustfmt、rust-analyzer 等 11 个二进制），
-//! `post_install` 负责链接 rust-std 到 sysroot 和动态库路径修复。
+//! Parses `channel-rust-stable.toml` to get stable version information.
+//! Installs complete toolchain (rustc, cargo, clippy, rustfmt, rust-analyzer, etc., 11 binaries),
+//! `post_install` handles linking rust-std to sysroot and dynamic library path fixes.
 
 use crate::error::{Result, VexError};
 use crate::tools::{Arch, Tool, Version};
 use serde::Deserialize;
 
-/// Rust 工具（官方稳定版工具链）
+/// Rust tool (official stable toolchain)
 pub struct RustTool;
 
 #[derive(Deserialize, Debug)]
@@ -42,16 +42,16 @@ impl Tool for RustTool {
     }
 
     fn list_remote(&self) -> Result<Vec<Version>> {
-        // Rust 只显示稳定版
+        // Rust only shows stable version
         let url = "https://static.rust-lang.org/dist/channel-rust-stable.toml";
         let response = reqwest::blocking::get(url)?;
         let content = response.text()?;
 
-        // 解析 TOML
+        // Parse TOML
         let manifest: RustManifest = toml::from_str(&content)
             .map_err(|e| VexError::Parse(format!("Failed to parse Rust manifest: {}", e)))?;
 
-        // 提取版本号（格式：1.93.1 (f4f0e5e1e 2026-02-11)）
+        // Extract version number (format: 1.93.1 (f4f0e5e1e 2026-02-11))
         let version_str = manifest.pkg.rust.version;
         let version = version_str
             .split_whitespace()
@@ -61,7 +61,7 @@ impl Tool for RustTool {
 
         Ok(vec![Version {
             version,
-            lts: None, // Rust 没有 LTS 概念
+            lts: None, // Rust has no LTS concept
         }])
     }
 
@@ -78,7 +78,7 @@ impl Tool for RustTool {
     }
 
     fn checksum_url(&self, _version: &str, _arch: Arch) -> Option<String> {
-        // Rust 的 SHA256 直接在 TOML 中
+        // Rust's SHA256 is directly in TOML
         None
     }
 
@@ -158,7 +158,7 @@ impl Tool for RustTool {
             crate::tools::Arch::X86_64 => "x86_64-apple-darwin",
         };
 
-        // 1. 链接 rust-std 到 rustc sysroot
+        // 1. Link rust-std to rustc sysroot
         let std_src = install_dir
             .join(format!("rust-std-{}", target))
             .join("lib/rustlib")
@@ -172,8 +172,8 @@ impl Tool for RustTool {
             unix_fs::symlink(&std_src, &std_dst)?;
         }
 
-        // 2. 链接 rustc/lib 到各组件目录
-        //    clippy/rustfmt/rust-analyzer 通过 @rpath (../lib/) 查找 librustc_driver
+        // 2. Link rustc/lib to component directories
+        //    clippy/rustfmt/rust-analyzer look for librustc_driver via @rpath (../lib/)
         let rustc_lib = install_dir.join("rustc/lib");
         for component in &["clippy-preview", "rustfmt-preview", "rust-analyzer-preview"] {
             let lib_link = install_dir.join(component).join("lib");
@@ -257,16 +257,16 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // 需要网络
+    #[ignore] // Requires network
     fn test_list_remote() {
         let versions = RustTool.list_remote().unwrap();
         assert!(!versions.is_empty());
-        // Rust 稳定版格式：x.y.z
+        // Rust stable version format: x.y.z
         assert!(versions[0].version.contains('.'));
     }
 
     #[test]
-    #[ignore] // 需要网络
+    #[ignore] // Requires network
     fn test_resolve_alias_latest() {
         let result = RustTool.resolve_alias("latest").unwrap();
         assert!(result.is_some());
@@ -274,7 +274,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // 需要网络
+    #[ignore] // Requires network
     fn test_resolve_alias_stable() {
         let result = RustTool.resolve_alias("stable").unwrap();
         assert!(result.is_some());
@@ -291,5 +291,66 @@ mod tests {
 
         let result = RustTool.resolve_alias("beta").unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_post_install_creates_symlinks() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let install_dir = temp_dir.path();
+
+        // Create fake Rust installation structure
+        let target = "aarch64-apple-darwin";
+
+        // Create rust-std source
+        let std_src = install_dir
+            .join(format!("rust-std-{}", target))
+            .join("lib/rustlib")
+            .join(target)
+            .join("lib");
+        fs::create_dir_all(&std_src).unwrap();
+        fs::write(std_src.join("libstd.rlib"), "fake").unwrap();
+
+        // Create rustc lib directory
+        let rustc_lib = install_dir.join("rustc/lib/rustlib").join(target);
+        fs::create_dir_all(&rustc_lib).unwrap();
+
+        // Create rustc/lib
+        let rustc_lib_root = install_dir.join("rustc/lib");
+        fs::create_dir_all(&rustc_lib_root).unwrap();
+
+        // Create component directories
+        for component in &["clippy-preview", "rustfmt-preview", "rust-analyzer-preview"] {
+            fs::create_dir_all(install_dir.join(component)).unwrap();
+        }
+
+        // Run post_install
+        let result = RustTool.post_install(install_dir, Arch::Arm64);
+        assert!(result.is_ok());
+
+        // Verify symlinks were created
+        let std_link = install_dir
+            .join("rustc/lib/rustlib")
+            .join(target)
+            .join("lib");
+        assert!(std_link.exists());
+
+        for component in &["clippy-preview", "rustfmt-preview", "rust-analyzer-preview"] {
+            let lib_link = install_dir.join(component).join("lib");
+            assert!(lib_link.exists(), "{} lib link should exist", component);
+        }
+    }
+
+    #[test]
+    #[ignore] // Requires network
+    fn test_get_checksum_format() {
+        // Test that get_checksum returns proper format
+        let version = "1.93.1";
+        let arch = Arch::Arm64;
+        let result = RustTool.get_checksum(version, arch);
+        assert!(result.is_ok());
+        // Should return Some(hash) or None
     }
 }

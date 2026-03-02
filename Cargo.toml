@@ -59,3 +59,7 @@ criterion = "0.5"
 [[bench]]
 name = "benchmarks"
 harness = false
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--html-in-header", "docs/header.html"]

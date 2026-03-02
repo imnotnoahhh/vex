@@ -1,26 +1,26 @@
-//! 版本文件解析模块
+//! Version file resolution module
 //!
-//! 从项目目录向上遍历查找版本文件（`.tool-versions`、`.node-version` 等），
-//! `.tool-versions` 优先级高于语言专用文件。
+//! Traverses upward from project directory to find version files (`.tool-versions`, `.node-version`, etc.).
+//! `.tool-versions` has higher priority than language-specific files.
 
 use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// 从起始目录向上遍历，查找所有工具的版本映射
+/// Traverse upward from start directory to find version mappings for all tools
 ///
-/// `.tool-versions` 优先级高于语言专用文件（`.node-version` 等）。
-/// 先找到的版本优先（子目录优先于父目录）。
+/// `.tool-versions` has higher priority than language-specific files (`.node-version`, etc.).
+/// First found version takes precedence (child directory over parent directory).
 ///
-/// # 参数
-/// - `start_dir` - 开始查找的目录
+/// # Arguments
+/// - `start_dir` - Directory to start searching from
 pub fn resolve_versions(start_dir: &Path) -> HashMap<String, String> {
     let mut versions = HashMap::new();
     let mut dir = start_dir.to_path_buf();
 
     loop {
-        // 1. 检查 .tool-versions（优先级最高）
+        // 1. Check .tool-versions (highest priority)
         let tool_versions = dir.join(".tool-versions");
         if tool_versions.is_file() {
             if let Ok(content) = fs::read_to_string(&tool_versions) {
@@ -30,7 +30,7 @@ pub fn resolve_versions(start_dir: &Path) -> HashMap<String, String> {
             }
         }
 
-        // 2. 检查各语言专用版本文件
+        // 2. Check language-specific version files
         for (file, tool) in TOOL_VERSION_FILES {
             let path = dir.join(file);
             if path.is_file() {
@@ -43,7 +43,7 @@ pub fn resolve_versions(start_dir: &Path) -> HashMap<String, String> {
             }
         }
 
-        // 向上遍历
+        // Traverse upward
         if !dir.pop() {
             break;
         }
@@ -52,21 +52,21 @@ pub fn resolve_versions(start_dir: &Path) -> HashMap<String, String> {
     versions
 }
 
-/// 查询单个工具的版本（从起始目录向上遍历）
+/// Query version for a single tool (traverse upward from start directory)
 ///
-/// # 参数
-/// - `tool_name` - 工具名称（如 "node"、"go"）
-/// - `start_dir` - 开始查找的目录
+/// # Arguments
+/// - `tool_name` - Tool name (e.g., "node", "go")
+/// - `start_dir` - Directory to start searching from
 ///
-/// # 返回
-/// - `Some(String)` - 找到的版本号
-/// - `None` - 未找到版本文件
+/// # Returns
+/// - `Some(String)` - Found version number
+/// - `None` - No version file found
 #[allow(dead_code)]
 pub fn resolve_version(tool_name: &str, start_dir: &Path) -> Option<String> {
     let mut dir = start_dir.to_path_buf();
 
     loop {
-        // 检查 .tool-versions
+        // Check .tool-versions
         let tool_versions = dir.join(".tool-versions");
         if tool_versions.is_file() {
             if let Ok(content) = fs::read_to_string(&tool_versions) {
@@ -78,7 +78,7 @@ pub fn resolve_version(tool_name: &str, start_dir: &Path) -> Option<String> {
             }
         }
 
-        // 检查专用版本文件
+        // Check tool-specific version files
         for (file, tool) in TOOL_VERSION_FILES {
             if *tool == tool_name {
                 let path = dir.join(file);
@@ -101,12 +101,12 @@ pub fn resolve_version(tool_name: &str, start_dir: &Path) -> Option<String> {
     None
 }
 
-/// 获取当前工作目录，失败时回退到 "."
+/// Get current working directory, fallback to "." on failure
 pub fn current_dir() -> PathBuf {
     env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
-/// 语言专用版本文件映射
+/// Language-specific version file mappings
 const TOOL_VERSION_FILES: &[(&str, &str)] = &[
     (".node-version", "node"),
     (".nvmrc", "node"),
@@ -115,13 +115,13 @@ const TOOL_VERSION_FILES: &[(&str, &str)] = &[
     (".rust-toolchain", "rust"),
 ];
 
-/// 解析 .tool-versions 文件内容
+/// Parse .tool-versions file content
 fn parse_tool_versions(content: &str) -> Vec<(String, String)> {
     content
         .lines()
         .filter_map(|line| {
             let line = line.trim();
-            // 跳过空行和注释
+            // Skip empty lines and comments
             if line.is_empty() || line.starts_with('#') {
                 return None;
             }
@@ -188,7 +188,7 @@ mod tests {
     fn test_parse_tool_versions_only_tool_no_version() {
         let content = "node\ngo 1.23.5";
         let result = parse_tool_versions(content);
-        // 没有版本号的行应该被跳过
+        // Lines without version should be skipped
         assert_eq!(result, vec![("go".into(), "1.23.5".into())]);
     }
 
@@ -204,7 +204,7 @@ mod tests {
         let result = resolve_version("node", &dir);
         assert_eq!(result, Some("20.11.0".into()));
 
-        // 不存在的工具
+        // Non-existent tool
         let result = resolve_version("go", &dir);
         assert_eq!(result, None);
 
@@ -217,7 +217,7 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
 
-        // .tool-versions 优先于 .node-version
+        // .tool-versions takes priority over .node-version
         fs::write(dir.join(".tool-versions"), "node 22.0.0\n").unwrap();
         fs::write(dir.join(".node-version"), "20.11.0\n").unwrap();
 
@@ -252,7 +252,7 @@ mod tests {
         let _ = fs::remove_dir_all(&parent);
         fs::create_dir_all(&child).unwrap();
 
-        // 版本文件在父目录
+        // Version file in parent directory
         fs::write(parent.join(".node-version"), "20.11.0\n").unwrap();
 
         let result = resolve_version("node", &child);

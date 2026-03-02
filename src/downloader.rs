@@ -1,7 +1,7 @@
-//! HTTP 下载与校验和验证模块
+//! HTTP download and checksum verification module
 //!
-//! 提供文件下载（带进度条）、SHA256 校验和验证、自动重试功能。
-//! 4xx 客户端错误不重试，服务端/网络错误最多重试 3 次。
+//! Provides file download (with progress bar), SHA256 checksum verification, and automatic retry.
+//! 4xx client errors are not retried, server/network errors are retried up to 3 times.
 
 use crate::error::{Result, VexError};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -11,22 +11,22 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-/// HTTP 连接超时（30 秒）
+/// HTTP connection timeout (30 seconds)
 const CONNECT_TIMEOUT_SECS: u64 = 30;
 
-/// HTTP 读取超时（5 分钟，适用于大文件下载）
+/// HTTP read timeout (5 minutes, suitable for large file downloads)
 const READ_TIMEOUT_SECS: u64 = 300;
 
-/// 下载缓冲区大小（64 KB）
+/// Download buffer size (64 KB)
 const DOWNLOAD_BUFFER_SIZE: usize = 65536;
 
-/// 校验和计算缓冲区大小（64 KB）
+/// Checksum calculation buffer size (64 KB)
 const CHECKSUM_BUFFER_SIZE: usize = 65536;
 
-/// 重试间隔（秒）
+/// Retry interval (seconds)
 const RETRY_DELAY_SECS: u64 = 2;
 
-/// 创建带超时配置的 HTTP 客户端
+/// Create HTTP client with timeout configuration
 fn create_http_client() -> Result<reqwest::blocking::Client> {
     reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
@@ -36,15 +36,15 @@ fn create_http_client() -> Result<reqwest::blocking::Client> {
         .map_err(VexError::Network)
 }
 
-/// 下载文件到指定路径，显示进度条
+/// Download file to specified path with progress bar
 ///
-/// # 参数
-/// - `url` - 下载地址
-/// - `dest` - 目标文件路径
+/// # Arguments
+/// - `url` - Download URL
+/// - `dest` - Destination file path
 ///
-/// # 错误
-/// - `VexError::Network` - HTTP 请求失败
-/// - `VexError::Io` - 文件写入失败
+/// # Errors
+/// - `VexError::Network` - HTTP request failed
+/// - `VexError::Io` - File write failed
 pub fn download_file(url: &str, dest: &Path) -> Result<()> {
     let client = create_http_client()?;
     let mut response = client.get(url).send()?;
@@ -83,15 +83,15 @@ pub fn download_file(url: &str, dest: &Path) -> Result<()> {
     Ok(())
 }
 
-/// 验证文件的 SHA256 校验和
+/// Verify file's SHA256 checksum
 ///
-/// # 参数
-/// - `file_path` - 待验证文件路径
-/// - `expected` - 期望的 SHA256 十六进制字符串
+/// # Arguments
+/// - `file_path` - File path to verify
+/// - `expected` - Expected SHA256 hex string
 ///
-/// # 返回
-/// - `Ok(true)` - 校验和匹配
-/// - `Err(VexError::ChecksumMismatch)` - 校验和不匹配
+/// # Returns
+/// - `Ok(true)` - Checksum matches
+/// - `Err(VexError::ChecksumMismatch)` - Checksum mismatch
 pub fn verify_checksum(file_path: &Path, expected: &str) -> Result<bool> {
     let mut file = File::open(file_path)?;
     let mut hasher = Sha256::new();
@@ -118,14 +118,14 @@ pub fn verify_checksum(file_path: &Path, expected: &str) -> Result<bool> {
     }
 }
 
-/// 带自动重试的文件下载
+/// File download with automatic retry
 ///
-/// 下载失败时自动重试，4xx 客户端错误（如 404）不重试。
+/// Automatically retries on failure, 4xx client errors (e.g., 404) are not retried.
 ///
-/// # 参数
-/// - `url` - 下载地址
-/// - `dest` - 目标文件路径
-/// - `retries` - 最大重试次数
+/// # Arguments
+/// - `url` - Download URL
+/// - `dest` - Destination file path
+/// - `retries` - Maximum retry attempts
 pub fn download_with_retry(url: &str, dest: &Path, retries: u32) -> Result<()> {
     let mut attempts = 0;
 
@@ -133,7 +133,7 @@ pub fn download_with_retry(url: &str, dest: &Path, retries: u32) -> Result<()> {
         match download_file(url, dest) {
             Ok(_) => return Ok(()),
             Err(e) => {
-                // 4xx 客户端错误不重试（如 404）
+                // Don't retry 4xx client errors (e.g., 404)
                 if let VexError::Network(ref req_err) = e {
                     if req_err
                         .status()
@@ -233,5 +233,48 @@ mod tests {
         assert_eq!(DOWNLOAD_BUFFER_SIZE, 65536);
         assert_eq!(CHECKSUM_BUFFER_SIZE, 65536);
         assert_eq!(RETRY_DELAY_SECS, 2);
+    }
+
+    #[test]
+    fn test_verify_checksum_returns_true_on_match() {
+        let dir = std::env::temp_dir().join("vex_test_checksum_true");
+        std::fs::create_dir_all(&dir).unwrap();
+        let file_path = dir.join("test.txt");
+
+        let mut f = File::create(&file_path).unwrap();
+        f.write_all(b"test").unwrap();
+
+        // sha256("test") = 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
+        let expected = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+        let result = verify_checksum(&file_path, expected);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_verify_checksum_error_on_mismatch() {
+        let dir = std::env::temp_dir().join("vex_test_mismatch");
+        std::fs::create_dir_all(&dir).unwrap();
+        let file_path = dir.join("test.txt");
+
+        let mut f = File::create(&file_path).unwrap();
+        f.write_all(b"test").unwrap();
+
+        let result = verify_checksum(&file_path, "wrong_checksum");
+        assert!(result.is_err());
+
+        if let Err(VexError::ChecksumMismatch { expected, actual }) = result {
+            assert_eq!(expected, "wrong_checksum");
+            assert_eq!(
+                actual,
+                "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+            );
+        } else {
+            panic!("Expected ChecksumMismatch error");
+        }
+
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

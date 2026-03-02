@@ -1,7 +1,7 @@
-//! 工具适配层模块
+//! Tool adapter layer module
 //!
-//! 定义 [`Tool`] trait 和各语言工具实现（Node.js、Go、Java、Rust）。
-//! 提供架构检测、版本别名解析和模糊版本匹配功能。
+//! Defines [`Tool`] trait and language tool implementations (Node.js, Go, Java, Rust).
+//! Provides architecture detection, version alias resolution, and fuzzy version matching.
 
 use crate::error::Result;
 use owo_colors::OwoColorize;
@@ -11,7 +11,7 @@ pub mod java;
 pub mod node;
 pub mod rust;
 
-/// CPU 架构枚举（macOS 支持 ARM64 和 x86_64）
+/// CPU architecture enum (macOS supports ARM64 and x86_64)
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
 pub enum Arch {
@@ -22,7 +22,7 @@ pub enum Arch {
 }
 
 impl Arch {
-    /// 自动检测当前 CPU 架构
+    /// Auto-detect current CPU architecture
     pub fn detect() -> Self {
         #[cfg(target_arch = "aarch64")]
         return Arch::Arm64;
@@ -32,33 +32,33 @@ impl Arch {
     }
 }
 
-/// 工具版本信息
+/// Tool version information
 #[derive(Debug, Clone)]
 pub struct Version {
-    /// 版本号（如 "v20.11.0"、"1.23.5"）
+    /// Version number (e.g., "v20.11.0", "1.23.5")
     pub version: String,
-    /// LTS 代号（如 Node.js 的 "Iron"，Java 的 "LTS"）
+    /// LTS codename (e.g., Node.js "Iron", Java "LTS")
     pub lts: Option<String>,
 }
 
-/// 工具 trait，所有语言工具必须实现此接口
+/// Tool trait, all language tools must implement this interface
 ///
-/// 提供版本查询、下载 URL 构造、校验和获取、二进制文件路径映射等功能。
+/// Provides version querying, download URL construction, checksum retrieval, binary file path mapping, etc.
 pub trait Tool: Send + Sync {
-    /// 返回工具名称（如 "node"、"go"、"java"、"rust"）
+    /// Return tool name (e.g., "node", "go", "java", "rust")
     fn name(&self) -> &str;
-    /// 查询远程可用版本列表（按发布时间降序）
+    /// Query remote available version list (descending by release time)
     fn list_remote(&self) -> Result<Vec<Version>>;
-    /// 构造指定版本和架构的下载 URL
+    /// Construct download URL for specified version and architecture
     fn download_url(&self, version: &str, arch: Arch) -> Result<String>;
-    /// 构造校验和文件 URL，返回 `None` 表示校验和在 API 中
+    /// Construct checksum file URL, returns `None` if checksum is in API
     fn checksum_url(&self, version: &str, arch: Arch) -> Option<String>;
-    /// 返回工具提供的可执行文件名列表
+    /// Return list of executable file names provided by the tool
     fn bin_names(&self) -> Vec<&str>;
-    /// 返回 bin 目录相对于安装目录的路径
+    /// Return path of bin directory relative to installation directory
     fn bin_subpath(&self) -> &str;
 
-    /// 返回 (二进制名, 子路径) 对，当二进制文件在不同子目录时覆写（如 Rust）
+    /// Return (binary name, subpath) pairs, override when binaries are in different subdirectories (e.g., Rust)
     fn bin_paths(&self) -> Vec<(&str, &str)> {
         let subpath = self.bin_subpath();
         self.bin_names()
@@ -67,23 +67,23 @@ pub trait Tool: Send + Sync {
             .collect()
     }
 
-    /// 获取指定版本的 SHA256 校验和，默认返回 `None`
+    /// Get SHA256 checksum for specified version, defaults to returning `None`
     fn get_checksum(&self, _version: &str, _arch: Arch) -> Result<Option<String>> {
         Ok(None)
     }
 
-    /// 解析版本别名（如 "latest"、"lts"、"stable"），默认返回 `None`
+    /// Resolve version alias (e.g., "latest", "lts", "stable"), defaults to returning `None`
     fn resolve_alias(&self, _alias: &str) -> Result<Option<String>> {
         Ok(None)
     }
 
-    /// 安装后钩子，用于工具特定的设置（如 Rust 的 sysroot 链接），默认无操作
+    /// Post-install hook for tool-specific setup (e.g., Rust sysroot linking), defaults to no-op
     fn post_install(&self, _install_dir: &std::path::Path, _arch: Arch) -> Result<()> {
         Ok(())
     }
 }
 
-/// 根据名称获取工具实现，支持 node、go、java、rust
+/// Get tool implementation by name, supports node, go, java, rust
 pub fn get_tool(name: &str) -> Result<Box<dyn Tool>> {
     match name {
         "node" => Ok(Box::new(node::NodeTool)),
@@ -94,7 +94,7 @@ pub fn get_tool(name: &str) -> Result<Box<dyn Tool>> {
     }
 }
 
-/// 模糊版本解析：支持别名（latest/lts/stable）、部分版本号（20→20.x）和精确版本
+/// Fuzzy version resolution: supports aliases (latest/lts/stable), partial version numbers (20→20.x), and exact versions
 pub fn resolve_fuzzy_version(tool: &dyn Tool, partial: &str) -> Result<String> {
     // First, try alias resolution
     if let Some(resolved) = tool.resolve_alias(partial)? {
@@ -132,7 +132,7 @@ pub fn resolve_fuzzy_version(tool: &dyn Tool, partial: &str) -> Result<String> {
         })
 }
 
-/// 去除版本号的 "v" 前缀
+/// Remove "v" prefix from version number
 fn normalize_version(version: &str) -> String {
     version.strip_prefix('v').unwrap_or(version).to_string()
 }
@@ -300,5 +300,78 @@ mod tests {
         let tool = MinimalTool;
         assert_eq!(tool.resolve_alias("latest").unwrap(), None);
         assert_eq!(tool.resolve_alias("lts").unwrap(), None);
+        // Test default get_checksum
+        assert_eq!(tool.get_checksum("1.0", Arch::Arm64).unwrap(), None);
+        // Test default post_install
+        assert!(tool
+            .post_install(std::path::Path::new("/tmp"), Arch::Arm64)
+            .is_ok());
+        // Test default bin_paths
+        assert!(tool.bin_paths().is_empty());
+    }
+
+    #[test]
+    fn test_normalize_version() {
+        assert_eq!(normalize_version("v20.11.0"), "20.11.0");
+        assert_eq!(normalize_version("20.11.0"), "20.11.0");
+        assert_eq!(normalize_version("v1.23"), "1.23");
+        assert_eq!(normalize_version("1.23"), "1.23");
+    }
+
+    #[test]
+    fn test_resolve_fuzzy_version_full_version() {
+        let tool = MockTool {
+            versions: vec![Version {
+                version: "22.5.0".to_string(),
+                lts: None,
+            }],
+        };
+        // Full version with 2+ dots should pass through directly
+        let result = resolve_fuzzy_version(&tool, "20.11.0").unwrap();
+        assert_eq!(result, "20.11.0");
+    }
+
+    #[test]
+    fn test_resolve_fuzzy_version_v_prefix() {
+        let tool = MockTool {
+            versions: vec![Version {
+                version: "22.5.0".to_string(),
+                lts: None,
+            }],
+        };
+        // v-prefix should be stripped
+        let result = resolve_fuzzy_version(&tool, "v20.11.0").unwrap();
+        assert_eq!(result, "20.11.0");
+    }
+
+    #[test]
+    fn test_resolve_fuzzy_version_partial_match() {
+        let tool = MockTool {
+            versions: vec![
+                Version {
+                    version: "v22.5.0".to_string(),
+                    lts: None,
+                },
+                Version {
+                    version: "v20.11.0".to_string(),
+                    lts: Some("Iron".to_string()),
+                },
+            ],
+        };
+        // Partial "22" should match "22.5.0"
+        let result = resolve_fuzzy_version(&tool, "22").unwrap();
+        assert_eq!(result, "22.5.0");
+    }
+
+    #[test]
+    fn test_resolve_fuzzy_version_no_match() {
+        let tool = MockTool {
+            versions: vec![Version {
+                version: "22.5.0".to_string(),
+                lts: None,
+            }],
+        };
+        let result = resolve_fuzzy_version(&tool, "99");
+        assert!(result.is_err());
     }
 }
