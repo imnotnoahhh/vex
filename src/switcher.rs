@@ -315,4 +315,92 @@ mod tests {
 
         let _ = fs::remove_dir_all(&base);
     }
+
+    #[test]
+    fn test_dynamic_binary_detection() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = make_temp_dir("dynamic_bin");
+
+        // Create Node.js 24 with corepack
+        let tc_v24 = base.join("toolchains/node/24.0.0/bin");
+        fs::create_dir_all(&tc_v24).unwrap();
+        for name in &["node", "npm", "npx", "corepack"] {
+            let path = tc_v24.join(name);
+            fs::write(&path, "v24").unwrap();
+            // Make executable
+            let mut perms = fs::metadata(&path).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&path, perms).unwrap();
+        }
+        switch_version_in(&NodeTool, "24.0.0", &base).unwrap();
+
+        // Verify corepack link exists
+        assert!(base.join("bin/corepack").exists());
+
+        // Create Node.js 25 without corepack
+        let tc_v25 = base.join("toolchains/node/25.0.0/bin");
+        fs::create_dir_all(&tc_v25).unwrap();
+        for name in &["node", "npm", "npx"] {
+            let path = tc_v25.join(name);
+            fs::write(&path, "v25").unwrap();
+            // Make executable
+            let mut perms = fs::metadata(&path).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&path, perms).unwrap();
+        }
+        switch_version_in(&NodeTool, "25.0.0", &base).unwrap();
+
+        // Verify corepack link is removed
+        assert!(!base.join("bin/corepack").exists());
+        // Verify other links still exist
+        assert!(base.join("bin/node").exists());
+        assert!(base.join("bin/npm").exists());
+        assert!(base.join("bin/npx").exists());
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_cleanup_stale_symlinks() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = make_temp_dir("cleanup_stale");
+
+        // Create v1 with extra binary
+        let tc_v1 = base.join("toolchains/node/1.0.0/bin");
+        fs::create_dir_all(&tc_v1).unwrap();
+        for name in &["node", "npm", "npx", "extra-tool"] {
+            let path = tc_v1.join(name);
+            fs::write(&path, "v1").unwrap();
+            // Make executable
+            let mut perms = fs::metadata(&path).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&path, perms).unwrap();
+        }
+        switch_version_in(&NodeTool, "1.0.0", &base).unwrap();
+
+        // Verify extra-tool link exists
+        assert!(base.join("bin/extra-tool").exists());
+
+        // Switch to v2 without extra-tool
+        let tc_v2 = base.join("toolchains/node/2.0.0/bin");
+        fs::create_dir_all(&tc_v2).unwrap();
+        for name in &["node", "npm", "npx"] {
+            let path = tc_v2.join(name);
+            fs::write(&path, "v2").unwrap();
+            // Make executable
+            let mut perms = fs::metadata(&path).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&path, perms).unwrap();
+        }
+        switch_version_in(&NodeTool, "2.0.0", &base).unwrap();
+
+        // Verify extra-tool link is cleaned up
+        assert!(!base.join("bin/extra-tool").exists());
+        // Verify standard links still exist
+        assert!(base.join("bin/node").exists());
+        assert!(base.join("bin/npm").exists());
+        assert!(base.join("bin/npx").exists());
+
+        let _ = fs::remove_dir_all(&base);
+    }
 }
