@@ -77,7 +77,7 @@ impl Tool for NodeTool {
     }
 
     fn bin_names(&self) -> Vec<&str> {
-        vec!["node", "npm", "npx", "corepack"]
+        vec!["node", "npm", "npx"]
     }
 
     fn bin_subpath(&self) -> &str {
@@ -176,7 +176,7 @@ mod tests {
     #[test]
     fn test_bin_names() {
         let tool = NodeTool;
-        assert_eq!(tool.bin_names(), vec!["node", "npm", "npx", "corepack"]);
+        assert_eq!(tool.bin_names(), vec!["node", "npm", "npx"]);
     }
 
     #[test]
@@ -195,7 +195,6 @@ mod tests {
                 ("node", "bin"),
                 ("npm", "bin"),
                 ("npx", "bin"),
-                ("corepack", "bin"),
             ]
         );
     }

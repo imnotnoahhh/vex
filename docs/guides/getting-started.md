@@ -188,7 +188,7 @@ cd project-b  # Uses node 22.0.0
 
 | Tool | Example | Notes |
 |------|---------|-------|
-| Node.js | `vex install node@20` | Includes npm, npx, corepack |
+| Node.js | `vex install node@20` | Includes npm, npx (+ corepack in v24 and earlier) |
 | Go | `vex install go@1.23` | Official Go binaries |
 | Java | `vex install java@21` | Eclipse Temurin JDK |
 | Rust | `vex install rust@stable` | Complete toolchain (rustc, cargo, clippy, etc.) |

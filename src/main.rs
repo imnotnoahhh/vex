@@ -821,6 +821,7 @@ fn run_doctor() -> Result<()> {
     let current_dir = vex_dir.join("current");
     let bin_dir = vex_dir.join("bin");
     let mut broken_links = Vec::new();
+    let mut corepack_missing = false;
 
     if current_dir.exists() {
         if let Ok(entries) = fs::read_dir(&current_dir) {
@@ -838,23 +839,44 @@ fn run_doctor() -> Result<()> {
     if bin_dir.exists() {
         if let Ok(entries) = fs::read_dir(&bin_dir) {
             for entry in entries.filter_map(|e| e.ok()) {
+                let filename = entry.file_name().to_string_lossy().to_string();
                 if let Ok(target) = fs::read_link(entry.path()) {
                     if !target.exists() {
-                        broken_links.push(format!("bin/{}", entry.file_name().to_string_lossy()));
+                        // Special handling for corepack - check if it's Node.js 25+
+                        if filename == "corepack" && target.to_string_lossy().contains("/node/") {
+                            corepack_missing = true;
+                        } else {
+                            broken_links.push(format!("bin/{}", filename));
+                        }
                     }
                 }
             }
         }
     }
 
-    if broken_links.is_empty() {
+    if broken_links.is_empty() && !corepack_missing {
         println!("{}", "✓".green());
-    } else {
+    } else if !broken_links.is_empty() {
         println!("{}", "⚠ Broken symlinks found".yellow());
         for link in &broken_links {
             println!("  {}", link.yellow());
         }
         warnings += 1;
+    } else {
+        println!("{}", "✓".green());
+    }
+
+    // Show Corepack info separately if detected
+    if corepack_missing {
+        println!();
+        println!(
+            "{} Corepack not bundled with Node.js 25+ (expected)",
+            "ℹ".cyan()
+        );
+        println!(
+            "  To enable: {}",
+            "corepack enable pnpm".cyan()
+        );
     }
 
     // 7. Check binary executability

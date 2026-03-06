@@ -194,7 +194,7 @@ vex install
 
 | Tool | Binaries | Source |
 |------|----------|--------|
-| Node.js | node, npm, npx, corepack | Official binaries |
+| Node.js | node, npm, npx (+ corepack in v24 and earlier) | Official binaries |
 | Go | go, gofmt | Official binaries |
 | Java | java, javac, jar, javadoc + 26 more JDK tools | Eclipse Temurin JDK |
 | Rust | rustc, rustdoc, cargo, rustfmt, clippy, rust-analyzer + 5 more | Official stable binaries |
