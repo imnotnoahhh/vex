@@ -229,10 +229,7 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
         if let Ok(major_version) = version.split('.').next().unwrap_or("0").parse::<u32>() {
             if major_version >= 25 {
                 println!();
-                println!(
-                    "{} Node.js 25+ no longer includes Corepack.",
-                    "ℹ".cyan()
-                );
+                println!("{} Node.js 25+ no longer includes Corepack.", "ℹ".cyan());
                 println!(
                     "  To use pnpm or yarn, run: {}",
                     "corepack enable pnpm".cyan()

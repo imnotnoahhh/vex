@@ -873,10 +873,7 @@ fn run_doctor() -> Result<()> {
             "{} Corepack not bundled with Node.js 25+ (expected)",
             "ℹ".cyan()
         );
-        println!(
-            "  To enable: {}",
-            "corepack enable pnpm".cyan()
-        );
+        println!("  To enable: {}", "corepack enable pnpm".cyan());
     }
 
     // 7. Check binary executability

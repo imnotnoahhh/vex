@@ -191,11 +191,7 @@ mod tests {
         let paths = tool.bin_paths();
         assert_eq!(
             paths,
-            vec![
-                ("node", "bin"),
-                ("npm", "bin"),
-                ("npx", "bin"),
-            ]
+            vec![("node", "bin"), ("npm", "bin"), ("npx", "bin"),]
         );
     }
 
