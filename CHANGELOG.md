@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Dynamic binary detection** — Version switching now automatically detects available binaries instead of relying on hardcoded lists:
+  - Scans toolchain bin directories for actual executables
+  - Only creates symlinks for binaries that exist
+  - Automatically cleans up stale symlinks when switching versions
+  - Handles version-specific binaries (e.g., corepack in Node.js 24 but not 25+)
+- **Node.js 25+ Corepack handling** — Improved support for Node.js 25+ which no longer bundles Corepack:
+  - Installation shows helpful message: "Node.js 25+ no longer includes Corepack. To use pnpm or yarn, run: corepack enable pnpm"
+  - `vex doctor` no longer reports false warnings for missing corepack in Node.js 25+
+  - Corepack automatically available in Node.js 24 and earlier versions
 - **Test coverage improvement** — Increased test coverage from 46.99% to 66.51% (+19.52%):
   - Added 25 new unit tests covering core logic (version resolution, file operations, cleanup guards)
   - Added 10 new CLI integration tests for install, global, use --auto, and doctor commands

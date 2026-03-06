@@ -63,12 +63,79 @@ fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<
     let bin_dir = base_dir.join("bin");
     fs::create_dir_all(&bin_dir)?;
 
-    for (bin_name, subpath) in tool.bin_paths() {
+    // First, collect all binaries that should exist for this tool version
+    let mut new_binaries = std::collections::HashSet::new();
+
+    // Get the list of binaries to link
+    let bin_paths = tool.bin_paths();
+
+    // For each expected binary, check if it exists before creating symlink
+    for (bin_name, subpath) in &bin_paths {
         let bin_link = bin_dir.join(bin_name);
         let target = toolchain_dir.join(subpath).join(bin_name);
 
-        let _ = fs::remove_file(&bin_link);
-        unix_fs::symlink(&target, &bin_link)?;
+        // Only create symlink if the target binary actually exists
+        if target.exists() {
+            let _ = fs::remove_file(&bin_link);
+            unix_fs::symlink(&target, &bin_link)?;
+            new_binaries.insert(bin_name.to_string());
+        }
+    }
+
+    // Additionally, scan the actual bin directory for any binaries not in bin_paths
+    // This handles cases like corepack in Node.js 24 which exists but isn't in bin_names()
+    for (_bin_name, subpath) in &bin_paths {
+        let actual_bin_dir = toolchain_dir.join(subpath);
+        if actual_bin_dir.exists() {
+            if let Ok(entries) = fs::read_dir(&actual_bin_dir) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let filename = entry.file_name();
+                    let filename_str = filename.to_string_lossy();
+
+                    // Skip if already handled by bin_paths
+                    if bin_paths.iter().any(|(name, _)| *name == filename_str) {
+                        continue;
+                    }
+
+                    // Check if it's an executable file or symlink
+                    if let Ok(metadata) = entry.metadata() {
+                        let is_executable = if metadata.is_symlink() {
+                            // For symlinks, check if the target exists
+                            entry.path().exists()
+                        } else {
+                            // For regular files, check execute permission
+                            use std::os::unix::fs::PermissionsExt;
+                            (metadata.permissions().mode() & 0o111) != 0
+                        };
+
+                        if is_executable {
+                            let bin_link = bin_dir.join(&filename);
+                            let target = entry.path();
+                            let _ = fs::remove_file(&bin_link);
+                            unix_fs::symlink(&target, &bin_link)?;
+                            new_binaries.insert(filename_str.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Clean up old symlinks that point to this tool but no longer exist in the new version
+    if let Ok(entries) = fs::read_dir(&bin_dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            if let Ok(target) = fs::read_link(entry.path()) {
+                let target_str = target.to_string_lossy();
+                // Check if this symlink points to this tool's toolchain
+                if target_str.contains(&format!("/toolchains/{}/", tool.name())) {
+                    let filename = entry.file_name().to_string_lossy().to_string();
+                    // If this binary is not in the new version, remove it
+                    if !new_binaries.contains(&filename) {
+                        let _ = fs::remove_file(entry.path());
+                    }
+                }
+            }
+        }
     }
 
     println!(
