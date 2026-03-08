@@ -270,7 +270,7 @@ fn test_e2e_local_command() {
 
 #[test]
 fn test_e2e_global_command() {
-    let global_versions = dirs::home_dir().unwrap().join(".tool-versions");
+    let global_versions = dirs::home_dir().unwrap().join(".vex/tool-versions");
 
     // 备份现有的全局配置（如果存在）
     let backup = if global_versions.exists() {
