@@ -147,6 +147,33 @@ fn vex_dir() -> Result<PathBuf> {
         .ok_or(error::VexError::HomeDirectoryNotFound)
 }
 
+/// Migrate ~/.tool-versions → ~/.vex/tool-versions if the old file exists and the new one doesn't.
+/// Silently skips if migration is not needed or if any step fails.
+fn migrate_global_tool_versions() {
+    let home = match dirs::home_dir() {
+        Some(h) => h,
+        None => return,
+    };
+    let old_path = home.join(".tool-versions");
+    let new_path = home.join(".vex").join("tool-versions");
+
+    if !old_path.exists() || new_path.exists() {
+        return;
+    }
+
+    if let Ok(content) = fs::read_to_string(&old_path) {
+        if fs::create_dir_all(home.join(".vex")).is_ok()
+            && fs::write(&new_path, &content).is_ok()
+        {
+            let _ = fs::remove_file(&old_path);
+            eprintln!(
+                "{} Migrated ~/.tool-versions → ~/.vex/tool-versions",
+                "vex:".cyan()
+            );
+        }
+    }
+}
+
 /// Initialize vex directory structure and configuration files
 fn init_vex() -> Result<()> {
     let vex_dir = vex_dir()?;
@@ -1105,6 +1132,7 @@ fn run_doctor() -> Result<()> {
 }
 
 fn run() -> Result<()> {
+    migrate_global_tool_versions();
     let cli = Cli::parse();
 
     match cli.command {

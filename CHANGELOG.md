@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-03-08
+
+### Fixed
+
+- **`vex self-update` exec format error** — Self-update now correctly handles `.tar.xz` release assets. Previously, `.tar.xz` was not excluded from the "bare binary" filter and was written directly to disk without extraction, causing `exec format error` on next run. The updater now prefers `.tar.xz` → `.tar.gz` → bare binary, and extracts accordingly.
+- **Auto-migrate `~/.tool-versions` → `~/.vex/tool-versions`** — On first run after upgrading from v0.2.0 or earlier, vex automatically detects `~/.tool-versions` and moves it to `~/.vex/tool-versions`. A one-line notice is printed. No manual steps required.
+
+### Added
+
+- `xz2` dependency for `.tar.xz` archive extraction in `vex self-update`
+
 ## [0.2.1] - 2026-03-08
 
 ### Fixed

@@ -210,6 +210,7 @@ fn test_install_no_args_no_version_file() {
     let output = vex_bin()
         .arg("install")
         .current_dir(&temp_dir)
+        .env("HOME", &temp_dir) // isolate from real ~/.vex/tool-versions
         .output()
         .unwrap();
     assert!(output.status.success());
