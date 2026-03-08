@@ -13,3 +13,5 @@ CLAUDE.md
 cobertura.xml
 coverage_output.txt
 coverage_summary.md
+
+.claude/
