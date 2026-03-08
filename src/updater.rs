@@ -98,18 +98,25 @@ pub fn self_update() -> Result<()> {
     let arch_suffix = asset_name()
         .ok_or_else(|| VexError::Parse("Unsupported architecture for self-update".to_string()))?;
 
-    // Find the matching asset (binary, not archive)
+    // Find the matching asset — prefer archive formats, then bare binary
     let asset = release
         .assets
         .iter()
-        .find(|a| {
-            a.name.contains(arch_suffix)
-                && !a.name.ends_with(".tar.gz")
-                && !a.name.ends_with(".zip")
+        .find(|a| a.name.contains(arch_suffix) && a.name.ends_with(".tar.xz"))
+        .or_else(|| {
+            release
+                .assets
+                .iter()
+                .find(|a| a.name.contains(arch_suffix) && a.name.ends_with(".tar.gz"))
         })
         .or_else(|| {
-            // Fallback: look for a .tar.gz
-            release.assets.iter().find(|a| a.name.contains(arch_suffix))
+            // Fallback: bare binary (no known archive extension)
+            release.assets.iter().find(|a| {
+                a.name.contains(arch_suffix)
+                    && !a.name.ends_with(".tar.gz")
+                    && !a.name.ends_with(".tar.xz")
+                    && !a.name.ends_with(".zip")
+            })
         })
         .ok_or_else(|| {
             VexError::Parse(format!(
@@ -126,8 +133,10 @@ pub fn self_update() -> Result<()> {
     println!("Downloading {}...", asset.name);
     download_with_retry(&asset.browser_download_url, &tmp_path, 3)?;
 
-    // If it's a tar.gz, extract the binary from it
-    let final_tmp = if asset.name.ends_with(".tar.gz") {
+    // If it's an archive, extract the binary from it
+    let final_tmp = if asset.name.ends_with(".tar.xz") {
+        extract_binary_from_tarball_xz(&tmp_path, &current_exe)?
+    } else if asset.name.ends_with(".tar.gz") {
         extract_binary_from_tarball(&tmp_path, &current_exe)?
     } else {
         tmp_path.clone()
@@ -161,6 +170,36 @@ fn extract_binary_from_tarball(tarball: &Path, current_exe: &Path) -> Result<Pat
     let file = fs::File::open(tarball)?;
     let gz = GzDecoder::new(file);
     let mut archive = Archive::new(gz);
+
+    let out_path = current_exe.with_extension("extracted_tmp");
+
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?;
+        let file_name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+
+        if file_name == "vex" {
+            entry.unpack(&out_path)?;
+            return Ok(out_path);
+        }
+    }
+
+    Err(VexError::Parse(
+        "Could not find 'vex' binary inside the release archive".to_string(),
+    ))
+}
+
+/// Extract the `vex` binary from a tar.xz archive, writing it to a temp path.
+fn extract_binary_from_tarball_xz(tarball: &Path, current_exe: &Path) -> Result<PathBuf> {
+    use tar::Archive;
+    use xz2::read::XzDecoder;
+
+    let file = fs::File::open(tarball)?;
+    let xz = XzDecoder::new(file);
+    let mut archive = Archive::new(xz);
 
     let out_path = current_exe.with_extension("extracted_tmp");
 
