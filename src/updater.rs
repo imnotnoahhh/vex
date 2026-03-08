@@ -102,12 +102,17 @@ pub fn self_update() -> Result<()> {
     let asset = release
         .assets
         .iter()
-        .find(|a| a.name.contains(arch_suffix) && a.name.ends_with(".tar.xz"))
+        .find(|a| {
+            a.name.contains(arch_suffix)
+                && a.name.ends_with(".tar.xz")
+                && !a.name.ends_with(".sha256")
+        })
         .or_else(|| {
-            release
-                .assets
-                .iter()
-                .find(|a| a.name.contains(arch_suffix) && a.name.ends_with(".tar.gz"))
+            release.assets.iter().find(|a| {
+                a.name.contains(arch_suffix)
+                    && a.name.ends_with(".tar.gz")
+                    && !a.name.ends_with(".sha256")
+            })
         })
         .or_else(|| {
             // Fallback: bare binary (no known archive extension)
@@ -116,6 +121,7 @@ pub fn self_update() -> Result<()> {
                     && !a.name.ends_with(".tar.gz")
                     && !a.name.ends_with(".tar.xz")
                     && !a.name.ends_with(".zip")
+                    && !a.name.ends_with(".sha256")
             })
         })
         .ok_or_else(|| {
