@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.1] - 2026-03-08
 
+> **⚠️ CRITICAL BUG — DO NOT USE** — This release has a broken `vex self-update` that writes corrupt binaries. Use v0.2.2 instead.
+
 ### Fixed
 
 - **`vex global` no longer pollutes `~`** — Global version pinning now writes to `~/.vex/tool-versions` instead of `~/.tool-versions`, keeping all vex data under `~/.vex/`
