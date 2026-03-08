@@ -162,9 +162,7 @@ fn migrate_global_tool_versions() {
     }
 
     if let Ok(content) = fs::read_to_string(&old_path) {
-        if fs::create_dir_all(home.join(".vex")).is_ok()
-            && fs::write(&new_path, &content).is_ok()
-        {
+        if fs::create_dir_all(home.join(".vex")).is_ok() && fs::write(&new_path, &content).is_ok() {
             let _ = fs::remove_file(&old_path);
             eprintln!(
                 "{} Migrated ~/.tool-versions → ~/.vex/tool-versions",

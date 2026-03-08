@@ -333,18 +333,6 @@ Switching versions just updates symlinks — instant and shell-restart-free.
 └── config.toml     # Configuration (e.g. cache_ttl_secs)
 ```
 
-## Migrating from v0.2.0
-
-> **v0.2.1 had a `vex self-update` bug that wrote a corrupt binary. If you ran `vex self-update` on v0.2.1, reinstall manually first:**
->
-> ```bash
-> curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash
-> ```
-
-Once you are on v0.2.2+, vex automatically migrates `~/.tool-versions` → `~/.vex/tool-versions` on first run. No manual steps needed.
-
----
-
 ## FAQ
 Run `vex doctor` to perform a comprehensive health check. It validates:
 - vex installation and PATH configuration
