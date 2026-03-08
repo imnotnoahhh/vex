@@ -8,6 +8,11 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Get the vex global tool-versions file path (~/.vex/tool-versions)
+fn vex_global_tool_versions() -> Option<PathBuf> {
+    dirs::home_dir().map(|p| p.join(".vex").join("tool-versions"))
+}
+
 /// Traverse upward from start directory to find version mappings for all tools
 ///
 /// `.tool-versions` has higher priority than language-specific files (`.node-version`, etc.).
@@ -49,10 +54,23 @@ pub fn resolve_versions(start_dir: &Path) -> HashMap<String, String> {
         }
     }
 
+    // Fallback: check ~/.vex/tool-versions (global) for any tools not yet found
+    if let Some(global_path) = vex_global_tool_versions() {
+        if global_path.is_file() {
+            if let Ok(content) = fs::read_to_string(&global_path) {
+                for (tool, version) in parse_tool_versions(&content) {
+                    versions.entry(tool).or_insert(version);
+                }
+            }
+        }
+    }
+
     versions
 }
 
 /// Query version for a single tool (traverse upward from start directory)
+///
+/// Falls back to ~/.vex/tool-versions (global) if not found in directory tree.
 ///
 /// # Arguments
 /// - `tool_name` - Tool name (e.g., "node", "go")
@@ -95,6 +113,19 @@ pub fn resolve_version(tool_name: &str, start_dir: &Path) -> Option<String> {
 
         if !dir.pop() {
             break;
+        }
+    }
+
+    // Fallback: check ~/.vex/tool-versions (global)
+    if let Some(global_path) = vex_global_tool_versions() {
+        if global_path.is_file() {
+            if let Ok(content) = fs::read_to_string(&global_path) {
+                for (tool, version) in parse_tool_versions(&content) {
+                    if tool == tool_name {
+                        return Some(version);
+                    }
+                }
+            }
         }
     }
 

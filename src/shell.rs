@@ -57,6 +57,7 @@ fn generate_zsh_hook() -> String {
     format!(
         r#"# vex shell integration
 export PATH="$HOME/.vex/bin:$PATH"
+export CARGO_HOME="$HOME/.vex/cargo"
 {}
 autoload -U add-zsh-hook
 add-zsh-hook chpwd __vex_use_if_found
@@ -72,6 +73,7 @@ fn generate_bash_hook() -> String {
     format!(
         r#"# vex shell integration
 export PATH="$HOME/.vex/bin:$PATH"
+export CARGO_HOME="$HOME/.vex/cargo"
 {}
 __vex_prompt_command() {{
     if [ "$__VEX_PREV_DIR" != "$PWD" ]; then
@@ -94,6 +96,7 @@ __vex_activate_venv
 fn generate_fish_hook() -> String {
     r#"# vex shell integration
 set -gx PATH $HOME/.vex/bin $PATH
+set -gx CARGO_HOME $HOME/.vex/cargo
 
 function __vex_use_if_found
     set -l dir $PWD
@@ -134,6 +137,7 @@ __vex_activate_venv
 fn generate_nushell_hook() -> String {
     r#"# vex shell integration
 $env.PATH = ($env.PATH | prepend $"($env.HOME)/.vex/bin")
+$env.CARGO_HOME = $"($env.HOME)/.vex/cargo"
 
 def --env __vex_use_if_found [] {
     mut dir = $env.PWD

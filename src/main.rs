@@ -95,7 +95,7 @@ enum Commands {
         spec: String,
     },
 
-    /// Pin a tool version globally (~/.tool-versions)
+    /// Pin a tool version globally (~/.vex/tool-versions)
     Global {
         /// Tool and version (e.g., node@20.11.0)
         spec: String,
@@ -119,9 +119,23 @@ enum Commands {
     /// Update vex itself to the latest release
     SelfUpdate,
 
-    /// Python-specific commands (init, freeze, sync)
+    /// Python virtual environment management
+    ///
+    /// Workflow:
+    ///   1. vex install python@3.12   (install a Python version globally)
+    ///   2. cd my-project
+    ///   3. vex python init            (create .venv using the active Python)
+    ///   4. pip install <packages>
+    ///   5. vex python freeze          (lock packages to requirements.lock)
+    ///   6. vex python sync            (restore from requirements.lock on another machine)
     Python {
-        /// Subcommand: init | freeze | sync
+        /// Subcommand:
+        ///   init   — Create .venv in the current directory using the active vex-managed Python.
+        ///            Also records the Python version in .tool-versions.
+        ///   freeze — Run `pip freeze` and write output to requirements.lock.
+        ///            Use after installing packages to lock the environment.
+        ///   sync   — Restore the environment from requirements.lock via `pip install -r`.
+        ///            Auto-creates .venv if it does not exist yet.
         subcmd: String,
     },
 }
@@ -1171,9 +1185,7 @@ fn run() -> Result<()> {
             }
             let tool = tools::get_tool(&tool_name)?;
             let resolved = tools::resolve_fuzzy_version(tool.as_ref(), &version)?;
-            let file_path = dirs::home_dir()
-                .ok_or(error::VexError::HomeDirectoryNotFound)?
-                .join(".tool-versions");
+            let file_path = vex_dir()?.join("tool-versions");
             write_tool_version(&file_path, &tool_name, &resolved)?;
             println!("Set {}@{} in {}", tool_name, resolved, file_path.display());
         }

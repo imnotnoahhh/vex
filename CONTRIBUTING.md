@@ -78,7 +78,7 @@ src/
 ├── downloader.rs    # HTTP download, SHA256 verification, retry logic, timeout configuration
 ├── installer.rs     # Extract tar.gz, disk space check, path traversal protection
 ├── switcher.rs      # Symlink management for bin/ and current/
-├── resolver.rs      # Version file resolution (.tool-versions / .node-version / etc.)
+├── resolver.rs      # Version file resolution (.tool-versions / .node-version / etc.); falls back to ~/.vex/tool-versions for global defaults
 ├── shell.rs         # Shell hook generation (zsh, bash, fish, nushell)
 ├── cache.rs         # Remote version list caching with TTL
 ├── lock.rs          # Installation lock mechanism

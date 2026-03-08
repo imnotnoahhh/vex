@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-03-08
+
+### Fixed
+
+- **`vex global` no longer pollutes `~`** — Global version pinning now writes to `~/.vex/tool-versions` instead of `~/.tool-versions`, keeping all vex data under `~/.vex/`
+- **`~/.cargo` no longer created in home directory** — Shell hooks now export `CARGO_HOME=$HOME/.vex/cargo` so cargo stores its data inside `~/.vex/cargo/` instead of `~/.cargo/`
+
+### Changed
+
+- **Resolver fallback** — `resolve_versions` and `resolve_version` now fall back to `~/.vex/tool-versions` (global) after traversing the directory tree, replacing the previous `~/.tool-versions` lookup
+- **`vex global` help text** — Updated to reflect the new path (`~/.vex/tool-versions`)
+- **`vex python` help text** — Expanded with a step-by-step workflow description so users understand the `init → freeze → sync` lifecycle without reading the docs
+
+### Documentation
+
+- Added Python workflow section to `docs/guides/getting-started.md` with a clear 5-step guide (install → init → freeze → commit → sync)
+- Added Known Limitations section to `docs/guides/troubleshooting.md`:
+  - `~/.cargo` migration instructions (`mv ~/.cargo ~/.vex/cargo`)
+  - `~/.cache/node` explanation (npm/pnpm behavior, manual workaround)
+
 ## [0.2.0] - 2026-03-08
 
 ### Added
