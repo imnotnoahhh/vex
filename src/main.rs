@@ -1387,7 +1387,10 @@ mod tests {
     fn test_find_active_python_bin_fallback() {
         use tempfile::TempDir;
         let temp = TempDir::new().unwrap();
-        // HOME points to a dir with no .vex/bin/python3 → fallback to "python3"
+        // Explicitly ensure no python3 exists under this HOME
+        let bin_dir = temp.path().join(".vex").join("bin");
+        fs::create_dir_all(&bin_dir).unwrap();
+        // python3 file does NOT exist → fallback
         std::env::set_var("HOME", temp.path());
         let result = find_active_python_bin().unwrap();
         assert_eq!(result, std::path::PathBuf::from("python3"));
@@ -1401,7 +1404,6 @@ mod tests {
         fs::create_dir_all(&bin_dir).unwrap();
         let python_bin = bin_dir.join("python3");
         fs::write(&python_bin, "").unwrap();
-
         std::env::set_var("HOME", temp.path());
         let result = find_active_python_bin().unwrap();
         assert_eq!(result, python_bin);
