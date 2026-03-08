@@ -578,7 +578,43 @@ source ~/.zshrc
 | `Installation already in progress` | Lock file exists | Wait or remove stale lock |
 | `Home directory not found` | $HOME not set | Set HOME environment variable |
 
-## Getting Help
+## Known Limitations
+
+### `~/.cargo` directory from existing Rust installations
+
+**Cause**: vex sets `CARGO_HOME=$HOME/.vex/cargo` in the shell hook so new cargo data goes into `~/.vex/cargo`. However, if you had Rust installed before (via rustup or a previous vex version), the existing `~/.cargo` directory remains.
+
+**Migration**: Move the existing directory to the new location:
+
+```bash
+mv ~/.cargo ~/.vex/cargo
+```
+
+If you also use rustup independently, be aware that rustup manages its own `~/.rustup` directory and may conflict with vex's Rust installation. In that case, you can leave `~/.cargo` as-is and let cargo maintain two separate homes — or uninstall rustup and use vex exclusively for Rust.
+
+---
+
+### `~/.cache/node` directory created by npm/pnpm
+
+**Cause**: npm and pnpm store their cache in `~/.cache/node` by default on macOS (following the XDG base directory spec). This is behavior of npm/pnpm themselves, not vex.
+
+**Workaround**: You can redirect npm's cache manually:
+
+```bash
+npm config set cache ~/.vex/npm-cache
+```
+
+For pnpm, set `PNPM_HOME` in your shell config:
+
+```bash
+export PNPM_HOME="$HOME/.vex/pnpm"
+```
+
+vex does not manage npm or pnpm configuration, so this must be done manually.
+
+---
+
+
 
 If you can't resolve the issue:
 

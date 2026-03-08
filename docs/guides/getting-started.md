@@ -149,6 +149,55 @@ vex doctor
 
 This validates your installation and provides fixes for any issues.
 
+## Python Workflow
+
+Python support uses [python-build-standalone](https://github.com/astral-sh/python-build-standalone) — prebuilt CPython binaries, no compilation needed.
+
+### Step 1 — Install Python globally
+
+```bash
+vex install python@3.12   # or: python@latest, python@stable
+vex global python@3.12    # set as global default
+```
+
+### Step 2 — Set up a project
+
+```bash
+cd my-project
+vex python init
+```
+
+This creates `.venv` in the current directory using the active vex-managed Python, and records the version in `.tool-versions`.
+
+### Step 3 — Install packages and lock them
+
+```bash
+source .venv/bin/activate   # or let the shell hook do it automatically on next cd
+pip install requests flask
+vex python freeze            # writes requirements.lock
+```
+
+### Step 4 — Commit
+
+```bash
+git add .tool-versions requirements.lock
+git commit -m "pin python and dependencies"
+```
+
+### Step 5 — Restore on another machine
+
+```bash
+vex install python@3.12
+cd my-project
+vex python sync   # creates .venv if missing, then pip install -r requirements.lock
+```
+
+### Auto-activation
+
+With the shell hook enabled (`eval "$(vex env zsh)"`), the `.venv` is automatically activated when you `cd` into the project and deactivated when you leave — no manual `source .venv/bin/activate` needed.
+
+---
+
 ## Working with Projects
 
 ### Pin a version for your project
@@ -250,13 +299,13 @@ vex uses symlinks, so all terminals share the same active version. To use differ
 
 ### Global default version
 
-Set a global default in your home directory:
+Set a global default that applies everywhere unless overridden by a project `.tool-versions`:
 
 ```bash
 vex global node@20.11.0
 ```
 
-This creates `~/.tool-versions` which applies everywhere unless overridden by a project-specific `.tool-versions`.
+This writes to `~/.vex/tool-versions` (not `~/.tool-versions`), keeping all vex data under `~/.vex/`.
 
 ## Tips
 

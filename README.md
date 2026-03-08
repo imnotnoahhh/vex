@@ -180,7 +180,7 @@ vex install
 | `vex use <tool@version>` | Switch to installed version | `vex use node@22` |
 | `vex use --auto` | Auto-switch from version files | `vex use --auto` |
 | `vex local <tool@version>` | Pin version in `.tool-versions` | `vex local node@20.11.0` |
-| `vex global <tool@version>` | Pin version in `~/.tool-versions` | `vex global go@1.23` |
+| `vex global <tool@version>` | Pin version in `~/.vex/tool-versions` | `vex global go@1.23` |
 | `vex list <tool>` | List installed versions | `vex list node` |
 | `vex list-remote <tool>` | List remote versions (interactive, latest 20) | `vex list-remote node` |
 | `vex list-remote <tool> --all` | List all remote versions | `vex list-remote node --all` |
@@ -302,11 +302,18 @@ Switching versions just updates symlinks — instant and shell-restart-free.
 
 | | vex | nvm | fnm | asdf | mise |
 |---|---|---|---|---|---|
-| Multi-language | ✅ | ❌ | ❌ | ✅ | ✅ |
+| Multi-language | ✅ | ❌ Node only | ❌ Node only | ✅ | ✅ |
+| Python venv management | ✅ built-in | ❌ | ❌ | ❌ | ❌ |
+| No shims | ✅ symlinks | ✅ | ✅ | ❌ shims | ❌ shims |
 | .tool-versions | ✅ | ❌ | ❌ | ✅ | ✅ |
-| Auto-switch | ✅ | ❌ | ✅ | ✅ | ✅ |
-| No shims | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Auto-switch on cd | ✅ | ❌ | ✅ | ✅ | ✅ |
+| Zero home dir pollution | ✅ all in ~/.vex | ❌ | ❌ | ❌ | ❌ |
+| Self-update | ✅ built-in | ❌ | ❌ | ❌ | ❌ |
 | Implementation | Rust | Shell | Rust | Shell | Rust |
+
+**Why no shims matters**: asdf and mise insert a shim binary in front of every command. Every time you run `node`, the shim wakes up, looks up the version, then execs the real binary. vex skips this entirely — `~/.vex/bin/node` is a direct symlink to the real binary. Zero overhead, no startup tax.
+
+**Why zero home dir pollution matters**: most version managers scatter files across `~/.nvm`, `~/.cargo`, `~/.cache/node`, `~/.tool-versions`, etc. vex keeps everything under `~/.vex/` — one directory, easy to back up, easy to nuke.
 
 ## Directory Layout
 
