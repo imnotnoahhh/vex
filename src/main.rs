@@ -114,6 +114,12 @@ enum Commands {
 
     /// Check vex installation health
     Doctor,
+
+    /// Python-specific commands (init, freeze, sync)
+    Python {
+        /// Subcommand: init | freeze | sync
+        subcmd: String,
+    },
 }
 
 /// Get vex root directory (~/.vex)
@@ -615,6 +621,12 @@ fn show_aliases(tool_name: &str) -> Result<()> {
             print_alias(&*tool, "latest")?;
             print_alias(&*tool, "stable")?;
         }
+        "python" => {
+            print_alias(&*tool, "latest")?;
+            print_alias(&*tool, "stable")?;
+            print_alias(&*tool, "bugfix")?;
+            print_alias(&*tool, "security")?;
+        }
         _ => {
             println!("  (no aliases available)");
         }
@@ -676,6 +688,147 @@ fn auto_switch() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Run `vex python init`: create .venv in cwd and record python version in .tool-versions
+fn python_init() -> Result<()> {
+    use std::process::Command;
+
+    let cwd = resolver::current_dir();
+    let python_bin = find_active_python_bin()?;
+
+    println!(
+        "Creating .venv using {}...",
+        python_bin.display().to_string().cyan()
+    );
+
+    let status = Command::new(&python_bin)
+        .args(["-m", "venv", ".venv"])
+        .current_dir(&cwd)
+        .status()?;
+
+    if !status.success() {
+        return Err(error::VexError::Parse(
+            "Failed to create .venv. Make sure python is installed via 'vex install python@<version>'".to_string(),
+        ));
+    }
+
+    // Record python version in .tool-versions if we know it
+    let versions = resolver::resolve_versions(&cwd);
+    if let Some((_, ver)) = versions.iter().find(|(t, _)| t.as_str() == "python") {
+        let file_path = cwd.join(".tool-versions");
+        write_tool_version(&file_path, "python", ver)?;
+        println!(
+            "{} Recorded python {} in .tool-versions",
+            "✓".green(),
+            ver.cyan()
+        );
+    }
+
+    println!(
+        "{} Created .venv in {}",
+        "✓".green(),
+        cwd.display().to_string().dimmed()
+    );
+    println!();
+    println!("{}", "To activate now:  source .venv/bin/activate".dimmed());
+    println!(
+        "{}",
+        "Auto-activates:   next time you cd into this directory".dimmed()
+    );
+
+    Ok(())
+}
+
+/// Run `vex python freeze`: write pip freeze output to requirements.lock
+fn python_freeze() -> Result<()> {
+    use std::process::Command;
+
+    let cwd = resolver::current_dir();
+    let pip = cwd.join(".venv").join("bin").join("pip");
+
+    if !pip.exists() {
+        return Err(error::VexError::Parse(
+            "No .venv found. Run 'vex python init' first.".to_string(),
+        ));
+    }
+
+    let output = Command::new(&pip)
+        .arg("freeze")
+        .current_dir(&cwd)
+        .output()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(error::VexError::Parse(format!(
+            "pip freeze failed: {}",
+            stderr
+        )));
+    }
+
+    let lock_path = cwd.join("requirements.lock");
+    fs::write(&lock_path, &output.stdout)?;
+
+    let line_count = output.stdout.iter().filter(|&&b| b == b'\n').count();
+    println!(
+        "{} Wrote {} packages to {}",
+        "✓".green(),
+        line_count,
+        "requirements.lock".cyan()
+    );
+
+    Ok(())
+}
+
+/// Run `vex python sync`: restore environment from requirements.lock (auto-init if needed)
+fn python_sync() -> Result<()> {
+    use std::process::Command;
+
+    let cwd = resolver::current_dir();
+    let venv = cwd.join(".venv");
+    let lock_path = cwd.join("requirements.lock");
+
+    if !lock_path.exists() {
+        return Err(error::VexError::Parse(
+            "No requirements.lock found. Run 'vex python freeze' first.".to_string(),
+        ));
+    }
+
+    if !venv.exists() {
+        println!("{}", "No .venv found, initializing...".dimmed());
+        python_init()?;
+    }
+
+    let pip = venv.join("bin").join("pip");
+    println!("Installing from requirements.lock...");
+
+    let status = Command::new(&pip)
+        .args(["install", "-r", "requirements.lock"])
+        .current_dir(&cwd)
+        .status()?;
+
+    if !status.success() {
+        return Err(error::VexError::Parse(
+            "pip install failed. Check requirements.lock for errors.".to_string(),
+        ));
+    }
+
+    println!(
+        "{} Environment restored from requirements.lock",
+        "✓".green()
+    );
+
+    Ok(())
+}
+
+/// Find the active python3 binary from vex bin dir, falling back to system python3
+fn find_active_python_bin() -> Result<std::path::PathBuf> {
+    let vex_dir = vex_dir()?;
+    let bin = vex_dir.join("bin").join("python3");
+    if bin.exists() {
+        return Ok(bin);
+    }
+    Ok(std::path::PathBuf::from("python3"))
 }
 
 fn run_doctor() -> Result<()> {
@@ -827,8 +980,7 @@ fn run_doctor() -> Result<()> {
         if let Ok(entries) = fs::read_dir(&current_dir) {
             for entry in entries.filter_map(|e| e.ok()) {
                 if fs::read_link(entry.path()).is_ok() && entry.path().canonicalize().is_err() {
-                    broken_links
-                        .push(format!("current/{}", entry.file_name().to_string_lossy()));
+                    broken_links.push(format!("current/{}", entry.file_name().to_string_lossy()));
                 }
             }
         }
@@ -1030,6 +1182,17 @@ fn run() -> Result<()> {
         Commands::Doctor => {
             run_doctor()?;
         }
+        Commands::Python { subcmd } => match subcmd.as_str() {
+            "init" => python_init()?,
+            "freeze" => python_freeze()?,
+            "sync" => python_sync()?,
+            _ => {
+                return Err(error::VexError::Parse(format!(
+                    "Unknown python subcommand: '{}'. Available: init, freeze, sync",
+                    subcmd
+                )));
+            }
+        },
     }
 
     Ok(())

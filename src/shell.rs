@@ -40,6 +40,16 @@ __vex_use_if_found() {
         dir="${dir%/*}"
     done
 }
+
+__vex_activate_venv() {
+    if [ -f "$PWD/.venv/bin/activate" ]; then
+        if [ -z "$VIRTUAL_ENV" ] || [ "$VIRTUAL_ENV" != "$PWD/.venv" ]; then
+            VIRTUAL_ENV_DISABLE_PROMPT=1 source "$PWD/.venv/bin/activate"
+        fi
+    elif [ -n "$VIRTUAL_ENV" ]; then
+        deactivate 2>/dev/null || true
+    fi
+}
 "#
 }
 
@@ -50,7 +60,9 @@ export PATH="$HOME/.vex/bin:$PATH"
 {}
 autoload -U add-zsh-hook
 add-zsh-hook chpwd __vex_use_if_found
+add-zsh-hook chpwd __vex_activate_venv
 __vex_use_if_found
+__vex_activate_venv
 "#,
         vex_hook_function()
     )
@@ -65,6 +77,7 @@ __vex_prompt_command() {{
     if [ "$__VEX_PREV_DIR" != "$PWD" ]; then
         __VEX_PREV_DIR="$PWD"
         __vex_use_if_found
+        __vex_activate_venv
     fi
 }}
 
@@ -72,6 +85,7 @@ if [[ ";$PROMPT_COMMAND;" != *";__vex_prompt_command;"* ]]; then
     PROMPT_COMMAND="__vex_prompt_command;$PROMPT_COMMAND"
 fi
 __vex_use_if_found
+__vex_activate_venv
 "#,
         vex_hook_function()
     )
@@ -96,11 +110,23 @@ function __vex_use_if_found
     end
 end
 
+function __vex_activate_venv
+    if test -f "$PWD/.venv/bin/activate.fish"
+        if test -z "$VIRTUAL_ENV"; or test "$VIRTUAL_ENV" != "$PWD/.venv"
+            source "$PWD/.venv/bin/activate.fish"
+        end
+    else if set -q VIRTUAL_ENV
+        deactivate 2>/dev/null; or true
+    end
+end
+
 function __vex_on_pwd --on-variable PWD
     __vex_use_if_found
+    __vex_activate_venv
 end
 
 __vex_use_if_found
+__vex_activate_venv
 "#
     .to_string()
 }
@@ -129,13 +155,24 @@ def --env __vex_use_if_found [] {
     }
 }
 
+def --env __vex_activate_venv [] {
+    let venv_activate = ($env.PWD | path join ".venv" "bin" "activate.nu")
+    if ($venv_activate | path exists) {
+        if ($env | get -i VIRTUAL_ENV | is-empty) or ($env.VIRTUAL_ENV != ($env.PWD | path join ".venv")) {
+            source $venv_activate
+        }
+    }
+}
+
 $env.config = ($env.config | upsert hooks {
     pre_prompt: ($env.config.hooks.pre_prompt | append {||
         __vex_use_if_found
+        __vex_activate_venv
     })
 })
 
 __vex_use_if_found
+__vex_activate_venv
 "#
     .to_string()
 }
@@ -149,8 +186,10 @@ mod tests {
         let hook = generate_hook("zsh").unwrap();
         assert!(hook.contains("add-zsh-hook chpwd"));
         assert!(hook.contains("__vex_use_if_found"));
+        assert!(hook.contains("__vex_activate_venv"));
         assert!(hook.contains(".tool-versions"));
         assert!(hook.contains("$HOME/.vex/bin"));
+        assert!(hook.contains(".venv/bin/activate"));
     }
 
     #[test]
@@ -158,22 +197,27 @@ mod tests {
         let hook = generate_hook("bash").unwrap();
         assert!(hook.contains("PROMPT_COMMAND"));
         assert!(hook.contains("__vex_use_if_found"));
+        assert!(hook.contains("__vex_activate_venv"));
         assert!(hook.contains(".tool-versions"));
+        assert!(hook.contains(".venv/bin/activate"));
     }
 
     #[test]
     fn test_generate_fish_hook() {
         let hook = generate_hook("fish").unwrap();
         assert!(hook.contains("function __vex_use_if_found"));
+        assert!(hook.contains("__vex_activate_venv"));
         assert!(hook.contains("on-variable PWD"));
         assert!(hook.contains(".tool-versions"));
         assert!(hook.contains("$HOME/.vex/bin"));
+        assert!(hook.contains(".venv/bin/activate.fish"));
     }
 
     #[test]
     fn test_generate_nushell_hook() {
         let hook = generate_hook("nu").unwrap();
         assert!(hook.contains("def --env __vex_use_if_found"));
+        assert!(hook.contains("__vex_activate_venv"));
         assert!(hook.contains("pre_prompt"));
         assert!(hook.contains(".tool-versions"));
         assert!(hook.contains("$env.PATH"));

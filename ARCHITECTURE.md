@@ -14,7 +14,7 @@ This document describes the architecture and design decisions of vex, a multi-la
 
 ## Overview
 
-vex is a Rust-based version manager that uses **symlinks + PATH prepending** (not shims) to provide instant version switching for Node.js, Go, Java, and Rust on macOS.
+vex is a Rust-based version manager that uses **symlinks + PATH prepending** (not shims) to provide instant version switching for Node.js, Go, Java, Rust, and Python on macOS.
 
 **Key characteristics:**
 - Zero runtime overhead (no shim layer)
@@ -57,10 +57,10 @@ vex is a Rust-based version manager that uses **symlinks + PATH prepending** (no
                          │
 ┌────────────────────────▼────────────────────────────────────┐
 │                    Tool Adapters                             │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐       │
-│  │ Node.js │  │   Go    │  │  Java   │  │  Rust   │       │
-│  │(LTS API)│  │(dl JSON)│  │(Adoptium│  │(channel)│       │
-│  └─────────┘  └─────────┘  └─────────┘  └─────────┘       │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  │
+│  │ Node.js │  │   Go    │  │  Java   │  │  Rust   │  │ Python  │  │
+│  │(LTS API)│  │(dl JSON)│  │(Adoptium│  │(channel)│  │(pbs GH) │  │
+│  └─────────┘  └─────────┘  └─────────┘  └─────────┘  └─────────┘  │
 └─────────────────────────────────────────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────────────────┐
@@ -85,7 +85,8 @@ main.rs
   │     ├─> tools/node.rs
   │     ├─> tools/go.rs
   │     ├─> tools/java.rs
-  │     └─> tools/rust.rs
+  │     ├─> tools/rust.rs
+  │     └─> tools/python.rs
   ├─> installer.rs
   │     ├─> downloader.rs
   │     ├─> lock.rs
@@ -110,6 +111,7 @@ main.rs
 | `tools/go.rs` | Go adapter (go.dev JSON API) | `list_remote()`, `download_url()` |
 | `tools/java.rs` | Java adapter (Adoptium API) | `list_remote()`, `download_url()` |
 | `tools/rust.rs` | Rust adapter (channel TOML) | `list_remote()`, `download_url()`, `post_install()` |
+| `tools/python.rs` | Python adapter (python-build-standalone GitHub releases) | `list_remote()`, `download_url()`, `get_checksum()`, `resolve_alias()` |
 | `downloader.rs` | HTTP download, SHA256 verification | `download()`, `verify_checksum()` |
 | `installer.rs` | Extract archives, disk space check | `install()`, `check_disk_space()` |
 | `switcher.rs` | Atomic symlink updates | `switch_version()` |
@@ -377,6 +379,15 @@ fs::rename(&temp_link, &final_link)?;
 - fish: `--on-variable PWD`
 - nushell: `pre_prompt` hooks
 
+**Two hooks are injected on every directory change**:
+
+1. `__vex_use_if_found` — traverses up the directory tree looking for `.tool-versions` / `.node-version` / `.go-version` etc., then calls `vex use --auto` to switch tool versions
+2. `__vex_activate_venv` — checks for `.venv/bin/activate` in `$PWD`:
+   - If found and not already active → `source .venv/bin/activate`
+   - If not found but a venv is currently active → `deactivate`
+
+This means entering a Python project directory automatically activates its `.venv`, and leaving it deactivates it, with no manual intervention.
+
 ### 9. Caching Strategy
 
 **Decision**: Cache remote version lists for 5 minutes (configurable)
@@ -419,16 +430,15 @@ Solutions:
 
 ### Python Support
 
-**Challenges**:
-- No official macOS binaries (python.org provides installers, not tarballs)
-- Multiple distribution options (CPython, PyPy, Anaconda)
-- Complex dependency management (pip, virtualenv)
+Python is supported via [python-build-standalone](https://github.com/astral-sh/python-build-standalone) — prebuilt, standalone CPython binaries requiring no compilation.
 
-**Potential approaches**:
-1. python-build-standalone (pre-built binaries)
-2. uv (Rust-based Python installer)
-3. conda-forge (community binaries)
-4. Local compilation (slow, requires build tools)
+**Implementation**:
+- `src/tools/python.rs` implements the `Tool` trait
+- Binaries: `python3`, `pip3`
+- Checksums verified via the `SHA256SUMS` file published alongside each release
+- Version aliases based on Python's support lifecycle: `bugfix`, `security`, `end-of-life`, `pre-release`
+- Shell hooks extended with `__vex_activate_venv` to auto-activate/deactivate `.venv` on directory change
+- `vex python init/freeze/sync` subcommands for venv and lockfile management
 
 ### Cross-Platform Support
 

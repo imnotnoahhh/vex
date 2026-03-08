@@ -14,6 +14,37 @@ cd vex
 cargo build
 ```
 
+## Testing Your Build Without Affecting Your Installed vex
+
+vex stores all its data under `~/.vex/`. If you have a stable vex installed, running your dev build directly would read and write the same directory, potentially corrupting your installed tool versions.
+
+The fix is to override `HOME` for your dev build, pointing it at a throwaway directory:
+
+```bash
+# Build the dev binary
+cargo build --release
+
+# Set up a convenience alias using an absolute path (works from any directory)
+alias vex-dev="HOME=/tmp/vex-dev $(pwd)/target/release/vex"
+
+# Now use vex-dev freely — it reads/writes /tmp/vex-dev/.vex/ only
+vex-dev init
+vex-dev install python@3.12
+vex-dev list python
+vex-dev doctor
+
+# Your real ~/.vex/ is completely untouched
+vex list python   # still shows your stable install
+```
+
+`HOME=<path> <command>` is standard shell syntax that overrides an environment variable for a single command only. `/tmp` is cleaned up on reboot, so there's no permanent mess.
+
+When you're done testing, clean up manually if needed:
+
+```bash
+rm -rf /tmp/vex-dev
+```
+
 ## Pre-PR Checks
 
 Before opening a PR, make sure all checks pass:
@@ -42,7 +73,8 @@ src/
 │   ├── node.rs      # Node.js with LTS support
 │   ├── go.rs        # Go with minor version matching
 │   ├── java.rs      # Java (Eclipse Temurin JDK)
-│   └── rust.rs      # Rust with complete toolchain
+│   ├── rust.rs      # Rust with complete toolchain
+│   └── python.rs    # Python via python-build-standalone
 ├── downloader.rs    # HTTP download, SHA256 verification, retry logic, timeout configuration
 ├── installer.rs     # Extract tar.gz, disk space check, path traversal protection
 ├── switcher.rs      # Symlink management for bin/ and current/
