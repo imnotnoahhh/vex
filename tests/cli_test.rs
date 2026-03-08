@@ -365,11 +365,23 @@ fn test_global_invalid_tool() {
 
 #[test]
 fn test_global_writes_tool_versions() {
-    // global with full version should write to ~/.tool-versions
-    let output = vex_bin().args(["global", "node@20.11.0"]).output().unwrap();
+    let home = std::env::temp_dir().join("vex_test_global_home");
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+
+    let output = vex_bin()
+        .args(["global", "node@20.11.0"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("node") && stdout.contains("20.11.0"));
+
+    let tv = std::fs::read_to_string(home.join(".vex/tool-versions")).unwrap();
+    assert!(tv.contains("node 20.11.0"));
+
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 // --- use --auto with version file ---

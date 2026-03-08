@@ -560,6 +560,9 @@ fn write_tool_version(file_path: &std::path::Path, tool_name: &str, version: &st
         .join("\n")
         + "\n";
 
+    if let Some(parent) = file_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
     fs::write(file_path, content)?;
     Ok(())
 }
