@@ -826,11 +826,9 @@ fn run_doctor() -> Result<()> {
     if current_dir.exists() {
         if let Ok(entries) = fs::read_dir(&current_dir) {
             for entry in entries.filter_map(|e| e.ok()) {
-                if let Ok(target) = fs::read_link(entry.path()) {
-                    if !target.exists() {
-                        broken_links
-                            .push(format!("current/{}", entry.file_name().to_string_lossy()));
-                    }
+                if fs::read_link(entry.path()).is_ok() && entry.path().canonicalize().is_err() {
+                    broken_links
+                        .push(format!("current/{}", entry.file_name().to_string_lossy()));
                 }
             }
         }
@@ -840,14 +838,12 @@ fn run_doctor() -> Result<()> {
         if let Ok(entries) = fs::read_dir(&bin_dir) {
             for entry in entries.filter_map(|e| e.ok()) {
                 let filename = entry.file_name().to_string_lossy().to_string();
-                if let Ok(target) = fs::read_link(entry.path()) {
-                    if !target.exists() {
-                        // Special handling for corepack - check if it's Node.js 25+
-                        if filename == "corepack" && target.to_string_lossy().contains("/node/") {
-                            corepack_missing = true;
-                        } else {
-                            broken_links.push(format!("bin/{}", filename));
-                        }
+                if entry.path().canonicalize().is_err() && fs::read_link(entry.path()).is_ok() {
+                    // Special handling for corepack - check if it's Node.js 25+
+                    if filename == "corepack" {
+                        corepack_missing = true;
+                    } else {
+                        broken_links.push(format!("bin/{}", filename));
                     }
                 }
             }
