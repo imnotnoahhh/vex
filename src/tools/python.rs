@@ -316,10 +316,38 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_alias_unknown() {
-        // Unknown aliases should return None without network call
-        // (this would fail if it tried to call list_remote)
-        // We test the logic path only — actual resolution requires network
+    fn test_get_major_minor_single_segment() {
+        // Fallback: version with no dot returns as-is
+        assert_eq!(get_major_minor("3"), "3");
+    }
+
+    #[test]
+    fn test_extract_python_version_no_plus() {
+        // No '+' separator → split returns the whole string after prefix
+        let result = extract_python_version("cpython-3.12.13-aarch64.tar.gz");
+        assert_eq!(result, Some("3.12.13-aarch64.tar.gz".to_string()));
+    }
+
+    #[test]
+    fn test_extract_python_version_empty_version() {
+        // '+' immediately after prefix → empty string version
+        let result = extract_python_version("cpython-+20260303-aarch64.tar.gz");
+        assert_eq!(result, Some("".to_string()));
+    }
+
+    #[test]
+    fn test_support_status_end_of_life_variants() {
+        for v in &["3.8", "3.7", "3.6", "2.7"] {
+            assert_eq!(SupportStatus::from_version(v), SupportStatus::EndOfLife);
+        }
+    }
+
+    #[test]
+    fn test_support_status_as_str_all_variants() {
+        assert_eq!(SupportStatus::Bugfix.as_str(), "bugfix");
+        assert_eq!(SupportStatus::Security.as_str(), "security");
+        assert_eq!(SupportStatus::EndOfLife.as_str(), "end-of-life");
+        assert_eq!(SupportStatus::PreRelease.as_str(), "pre-release");
     }
 
     #[test]

@@ -19,6 +19,7 @@ mod resolver;
 mod shell;
 mod switcher;
 mod tools;
+mod updater;
 
 use error::Result;
 
@@ -114,6 +115,9 @@ enum Commands {
 
     /// Check vex installation health
     Doctor,
+
+    /// Update vex itself to the latest release
+    SelfUpdate,
 
     /// Python-specific commands (init, freeze, sync)
     Python {
@@ -1182,6 +1186,9 @@ fn run() -> Result<()> {
         Commands::Doctor => {
             run_doctor()?;
         }
+        Commands::SelfUpdate => {
+            updater::self_update()?;
+        }
         Commands::Python { subcmd } => match subcmd.as_str() {
             "init" => python_init()?,
             "freeze" => python_freeze()?,
@@ -1374,5 +1381,85 @@ mod tests {
 
         let content = fs::read_to_string(&file_path).unwrap();
         assert_eq!(content, "node 22.0.0\n");
+    }
+
+    #[test]
+    fn test_find_active_python_bin_fallback() {
+        use tempfile::TempDir;
+        let temp = TempDir::new().unwrap();
+        // HOME points to a dir with no .vex/bin/python3 → fallback to "python3"
+        std::env::set_var("HOME", temp.path());
+        let result = find_active_python_bin().unwrap();
+        assert_eq!(result, std::path::PathBuf::from("python3"));
+    }
+
+    #[test]
+    fn test_find_active_python_bin_vex_bin() {
+        use tempfile::TempDir;
+        let temp = TempDir::new().unwrap();
+        let bin_dir = temp.path().join(".vex").join("bin");
+        fs::create_dir_all(&bin_dir).unwrap();
+        let python_bin = bin_dir.join("python3");
+        fs::write(&python_bin, "").unwrap();
+
+        std::env::set_var("HOME", temp.path());
+        let result = find_active_python_bin().unwrap();
+        assert_eq!(result, python_bin);
+    }
+
+    #[test]
+    fn test_list_installed_no_toolchains_dir() {
+        use tempfile::TempDir;
+        let temp = TempDir::new().unwrap();
+        std::env::set_var("HOME", temp.path());
+        // No toolchains dir → prints "No versions" and returns Ok
+        let result = list_installed("node");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_list_installed_empty_dir() {
+        use tempfile::TempDir;
+        let temp = TempDir::new().unwrap();
+        fs::create_dir_all(temp.path().join(".vex").join("toolchains").join("node")).unwrap();
+        std::env::set_var("HOME", temp.path());
+        let result = list_installed("node");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_current_no_current_dir() {
+        use tempfile::TempDir;
+        let temp = TempDir::new().unwrap();
+        fs::create_dir_all(temp.path().join(".vex")).unwrap();
+        std::env::set_var("HOME", temp.path());
+        let result = show_current();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_current_empty_current_dir() {
+        use tempfile::TempDir;
+        let temp = TempDir::new().unwrap();
+        fs::create_dir_all(temp.path().join(".vex").join("current")).unwrap();
+        std::env::set_var("HOME", temp.path());
+        let result = show_current();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_uninstall_version_not_found() {
+        use tempfile::TempDir;
+        let temp = TempDir::new().unwrap();
+        fs::create_dir_all(temp.path().join(".vex").join("toolchains")).unwrap();
+        std::env::set_var("HOME", temp.path());
+        let result = uninstall("node", "99.0.0");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_spec_error_message() {
+        let err = parse_spec("node@20@11").unwrap_err();
+        assert!(err.to_string().contains("Invalid spec format"));
     }
 }

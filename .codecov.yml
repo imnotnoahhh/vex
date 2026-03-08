@@ -1,0 +1,6 @@
+coverage:
+  status:
+    patch:
+      default:
+        target: 10%   # updater.rs 依赖网络/文件系统，无法在 CI 中单元测试
+        threshold: 5%
