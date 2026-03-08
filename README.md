@@ -8,6 +8,24 @@
   Symlink-based switching · Node.js / Go / Java / Rust / Python · .tool-versions · Auto-switch on cd
 </p>
 
+> **⚠️ IMPORTANT: Manual Update Required for v0.2.2 and Earlier**
+>
+> If you're using vex v0.2.2 or earlier, `vex self-update` has a bug that prevents automatic updates. Please manually install v0.2.3 or later:
+>
+> ```bash
+> # Apple Silicon (M1/M2/M3)
+> curl -L https://github.com/imnotnoahhh/vex/releases/download/v0.2.3/vex-aarch64-apple-darwin.tar.gz | tar xz
+> mv vex ~/.local/bin/vex
+> chmod +x ~/.local/bin/vex
+>
+> # Intel
+> curl -L https://github.com/imnotnoahhh/vex/releases/download/v0.2.3/vex-x86_64-apple-darwin.tar.gz | tar xz
+> mv vex ~/.local/bin/vex
+> chmod +x ~/.local/bin/vex
+> ```
+>
+> After upgrading to v0.2.3, `vex self-update` will work correctly for all future updates.
+
 <p align="center">
   <a href="https://github.com/imnotnoahhh/vex/actions/workflows/ci.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/imnotnoahhh/vex/ci.yml?style=flat-square&label=CI" alt="CI">

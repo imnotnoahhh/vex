@@ -7,7 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-03-08
+
+### Fixed
+
+- **`vex self-update` downloading .sha256 checksum files** — Fixed asset selection logic that incorrectly matched `.tar.gz.sha256` and `.tar.xz.sha256` files instead of actual binaries. Now explicitly excludes files ending with `.sha256`.
+- **Homebrew liblzma dependency** — Statically link `liblzma` to eliminate runtime dependency on Homebrew's `xz` library. Binaries now work on systems without Homebrew installed.
+
+### Changed
+
+- `xz2` crate now uses `static` feature to bundle `liblzma` into the binary
+
+### Migration Note
+
+**Users on v0.2.2 or earlier must manually install v0.2.3** due to bugs in previous `self-update` implementations. After upgrading to v0.2.3, `vex self-update` will work correctly for all future updates.
+
 ## [0.2.2] - 2026-03-08
+
+> **⚠️ CRITICAL BUG — DO NOT USE** — This release has two critical issues:
+> 1. `vex self-update` downloads `.sha256` checksum files instead of binaries
+> 2. Binary has Homebrew `liblzma` dependency, fails on systems without Homebrew
+>
+> Use v0.2.3 instead.
 
 ### Fixed
 
