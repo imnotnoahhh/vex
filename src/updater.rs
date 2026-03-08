@@ -99,18 +99,20 @@ pub fn self_update() -> Result<()> {
         .ok_or_else(|| VexError::Parse("Unsupported architecture for self-update".to_string()))?;
 
     // Find the matching asset — prefer archive formats, then bare binary
-    // Exclude .sha256 checksum files by checking the extension is exactly what we want
+    // Exclude .sha256 checksum files explicitly
     let asset = release
         .assets
         .iter()
         .find(|a| {
             a.name.contains(arch_suffix)
-                && (a.name.ends_with(".tar.xz") && !a.name.contains(".tar.xz."))
+                && a.name.ends_with(".tar.xz")
+                && !a.name.ends_with(".sha256")
         })
         .or_else(|| {
             release.assets.iter().find(|a| {
                 a.name.contains(arch_suffix)
-                    && (a.name.ends_with(".tar.gz") && !a.name.contains(".tar.gz."))
+                    && a.name.ends_with(".tar.gz")
+                    && !a.name.ends_with(".sha256")
             })
         })
         .or_else(|| {
@@ -120,7 +122,7 @@ pub fn self_update() -> Result<()> {
                     && !a.name.contains(".tar.gz")
                     && !a.name.contains(".tar.xz")
                     && !a.name.contains(".zip")
-                    && !a.name.contains(".sha256")
+                    && !a.name.ends_with(".sha256")
             })
         })
         .ok_or_else(|| {
