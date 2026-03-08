@@ -50,6 +50,7 @@
 - **Remote version cache** — cached for 5 min by default, configurable via `config.toml`
 - **Concurrent install protection** — file-based locking prevents parallel install corruption
 - **Checksum verification** — Node.js uses official SHA256 verification; Go/Java/Rust follow upstream checksum metadata availability
+- **Self-update** — `vex self-update` upgrades vex itself to the latest GitHub release
 - **Health check** — `vex doctor` validates installation, PATH, shell hooks, and provides actionable fixes
 - **Disk space check** — prevents installation when less than 500 MB free space available
 - **Security hardening** — path traversal protection for tar extraction, HTTP timeouts with retry logic
@@ -189,6 +190,7 @@ vex install
 | `vex current` | Show active versions | `vex current` |
 | `vex uninstall <tool@version>` | Uninstall a version | `vex uninstall node@20.11.0` |
 | `vex doctor` | Run health check and diagnostics | `vex doctor` |
+| `vex self-update` | Update vex itself to the latest release | `vex self-update` |
 | `vex env <shell>` | Output shell hook script | `vex env zsh` |
 | `vex python init` | Create `.venv` in current directory | `vex python init` |
 | `vex python freeze` | Lock environment to `requirements.lock` | `vex python freeze` |
@@ -340,6 +342,9 @@ Go remote listings are constrained by upstream API policy and usually focus on a
 **Why does `vex list-remote rust` show limited choices?**
 Current Rust support reads `channel-rust-stable.toml` and only targets the stable channel's current release.
 
+**How do I upgrade vex itself?**
+Run `vex self-update`. It fetches the latest release from GitHub, downloads the binary for your architecture, and replaces the current executable atomically.
+
 **How do I upgrade to the latest version of a tool?**
 Use `vex upgrade <tool>`. It installs the latest version and switches to it automatically.
 
@@ -426,6 +431,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 - **Global default versions** — Set default versions without `.tool-versions` file
 - **Parallel installations** — Install multiple tools concurrently
 - **Update notifications** — Notify when new tool versions are available
+- **Self-update** — ✅ Done (`vex self-update`)
 
 ### Future Considerations
 

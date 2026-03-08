@@ -82,6 +82,7 @@ src/
 ├── shell.rs         # Shell hook generation (zsh, bash, fish, nushell)
 ├── cache.rs         # Remote version list caching with TTL
 ├── lock.rs          # Installation lock mechanism
+├── updater.rs       # Self-update: fetch latest GitHub release and replace binary
 └── error.rs         # Unified error types with actionable suggestions
 ```
 
