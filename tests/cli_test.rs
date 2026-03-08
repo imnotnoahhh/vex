@@ -33,7 +33,7 @@ fn test_current() {
 
 #[test]
 fn test_invalid_tool() {
-    let output = vex_bin().args(["list-remote", "python"]).output().unwrap();
+    let output = vex_bin().args(["list-remote", "ruby"]).output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Tool not found"));
@@ -94,7 +94,7 @@ fn test_version_flag() {
 
 #[test]
 fn test_install_invalid_tool() {
-    let output = vex_bin().args(["install", "python@3.12"]).output().unwrap();
+    let output = vex_bin().args(["install", "ruby@3.0"]).output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Tool not found"));
@@ -126,8 +126,8 @@ fn test_install_invalid_spec() {
 
 #[test]
 fn test_list_all_supported_tools() {
-    // 所有支持的工具都应该能 list（即使没安装）
-    for tool in &["node", "go", "java", "rust"] {
+    // All supported tools should be listable (even if not installed)
+    for tool in &["node", "go", "java", "rust", "python"] {
         let output = vex_bin().args(["list", tool]).output().unwrap();
         assert!(output.status.success(), "list {} should succeed", tool);
     }
@@ -239,7 +239,7 @@ fn test_global_without_version() {
 
 #[test]
 fn test_local_invalid_tool() {
-    let output = vex_bin().args(["local", "python@3.12"]).output().unwrap();
+    let output = vex_bin().args(["local", "ruby@3.0"]).output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Tool not found"));
@@ -279,7 +279,7 @@ fn test_doctor_command() {
 
 #[test]
 fn test_upgrade_invalid_tool() {
-    let output = vex_bin().args(["upgrade", "python"]).output().unwrap();
+    let output = vex_bin().args(["upgrade", "ruby"]).output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Tool not found"));
@@ -298,7 +298,7 @@ fn test_upgrade_valid_tool_format() {
 
 #[test]
 fn test_alias_invalid_tool() {
-    let output = vex_bin().args(["alias", "python"]).output().unwrap();
+    let output = vex_bin().args(["alias", "ruby"]).output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Tool not found"));
@@ -319,8 +319,8 @@ fn test_install_from_version_file_unsupported_tool() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
-    // Write .tool-versions with unsupported tool
-    std::fs::write(dir.join(".tool-versions"), "python 3.12.0\n").unwrap();
+    // Write .tool-versions with a truly unsupported tool
+    std::fs::write(dir.join(".tool-versions"), "ruby 3.2.0\n").unwrap();
 
     let output = vex_bin().arg("install").current_dir(&dir).output().unwrap();
     // Should not crash, just skip unsupported tool
@@ -357,7 +357,7 @@ fn test_install_from_version_file_already_installed() {
 
 #[test]
 fn test_global_invalid_tool() {
-    let output = vex_bin().args(["global", "python@3.12"]).output().unwrap();
+    let output = vex_bin().args(["global", "ruby@3.0"]).output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Tool not found"));
@@ -380,7 +380,7 @@ fn test_use_auto_with_unsupported_tool() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
-    std::fs::write(dir.join(".tool-versions"), "python 3.12.0\n").unwrap();
+    std::fs::write(dir.join(".tool-versions"), "ruby 3.2.0\n").unwrap();
 
     let output = vex_bin()
         .args(["use", "--auto"])
@@ -448,10 +448,99 @@ fn test_init_idempotent() {
 #[test]
 fn test_list_remote_no_cache_invalid_tool() {
     let output = vex_bin()
-        .args(["list-remote", "python", "--no-cache"])
+        .args(["list-remote", "ruby", "--no-cache"])
         .output()
         .unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Tool not found"));
+}
+
+// --- python subcommand tests ---
+
+#[test]
+fn test_python_unknown_subcmd() {
+    let output = vex_bin().args(["python", "build"]).output().unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Unknown python subcommand"));
+}
+
+#[test]
+fn test_python_freeze_no_venv() {
+    let dir = std::env::temp_dir().join("vex_test_python_freeze_no_venv");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let output = vex_bin()
+        .args(["python", "freeze"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("No .venv found"));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn test_python_sync_no_lock() {
+    let dir = std::env::temp_dir().join("vex_test_python_sync_no_lock");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let output = vex_bin()
+        .args(["python", "sync"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("No requirements.lock found"));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn test_python_list_installed() {
+    let output = vex_bin().args(["list", "python"]).output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Installed versions") || stdout.contains("No versions"));
+}
+
+#[test]
+fn test_install_from_version_file_python_skipped_or_handled() {
+    let dir = std::env::temp_dir().join("vex_test_python_version_file");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    std::fs::write(dir.join(".tool-versions"), "python 3.12.0\n").unwrap();
+
+    let output = vex_bin().arg("install").current_dir(&dir).output().unwrap();
+    // python is now a supported tool — should not produce "skipping unsupported tool"
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stderr.contains("skipping unsupported tool 'python'"));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn test_use_auto_with_python_version_file() {
+    let dir = std::env::temp_dir().join("vex_test_auto_python");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    std::fs::write(dir.join(".tool-versions"), "python 3.12.0\n").unwrap();
+
+    let output = vex_bin()
+        .args(["use", "--auto"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    // Should succeed (uninstalled python is warned, not a fatal error)
+    assert!(output.status.success());
+
+    let _ = std::fs::remove_dir_all(&dir);
 }

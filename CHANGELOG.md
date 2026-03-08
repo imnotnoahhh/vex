@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Python support** — Full Python version management via [python-build-standalone](https://github.com/astral-sh/python-build-standalone):
+  - `vex install python@<version>` / `vex use python@<version>` / `vex list python` / `vex list-remote python`
+  - Version aliases: `latest`, `stable`, `bugfix`, `security` based on Python's support lifecycle
+  - `vex python init` — creates `.venv` in current directory using active Python version
+  - `vex python freeze` — locks environment to `requirements.lock` via `pip freeze`
+  - `vex python sync` — restores environment from `requirements.lock` (auto-inits `.venv` if missing)
+  - Shell hooks extended with `__vex_activate_venv` — auto-activates/deactivates `.venv` on `cd` in zsh, bash, fish, and nushell
+  - Checksums verified via `SHA256SUMS` file published alongside each release
+
 ### Changed
 
 - **Dynamic binary detection** — Version switching now automatically detects available binaries instead of relying on hardcoded lists:

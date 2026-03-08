@@ -9,6 +9,7 @@ use owo_colors::OwoColorize;
 pub mod go;
 pub mod java;
 pub mod node;
+pub mod python;
 pub mod rust;
 
 /// CPU architecture enum (macOS supports ARM64 and x86_64)
@@ -89,6 +90,7 @@ pub fn get_tool(name: &str) -> Result<Box<dyn Tool>> {
         "node" => Ok(Box::new(node::NodeTool)),
         "go" => Ok(Box::new(go::GoTool)),
         "java" => Ok(Box::new(java::JavaTool)),
+        "python" => Ok(Box::new(python::PythonTool)),
         "rust" => Ok(Box::new(rust::RustTool)),
         _ => Err(crate::error::VexError::ToolNotFound(name.to_string())),
     }
@@ -167,7 +169,7 @@ mod tests {
 
     #[test]
     fn test_get_tool_valid() {
-        for name in &["node", "go", "java", "rust"] {
+        for name in &["node", "go", "java", "rust", "python"] {
             let tool = get_tool(name);
             assert!(tool.is_ok(), "get_tool({}) should succeed", name);
             assert_eq!(tool.unwrap().name(), *name);
@@ -176,10 +178,10 @@ mod tests {
 
     #[test]
     fn test_get_tool_invalid() {
-        let result = get_tool("python");
+        let result = get_tool("ruby");
         assert!(result.is_err());
 
-        let result = get_tool("ruby");
+        let result = get_tool("perl");
         assert!(result.is_err());
 
         let result = get_tool("");

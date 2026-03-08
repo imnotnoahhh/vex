@@ -56,8 +56,8 @@ pub enum VexError {
         version: String,
     },
 
-    /// Unsupported tool name (currently supports node, go, java, rust)
-    #[error("Tool not found: {0}\n\nSupported tools: node, go, java, rust\n\nTo see available versions:\n  - Run 'vex list-remote <tool>'\n  - Visit https://github.com/imnotnoahhh/vex for documentation")]
+    /// Unsupported tool name (currently supports node, go, java, rust, python)
+    #[error("Tool not found: {0}\n\nSupported tools: node, go, java, rust, python\n\nTo see available versions:\n  - Run 'vex list-remote <tool>'\n  - Visit https://github.com/imnotnoahhh/vex for documentation")]
     ToolNotFound(String),
 
     /// Parse error (version number format, configuration file format, etc.)
