@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-08
+
 ### Added
+
+- **`vex self-update`** — Update vex itself to the latest GitHub release without reinstalling:
+  - Fetches latest release info from GitHub API
+  - Compares semver against current binary version
+  - Downloads the matching platform asset (`aarch64-apple-darwin` or `x86_64-apple-darwin`)
+  - Supports both bare binary and `.tar.gz` release assets
+  - Atomically replaces the current executable via `fs::rename`
+  - Prints "already up to date" if no newer version exists
 
 - **Python support** — Full Python version management via [python-build-standalone](https://github.com/astral-sh/python-build-standalone):
   - `vex install python@<version>` / `vex use python@<version>` / `vex list python` / `vex list-remote python`

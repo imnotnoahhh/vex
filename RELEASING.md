@@ -352,6 +352,7 @@ git push origin :refs/tags/v0.1.7
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 0.2.0 | 2026-03-08 | Self-update, Python support, dynamic binary detection |
 | 0.1.6 | 2026-03-02 | Fish/Nushell support, vex doctor, security improvements |
 | 0.1.5 | 2026-03-01 | Colorful output |
 | 0.1.4 | 2026-03-01 | Rust complete toolchain, uninstall cleanup |
