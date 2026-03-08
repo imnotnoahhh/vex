@@ -22,7 +22,7 @@ toml = "1"
 # 压缩和解压
 tar = "0.4"
 flate2 = "1"
-xz2 = "0.1"
+xz2 = { version = "0.1", features = ["static"] }
 
 # 进度条
 indicatif = "0.18"
