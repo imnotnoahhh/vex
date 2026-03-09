@@ -9,6 +9,7 @@ use owo_colors::OwoColorize;
 use std::fs;
 use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
+use uuid::Uuid;
 
 fn vex_dir() -> Result<PathBuf> {
     dirs::home_dir()
@@ -53,7 +54,25 @@ fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<
     fs::create_dir_all(&current_dir)?;
 
     let current_link = current_dir.join(tool.name());
-    let temp_link = current_link.with_extension("tmp");
+
+    // Use UUID v4 for random temporary filename to prevent TOCTOU race conditions
+    let temp_link = current_dir.join(format!(".{}.tmp.{}", tool.name(), Uuid::new_v4()));
+
+    // Verify target directory ownership matches current user (security check)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let current_uid = unsafe { libc::getuid() };
+        if let Ok(metadata) = fs::metadata(&toolchain_dir) {
+            if metadata.uid() != current_uid {
+                return Err(VexError::Parse(format!(
+                    "Security: toolchain directory owner mismatch (expected uid {}, got {})",
+                    current_uid,
+                    metadata.uid()
+                )));
+            }
+        }
+    }
 
     let _ = fs::remove_file(&temp_link);
     unix_fs::symlink(&toolchain_dir, &temp_link)?;
@@ -171,7 +190,7 @@ mod tests {
     use crate::tools::node::NodeTool;
     use crate::tools::rust::RustTool;
 
-    fn make_temp_dir(name: &str) -> PathBuf {
+    pub(crate) fn make_temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("vex_switcher_test_{}", name));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
@@ -400,6 +419,193 @@ mod tests {
         assert!(base.join("bin/node").exists());
         assert!(base.join("bin/npm").exists());
         assert!(base.join("bin/npx").exists());
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_switch_version_empty_toolchain() {
+        let base = make_temp_dir("empty_toolchain");
+
+        // Create toolchain directory but no binaries
+        let tc = base.join("toolchains/node/20.0.0/bin");
+        fs::create_dir_all(&tc).unwrap();
+
+        let result = switch_version_in(&NodeTool, "20.0.0", &base);
+        // Should succeed even with no binaries
+        assert!(result.is_ok());
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_switch_version_creates_bin_directory() {
+        let base = make_temp_dir("create_bin_dir");
+
+        let tc = base.join("toolchains/go/1.21.0/bin");
+        fs::create_dir_all(&tc).unwrap();
+        fs::write(tc.join("go"), "fake").unwrap();
+
+        // Ensure bin directory doesn't exist
+        let bin_dir = base.join("bin");
+        assert!(!bin_dir.exists());
+
+        let result = switch_version_in(&GoTool, "1.21.0", &base);
+        assert!(result.is_ok());
+
+        // Verify bin directory was created
+        assert!(bin_dir.exists());
+        assert!(bin_dir.is_dir());
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_switch_version_symlink_atomicity() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = make_temp_dir("atomicity");
+
+        // Create two versions
+        let tc_v1 = base.join("toolchains/node/1.0.0/bin");
+        let tc_v2 = base.join("toolchains/node/2.0.0/bin");
+        fs::create_dir_all(&tc_v1).unwrap();
+        fs::create_dir_all(&tc_v2).unwrap();
+
+        for name in &["node", "npm"] {
+            let path1 = tc_v1.join(name);
+            fs::write(&path1, "v1").unwrap();
+            let mut perms = fs::metadata(&path1).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&path1, perms).unwrap();
+
+            let path2 = tc_v2.join(name);
+            fs::write(&path2, "v2").unwrap();
+            let mut perms = fs::metadata(&path2).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&path2, perms).unwrap();
+        }
+
+        // Switch to v1
+        switch_version_in(&NodeTool, "1.0.0", &base).unwrap();
+        let target1 = fs::read_link(base.join("current/node")).unwrap();
+
+        // Switch to v2
+        switch_version_in(&NodeTool, "2.0.0", &base).unwrap();
+        let target2 = fs::read_link(base.join("current/node")).unwrap();
+
+        // Verify targets are different
+        assert_ne!(target1, target2);
+        assert!(target2.ends_with("toolchains/node/2.0.0"));
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_switch_version_with_special_characters() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = make_temp_dir("special_chars");
+
+        // Create version with special characters (e.g., beta, rc)
+        let tc = base.join("toolchains/node/20.0.0-beta.1/bin");
+        fs::create_dir_all(&tc).unwrap();
+        for name in &["node", "npm"] {
+            let path = tc.join(name);
+            fs::write(&path, "beta").unwrap();
+            let mut perms = fs::metadata(&path).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&path, perms).unwrap();
+        }
+
+        let result = switch_version_in(&NodeTool, "20.0.0-beta.1", &base);
+        assert!(result.is_ok());
+
+        let target = fs::read_link(base.join("current/node")).unwrap();
+        assert!(target.to_string_lossy().contains("20.0.0-beta.1"));
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_switch_multiple_tools_independently() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = make_temp_dir("multi_tools");
+
+        // Create Node.js toolchain
+        let node_tc = base.join("toolchains/node/20.0.0/bin");
+        fs::create_dir_all(&node_tc).unwrap();
+        let node_path = node_tc.join("node");
+        fs::write(&node_path, "node").unwrap();
+        let mut perms = fs::metadata(&node_path).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&node_path, perms).unwrap();
+
+        // Create Go toolchain
+        let go_tc = base.join("toolchains/go/1.21.0/bin");
+        fs::create_dir_all(&go_tc).unwrap();
+        let go_path = go_tc.join("go");
+        fs::write(&go_path, "go").unwrap();
+        let mut perms = fs::metadata(&go_path).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&go_path, perms).unwrap();
+
+        // Switch both
+        switch_version_in(&NodeTool, "20.0.0", &base).unwrap();
+        switch_version_in(&GoTool, "1.21.0", &base).unwrap();
+
+        // Verify both are active
+        assert!(base.join("current/node").exists());
+        assert!(base.join("current/go").exists());
+        assert!(base.join("bin/node").exists());
+        assert!(base.join("bin/go").exists());
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_switch_version_preserves_other_tools() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = make_temp_dir("preserve_tools");
+
+        // Setup Node.js
+        let node_tc = base.join("toolchains/node/20.0.0/bin");
+        fs::create_dir_all(&node_tc).unwrap();
+        let node_path = node_tc.join("node");
+        fs::write(&node_path, "node").unwrap();
+        let mut perms = fs::metadata(&node_path).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&node_path, perms).unwrap();
+
+        // Setup Go
+        let go_tc = base.join("toolchains/go/1.21.0/bin");
+        fs::create_dir_all(&go_tc).unwrap();
+        let go_path = go_tc.join("go");
+        fs::write(&go_path, "go").unwrap();
+        let mut perms = fs::metadata(&go_path).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&go_path, perms).unwrap();
+
+        // Activate both
+        switch_version_in(&NodeTool, "20.0.0", &base).unwrap();
+        switch_version_in(&GoTool, "1.21.0", &base).unwrap();
+
+        // Switch Node.js to different version
+        let node_tc2 = base.join("toolchains/node/21.0.0/bin");
+        fs::create_dir_all(&node_tc2).unwrap();
+        let node_path2 = node_tc2.join("node");
+        fs::write(&node_path2, "node21").unwrap();
+        let mut perms = fs::metadata(&node_path2).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&node_path2, perms).unwrap();
+
+        switch_version_in(&NodeTool, "21.0.0", &base).unwrap();
+
+        // Verify Go is still active
+        assert!(base.join("current/go").exists());
+        assert!(base.join("bin/go").exists());
+
+        // Verify Node.js was updated
+        let node_target = fs::read_link(base.join("current/node")).unwrap();
+        assert!(node_target.to_string_lossy().contains("21.0.0"));
 
         let _ = fs::remove_dir_all(&base);
     }

@@ -351,6 +351,70 @@ fn bench_cache_full_cycle(c: &mut Criterion) {
     });
 }
 
+/// Benchmark: Parallel file extraction simulation
+fn bench_parallel_extraction(c: &mut Criterion) {
+    use rayon::prelude::*;
+    use std::sync::Mutex;
+
+    let tmp = TempDir::new().unwrap();
+    let extract_dir = tmp.path().join("extract");
+    fs::create_dir_all(&extract_dir).unwrap();
+
+    // Simulate 100 files to extract
+    let files: Vec<_> = (0..100)
+        .map(|i| {
+            (
+                format!("file{}.txt", i),
+                format!("content of file {}", i).into_bytes(),
+            )
+        })
+        .collect();
+
+    c.bench_function("parallel_extraction", |b| {
+        b.iter(|| {
+            let errors = Mutex::new(Vec::new());
+            files.par_iter().for_each(|(name, data)| {
+                let target = extract_dir.join(name);
+                if let Err(e) = fs::write(&target, data) {
+                    errors.lock().unwrap().push(format!("Failed: {}", e));
+                }
+            });
+            let error_count = errors.lock().unwrap().len();
+            black_box(error_count)
+        });
+    });
+}
+
+/// Benchmark: Sequential file extraction (for comparison)
+fn bench_sequential_extraction(c: &mut Criterion) {
+    let tmp = TempDir::new().unwrap();
+    let extract_dir = tmp.path().join("extract");
+    fs::create_dir_all(&extract_dir).unwrap();
+
+    // Simulate 100 files to extract
+    let files: Vec<_> = (0..100)
+        .map(|i| {
+            (
+                format!("file{}.txt", i),
+                format!("content of file {}", i).into_bytes(),
+            )
+        })
+        .collect();
+
+    c.bench_function("sequential_extraction", |b| {
+        b.iter(|| {
+            let mut errors = Vec::new();
+            for (name, data) in &files {
+                let target = extract_dir.join(name);
+                if let Err(e) = fs::write(&target, data) {
+                    errors.push(format!("Failed: {}", e));
+                }
+            }
+            black_box(errors.len())
+        });
+    });
+}
+
 criterion_group!(
     benches,
     bench_parse_tool_versions,
@@ -361,6 +425,8 @@ criterion_group!(
     bench_cache_write,
     bench_cache_read,
     bench_cache_full_cycle,
+    bench_parallel_extraction,
+    bench_sequential_extraction,
 );
 
 criterion_main!(benches);

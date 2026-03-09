@@ -23,6 +23,20 @@ mod updater;
 
 use error::Result;
 
+/// Filter type for list-remote command
+#[derive(Debug, Clone, Copy, clap::ValueEnum, Default)]
+enum FilterType {
+    /// Show all versions
+    #[default]
+    All,
+    /// Show only LTS versions
+    Lts,
+    /// Show only the latest version of each major release
+    Major,
+    /// Show only the latest version
+    Latest,
+}
+
 /// vex CLI main structure
 #[derive(Parser)]
 #[command(name = "vex", version)]
@@ -36,12 +50,24 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Initialize vex directory structure
-    Init,
+    Init {
+        /// Shell to configure (auto, zsh, bash, fish, or skip)
+        #[arg(long, default_value = "skip")]
+        shell: String,
+
+        /// Preview changes without modifying files
+        #[arg(long)]
+        dry_run: bool,
+    },
 
     /// Install a tool version (or all from .tool-versions)
     Install {
         /// Tool and version (e.g., node@20, node@20.11.0). Omit to install from .tool-versions.
         spec: Option<String>,
+
+        /// Skip automatic version switching after installation
+        #[arg(long)]
+        no_switch: bool,
     },
 
     /// Switch to a different version
@@ -65,9 +91,9 @@ enum Commands {
         /// Tool name (e.g., node)
         tool: String,
 
-        /// Show all versions (default: interactive top 20)
-        #[arg(long)]
-        all: bool,
+        /// Filter type (all, lts, major, latest)
+        #[arg(long, short = 'f', default_value = "all")]
+        filter: FilterType,
 
         /// Skip cache and fetch fresh data
         #[arg(long)]
@@ -125,7 +151,7 @@ enum Commands {
     ///   1. vex install python@3.12   (install a Python version globally)
     ///   2. cd my-project
     ///   3. vex python init            (create .venv using the active Python)
-    ///   4. pip install <packages>
+    ///   4. pip install \<packages\>
     ///   5. vex python freeze          (lock packages to requirements.lock)
     ///   6. vex python sync            (restore from requirements.lock on another machine)
     Python {
@@ -173,35 +199,147 @@ fn migrate_global_tool_versions() {
 }
 
 /// Initialize vex directory structure and configuration files
-fn init_vex() -> Result<()> {
+fn init_vex(shell_arg: &str, dry_run: bool) -> Result<()> {
     let vex_dir = vex_dir()?;
 
     // Create directory structure
-    fs::create_dir_all(vex_dir.join("cache"))?;
-    fs::create_dir_all(vex_dir.join("locks"))?;
-    fs::create_dir_all(vex_dir.join("toolchains"))?;
-    fs::create_dir_all(vex_dir.join("current"))?;
-    fs::create_dir_all(vex_dir.join("bin"))?;
+    if !dry_run {
+        fs::create_dir_all(vex_dir.join("cache"))?;
+        fs::create_dir_all(vex_dir.join("locks"))?;
+        fs::create_dir_all(vex_dir.join("toolchains"))?;
+        fs::create_dir_all(vex_dir.join("current"))?;
+        fs::create_dir_all(vex_dir.join("bin"))?;
 
-    // Create configuration file
-    let config_path = vex_dir.join("config.toml");
-    if !config_path.exists() {
-        fs::write(&config_path, "# vex configuration\n")?;
+        // Create configuration file
+        let config_path = vex_dir.join("config.toml");
+        if !config_path.exists() {
+            fs::write(&config_path, "# vex configuration\n")?;
+        }
     }
 
     println!(
-        "{} Created directory structure at {}",
-        "✓".green(),
+        "{}  directory structure at {}",
+        if dry_run {
+            "Would create"
+        } else {
+            "✓ Created"
+        }
+        .bright_green(),
         vex_dir.display().to_string().dimmed()
     );
     println!();
-    println!(
-        "{}",
-        "Run this to activate vex (auto-switching on cd):".dimmed()
-    );
-    println!();
-    println!("  echo 'eval \"$(vex env zsh)\"' >> ~/.zshrc && source ~/.zshrc");
-    println!();
+
+    // Handle shell configuration
+    let shell = if shell_arg == "auto" {
+        shell::detect_shell()
+    } else if shell_arg == "skip" {
+        None
+    } else {
+        Some(shell_arg.to_string())
+    };
+
+    if let Some(shell_name) = shell {
+        // Validate shell is supported
+        if let Err(e) = shell::generate_hook(&shell_name) {
+            eprintln!("{} {}", "✗".red(), e);
+            return Ok(());
+        }
+
+        let config_path =
+            shell::get_shell_config_path(&shell_name).map_err(error::VexError::Parse)?;
+
+        // Check if already configured
+        let already_configured = shell::is_vex_configured(&config_path)?;
+
+        if already_configured {
+            println!(
+                "{} vex is already configured in {}",
+                "ℹ".blue(),
+                config_path.display().to_string().dimmed()
+            );
+            println!();
+            return Ok(());
+        }
+
+        // Generate hook command
+        let hook_command = match shell_name.as_str() {
+            "zsh" => "\n# vex shell integration\neval \"$(vex env zsh)\"\n".to_string(),
+            "bash" => "\n# vex shell integration\neval \"$(vex env bash)\"\n".to_string(),
+            "fish" => "\n# vex shell integration\nvex env fish | source\n".to_string(),
+            "nu" | "nushell" => {
+                "\n# vex shell integration\nvex env nu | save -f ~/.vex-env.nu\nsource ~/.vex-env.nu\n".to_string()
+            }
+            _ => {
+                return Err(error::VexError::Parse(format!(
+                    "Unsupported shell: {}",
+                    shell_name
+                )))
+            }
+        };
+
+        if dry_run {
+            println!(
+                "{} Would append to {}:",
+                "Preview".bright_yellow(),
+                config_path.display().to_string().dimmed()
+            );
+            println!("{}", hook_command.dimmed());
+        } else {
+            // Ensure parent directory exists (for fish/nu)
+            if let Some(parent) = config_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+
+            // Append hook to config file
+            use std::io::Write;
+            let mut file = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&config_path)?;
+            file.write_all(hook_command.as_bytes())?;
+
+            println!(
+                "{} Configured {} shell integration in {}",
+                "✓".green(),
+                shell_name.bright_cyan(),
+                config_path.display().to_string().dimmed()
+            );
+            println!();
+            println!("{}", "Restart your shell or run:".dimmed());
+            println!();
+            match shell_name.as_str() {
+                "zsh" => println!("  source ~/.zshrc"),
+                "bash" => {
+                    if config_path.ends_with(".bashrc") {
+                        println!("  source ~/.bashrc");
+                    } else {
+                        println!("  source ~/.bash_profile");
+                    }
+                }
+                "fish" => println!("  source ~/.config/fish/config.fish"),
+                "nu" | "nushell" => println!("  source ~/.config/nushell/config.nu"),
+                _ => {}
+            }
+            println!();
+        }
+    } else if shell_arg == "skip" {
+        println!("{}", "To enable auto-switching on cd, run:".dimmed());
+        println!();
+        println!("  vex init --shell auto");
+        println!();
+        println!("Or manually configure your shell:");
+        println!();
+        println!("  echo 'eval \"$(vex env zsh)\"' >> ~/.zshrc && source ~/.zshrc");
+        println!();
+    } else {
+        println!(
+            "{} Unable to detect shell. Please configure manually:",
+            "⚠".yellow()
+        );
+        println!();
+        println!("  vex init --shell zsh    # or bash, fish, nu");
+        println!();
+    }
 
     Ok(())
 }
@@ -223,7 +361,7 @@ fn parse_spec(spec: &str) -> Result<(String, String)> {
     }
 }
 
-fn interactive_install(tool_name: &str) -> Result<()> {
+fn interactive_install(tool_name: &str, no_switch: bool) -> Result<()> {
     let tool = tools::get_tool(tool_name)?;
 
     let spinner = ProgressBar::new_spinner();
@@ -269,7 +407,28 @@ fn interactive_install(tool_name: &str) -> Result<()> {
 
         println!();
         installer::install(tool.as_ref(), version)?;
-        switcher::switch_version(tool.as_ref(), version)?;
+
+        // Auto-switch unless --no-switch is specified
+        if !no_switch {
+            switcher::switch_version(tool.as_ref(), version)?;
+            println!();
+            println!(
+                "{} Switched to {}@{}",
+                "✓".green(),
+                tool_name.yellow(),
+                version.cyan()
+            );
+        } else {
+            println!();
+            println!(
+                "{}",
+                format!(
+                    "To activate this version, run: vex use {}@{}",
+                    tool_name, version
+                )
+                .dimmed()
+            );
+        }
     } else {
         println!("Installation cancelled.");
     }
@@ -289,7 +448,37 @@ fn show_current() -> Result<()> {
     }
 
     let entries = fs::read_dir(&current_dir)?;
-    let mut tools: Vec<(String, String)> = Vec::new();
+    let mut tools: Vec<(String, String, String, String)> = Vec::new();
+
+    // Get current directory and resolve versions
+    let pwd = resolver::current_dir();
+    let versions = resolver::resolve_versions(&pwd);
+
+    // Get global versions
+    let global_path = dirs::home_dir()
+        .map(|p| p.join(".vex").join("tool-versions"))
+        .unwrap_or_default();
+    let global_versions = if global_path.is_file() {
+        if let Ok(content) = fs::read_to_string(&global_path) {
+            content
+                .lines()
+                .filter_map(|line| {
+                    let line = line.trim();
+                    if line.is_empty() || line.starts_with('#') {
+                        return None;
+                    }
+                    let mut parts = line.split_whitespace();
+                    let tool = parts.next()?;
+                    let version = parts.next()?;
+                    Some((tool.to_string(), version.to_string()))
+                })
+                .collect::<std::collections::HashMap<_, _>>()
+        } else {
+            std::collections::HashMap::new()
+        }
+    } else {
+        std::collections::HashMap::new()
+    };
 
     for entry in entries.filter_map(|e| e.ok()) {
         let tool_name = entry.file_name().to_string_lossy().to_string();
@@ -297,7 +486,86 @@ fn show_current() -> Result<()> {
         if let Ok(target) = fs::read_link(entry.path()) {
             if let Some(version) = target.file_name() {
                 let version_str = version.to_string_lossy().to_string();
-                tools.push((tool_name, version_str));
+
+                // Determine source
+                let (source, source_path) = if let Some(project_version) = versions.get(&tool_name)
+                {
+                    if project_version == &version_str {
+                        // Find the actual file that defines this version
+                        let mut dir = pwd.clone();
+                        let mut found_source = None;
+                        loop {
+                            let tool_versions = dir.join(".tool-versions");
+                            if tool_versions.is_file() {
+                                if let Ok(content) = fs::read_to_string(&tool_versions) {
+                                    for line in content.lines() {
+                                        let line = line.trim();
+                                        if line.starts_with(&tool_name) {
+                                            found_source = Some((
+                                                "Project override".to_string(),
+                                                tool_versions.display().to_string(),
+                                            ));
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if found_source.is_some() {
+                                break;
+                            }
+
+                            // Check tool-specific files
+                            let specific_files = [
+                                (".node-version", "node"),
+                                (".nvmrc", "node"),
+                                (".go-version", "go"),
+                                (".java-version", "java"),
+                                (".rust-toolchain", "rust"),
+                            ];
+                            for (file, tool) in &specific_files {
+                                if tool_name == *tool {
+                                    let path = dir.join(file);
+                                    if path.is_file() {
+                                        found_source = Some((
+                                            "Project override".to_string(),
+                                            path.display().to_string(),
+                                        ));
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if found_source.is_some() {
+                                break;
+                            }
+
+                            if !dir.pop() {
+                                break;
+                            }
+                        }
+                        found_source.unwrap_or_else(|| {
+                            (
+                                "Project override".to_string(),
+                                pwd.join(".tool-versions").display().to_string(),
+                            )
+                        })
+                    } else {
+                        (
+                            "Global default".to_string(),
+                            global_path.display().to_string(),
+                        )
+                    }
+                } else if global_versions.contains_key(&tool_name) {
+                    (
+                        "Global default".to_string(),
+                        global_path.display().to_string(),
+                    )
+                } else {
+                    ("Manual activation".to_string(), "N/A".to_string())
+                };
+
+                tools.push((tool_name, version_str, source, source_path));
             }
         }
     }
@@ -315,8 +583,16 @@ fn show_current() -> Result<()> {
     println!("{}", "Current active versions:".bold());
     println!();
 
-    for (tool, version) in tools {
-        println!("  {} → {}", tool.yellow(), version.cyan());
+    for (tool, version, source, source_path) in tools {
+        println!(
+            "  {} → {} ({})",
+            tool.yellow(),
+            version.cyan(),
+            source.dimmed()
+        );
+        if source_path != "N/A" {
+            println!("    {}: {}", "Source".dimmed(), source_path.dimmed());
+        }
     }
 
     println!();
@@ -442,7 +718,7 @@ fn fetch_versions_cached(tool: &dyn tools::Tool, use_cache: bool) -> Result<Vec<
     Ok(versions)
 }
 
-fn list_remote(tool_name: &str, show_all: bool, use_cache: bool) -> Result<()> {
+fn list_remote(tool_name: &str, filter: FilterType, use_cache: bool) -> Result<()> {
     let tool = tools::get_tool(tool_name)?;
 
     let spinner = ProgressBar::new_spinner();
@@ -454,71 +730,120 @@ fn list_remote(tool_name: &str, show_all: bool, use_cache: bool) -> Result<()> {
     spinner.set_message(format!("Fetching available versions of {}...", tool_name));
     spinner.enable_steady_tick(std::time::Duration::from_millis(100));
 
-    let versions = fetch_versions_cached(tool.as_ref(), use_cache)?;
+    let mut versions = fetch_versions_cached(tool.as_ref(), use_cache)?;
     spinner.finish_and_clear();
 
-    if show_all {
-        println!();
-        for version in versions.iter() {
-            if let Some(lts) = &version.lts {
-                println!("  {} (LTS: {})", version.version, lts);
-            } else {
-                println!("  {}", version.version);
+    // Get current version for highlighting
+    let current_version = get_current_version_for_tool(tool_name);
+
+    // Apply filter
+    versions = match filter {
+        FilterType::All => versions,
+        FilterType::Lts => versions.into_iter().filter(|v| v.lts.is_some()).collect(),
+        FilterType::Major => {
+            let mut major_versions = std::collections::HashMap::new();
+            for v in versions {
+                let major = extract_major_version(&v.version);
+                major_versions.entry(major).or_insert_with(Vec::new).push(v);
             }
+            major_versions
+                .into_values()
+                .filter_map(|mut versions| versions.pop())
+                .collect()
         }
-        println!();
-        println!("Total: {} versions", versions.len());
+        FilterType::Latest => versions.into_iter().take(1).collect(),
+    };
+
+    if versions.is_empty() {
+        println!("{}", "No versions found matching the filter.".yellow());
         return Ok(());
     }
 
-    // Default: show only the latest 20, support scrolling with arrow keys
-    let recent: Vec<_> = versions.iter().take(20).cloned().collect();
-    let items: Vec<String> = recent
-        .iter()
-        .map(|v| {
-            if let Some(lts) = &v.lts {
-                format!("{} (LTS: {})", v.version, lts)
-            } else {
-                v.version.clone()
-            }
-        })
-        .collect();
-
+    // Display versions in a compact format
     println!();
-    println!("Use arrow keys to browse, Enter to install, Esc to quit");
-    println!(
-        "Showing latest {} of {} versions (use --all to show all)",
-        items.len(),
-        versions.len()
-    );
+    println!("{} {} versions:", "Available".cyan(), tool_name.yellow());
     println!();
 
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt(format!("Available versions of {}", tool_name))
-        .items(&items)
-        .default(0)
-        .max_length(20)
-        .interact_opt()
-        .map_err(|e| error::VexError::Dialog(e.to_string()))?;
-
-    if let Some(index) = selection {
-        let selected_version = &recent[index].version;
-        let version = selected_version
+    let mut count = 0;
+    for version in &versions {
+        let version_str = version
+            .version
             .strip_prefix('v')
-            .unwrap_or(selected_version);
-        let resolved = tools::resolve_fuzzy_version(tool.as_ref(), version)?;
+            .unwrap_or(&version.version);
+        let is_current = current_version
+            .as_ref()
+            .map(|cv| cv == version_str || cv == &version.version)
+            .unwrap_or(false);
+
+        // Format version string
+        let mut display = if is_current {
+            format!("{}", version_str.green().bold())
+        } else {
+            // Check if version is outdated (heuristic: major version < latest major - 2)
+            let is_outdated = is_version_outdated(&version.version, &versions[0].version);
+            if is_outdated {
+                format!("{}", version_str.dimmed())
+            } else {
+                version_str.to_string()
+            }
+        };
+
+        // Add LTS marker
+        if let Some(lts) = &version.lts {
+            display.push_str(&format!(" {}", format!("(LTS: {})", lts).cyan()));
+        }
+
+        // Add current marker
+        if is_current {
+            display.push_str(&format!(" {}", "← current".green()));
+        }
+
+        print!("  {:<40}", display);
+        count += 1;
+        if count % 3 == 0 {
+            println!();
+        }
+    }
+    if count % 3 != 0 {
         println!();
-        println!(
-            "{} {}@{}...",
-            "Installing".cyan(),
-            tool_name.yellow(),
-            resolved.yellow()
-        );
-        installer::install(tool.as_ref(), &resolved)?;
-        switcher::switch_version(tool.as_ref(), &resolved)?;
     }
 
+    println!();
+    println!(
+        "{} {} versions (filter: {})",
+        "Total:".dimmed(),
+        versions.len(),
+        format!("{:?}", filter).to_lowercase().dimmed()
+    );
+
     Ok(())
+}
+
+/// Get current version for a tool
+fn get_current_version_for_tool(tool_name: &str) -> Option<String> {
+    let vex_dir = vex_dir().ok()?;
+    let current_link = vex_dir.join("current").join(tool_name);
+
+    if let Ok(target) = fs::read_link(&current_link) {
+        if let Some(version) = target.file_name() {
+            return Some(version.to_string_lossy().to_string());
+        }
+    }
+    None
+}
+
+/// Extract major version number from version string
+fn extract_major_version(version: &str) -> String {
+    let v = version.strip_prefix('v').unwrap_or(version);
+    v.split('.').next().unwrap_or("0").to_string()
+}
+
+/// Check if a version is outdated (heuristic: major version < latest major - 2)
+fn is_version_outdated(version: &str, latest: &str) -> bool {
+    let v_major = extract_major_version(version).parse::<i32>().unwrap_or(0);
+    let latest_major = extract_major_version(latest).parse::<i32>().unwrap_or(0);
+
+    v_major > 0 && latest_major > 0 && v_major < latest_major - 2
 }
 
 fn install_from_version_files() -> Result<()> {
@@ -1134,19 +1459,40 @@ fn run() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Init => {
-            init_vex()?;
+        Commands::Init { shell, dry_run } => {
+            init_vex(&shell, dry_run)?;
         }
-        Commands::Install { spec } => {
+        Commands::Install { spec, no_switch } => {
             if let Some(spec) = spec {
                 let (tool_name, version) = parse_spec(&spec)?;
                 if version.is_empty() {
-                    interactive_install(&tool_name)?;
+                    interactive_install(&tool_name, no_switch)?;
                 } else {
                     let tool = tools::get_tool(&tool_name)?;
                     let resolved = tools::resolve_fuzzy_version(tool.as_ref(), &version)?;
                     installer::install(tool.as_ref(), &resolved)?;
-                    switcher::switch_version(tool.as_ref(), &resolved)?;
+
+                    // Auto-switch unless --no-switch is specified
+                    if !no_switch {
+                        switcher::switch_version(tool.as_ref(), &resolved)?;
+                        println!();
+                        println!(
+                            "{} Switched to {}@{}",
+                            "✓".green(),
+                            tool_name.yellow(),
+                            resolved.cyan()
+                        );
+                    } else {
+                        println!();
+                        println!(
+                            "{}",
+                            format!(
+                                "To activate this version, run: vex use {}@{}",
+                                tool_name, resolved
+                            )
+                            .dimmed()
+                        );
+                    }
                 }
             } else {
                 install_from_version_files()?;
@@ -1171,10 +1517,10 @@ fn run() -> Result<()> {
         }
         Commands::ListRemote {
             tool,
-            all,
+            filter,
             no_cache,
         } => {
-            list_remote(&tool, all, !no_cache)?;
+            list_remote(&tool, filter, !no_cache)?;
         }
         Commands::Current => {
             show_current()?;
@@ -1202,8 +1548,53 @@ fn run() -> Result<()> {
             let tool = tools::get_tool(&tool_name)?;
             let resolved = tools::resolve_fuzzy_version(tool.as_ref(), &version)?;
             let file_path = resolver::current_dir().join(".tool-versions");
+
+            // Check if version is installed
+            let version_dir = vex_dir()?
+                .join("toolchains")
+                .join(&tool_name)
+                .join(&resolved);
+            let is_installed = version_dir.exists();
+
             write_tool_version(&file_path, &tool_name, &resolved)?;
-            println!("Set {}@{} in {}", tool_name, resolved, file_path.display());
+
+            if is_installed {
+                println!(
+                    "{} Set project version: {}@{}",
+                    "✓".green(),
+                    tool_name.yellow(),
+                    resolved.cyan()
+                );
+            } else {
+                println!(
+                    "{} Set project version: {}@{}",
+                    "✓".green(),
+                    tool_name.yellow(),
+                    resolved.cyan()
+                );
+                println!(
+                    "{}",
+                    format!(
+                        "  Note: Version {}@{} is not installed yet.",
+                        tool_name, resolved
+                    )
+                    .yellow()
+                );
+                println!(
+                    "{}",
+                    format!(
+                        "  Run 'vex install {}@{}' to install it.",
+                        tool_name, resolved
+                    )
+                    .dimmed()
+                );
+            }
+
+            println!("{}", format!("  Config: {}", file_path.display()).dimmed());
+            if is_installed {
+                println!();
+                println!("{}", "To activate it now, run: vex use --auto".dimmed());
+            }
         }
         Commands::Global { spec } => {
             let (tool_name, version) = parse_spec(&spec)?;
@@ -1215,8 +1606,57 @@ fn run() -> Result<()> {
             let tool = tools::get_tool(&tool_name)?;
             let resolved = tools::resolve_fuzzy_version(tool.as_ref(), &version)?;
             let file_path = vex_dir()?.join("tool-versions");
+
+            // Check if version is installed
+            let version_dir = vex_dir()?
+                .join("toolchains")
+                .join(&tool_name)
+                .join(&resolved);
+            let is_installed = version_dir.exists();
+
             write_tool_version(&file_path, &tool_name, &resolved)?;
-            println!("Set {}@{} in {}", tool_name, resolved, file_path.display());
+
+            if is_installed {
+                println!(
+                    "{} Set global default: {}@{}",
+                    "✓".green(),
+                    tool_name.yellow(),
+                    resolved.cyan()
+                );
+            } else {
+                println!(
+                    "{} Set global default: {}@{}",
+                    "✓".green(),
+                    tool_name.yellow(),
+                    resolved.cyan()
+                );
+                println!(
+                    "{}",
+                    format!(
+                        "  Note: Version {}@{} is not installed yet.",
+                        tool_name, resolved
+                    )
+                    .yellow()
+                );
+                println!(
+                    "{}",
+                    format!(
+                        "  Run 'vex install {}@{}' to install it.",
+                        tool_name, resolved
+                    )
+                    .dimmed()
+                );
+            }
+
+            println!("{}", format!("  Config: {}", file_path.display()).dimmed());
+            println!();
+            println!(
+                "{}",
+                "This version will be used when no project-specific version is found.".dimmed()
+            );
+            if is_installed {
+                println!("{}", "To activate it now, run: vex use --auto".dimmed());
+            }
         }
         Commands::Upgrade { tool } => {
             upgrade_tool(&tool)?;

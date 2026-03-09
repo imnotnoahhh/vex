@@ -222,6 +222,7 @@ fn test_install_node() {
 - Directory traversal
 - Symlink creation
 - Cache read/write
+- Parallel vs sequential file extraction
 
 **Guidelines**:
 - Use `criterion` crate
@@ -242,6 +243,45 @@ fn bench_parse_tool_versions(c: &mut Criterion) {
 
 criterion_group!(benches, bench_parse_tool_versions);
 criterion_main!(benches);
+```
+
+### 5. Parallel Operations Tests
+
+**Location**: Unit tests in `src/downloader.rs` and `src/installer.rs`
+
+**Purpose**: Test parallel download and extraction functionality
+
+**Examples**:
+- Atomic write with UUID-based temp files
+- Parallel file extraction
+- Error collection from parallel operations
+- Cleanup of temporary files on failure
+
+**Guidelines**:
+- Test both parallel and sequential paths
+- Verify atomic operations (temp file + rename)
+- Test error handling in parallel contexts
+- Ensure proper cleanup of temporary files
+
+**Example**:
+```rust
+#[test]
+fn test_atomic_write_cleanup_on_error() {
+    let dir = std::env::temp_dir().join("vex_test_atomic_cleanup");
+    std::fs::create_dir_all(&dir).unwrap();
+    let dest = dir.join("test.txt");
+
+    // Try to download from invalid URL
+    let result = download_file("http://invalid.url/file", &dest);
+    assert!(result.is_err());
+
+    // Verify no temp files left behind
+    let entries: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
+    assert_eq!(entries.len(), 0, "Temp files should be cleaned up");
+}
 ```
 
 ## Writing Tests
@@ -424,13 +464,13 @@ fn test_checksum_invalid() {
 
 ### Current Coverage
 
-As of v0.1.6:
-- **Overall**: 66.51%
-- **Lines covered**: 828/1245
-- **Unit tests**: 133 tests
-- **CLI integration tests**: 43 tests
-- **E2E tests**: 5 tests
-- **Total**: 181 tests
+As of v0.2.4:
+- **Overall**: ~67%
+- **Lines covered**: 850+/1250+
+- **Unit tests**: 170+ tests
+- **CLI integration tests**: 57 tests
+- **E2E tests**: 5 tests (6 ignored)
+- **Total**: 230+ tests
 
 ### 100% Coverage Modules
 
@@ -439,6 +479,13 @@ As of v0.1.6:
 - `shell.rs`
 - `switcher.rs`
 - `tools/mod.rs`
+
+### High Coverage Modules (>80%)
+
+- `downloader.rs` - includes parallel download tests
+- `installer.rs` - includes parallel extraction tests
+- `error.rs`
+- `lock.rs`
 
 ### Measuring Coverage
 

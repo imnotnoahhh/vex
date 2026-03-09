@@ -6,10 +6,11 @@ Welcome to vex! This guide will help you get up and running quickly.
 
 vex is a fast, multi-language version manager for macOS that lets you:
 
-- Install and manage multiple versions of Node.js, Go, Java, and Rust
+- Install and manage multiple versions of Node.js, Go, Java, Rust, and Python
 - Switch between versions instantly (no shim overhead)
 - Pin versions per project with `.tool-versions` files
 - Auto-switch versions when you `cd` into a project
+- Manage Python virtual environments with built-in venv integration
 
 ## Quick Start
 

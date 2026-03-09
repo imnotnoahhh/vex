@@ -305,4 +305,83 @@ mod tests {
         let result = extract_binary_from_tarball(&tarball, &fake_exe);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_is_newer_edge_cases() {
+        // Same version
+        assert!(!is_newer("1.0.0", "1.0.0"));
+
+        // Major version differences
+        assert!(is_newer("1.0.0", "2.0.0"));
+        assert!(!is_newer("2.0.0", "1.0.0"));
+
+        // Minor version differences
+        assert!(is_newer("1.1.0", "1.2.0"));
+        assert!(!is_newer("1.2.0", "1.1.0"));
+
+        // Patch version differences
+        assert!(is_newer("1.0.1", "1.0.2"));
+        assert!(!is_newer("1.0.2", "1.0.1"));
+
+        // Multi-digit versions
+        assert!(is_newer("1.9.9", "1.10.0"));
+        assert!(is_newer("1.99.99", "2.0.0"));
+    }
+
+    #[test]
+    fn test_strip_v_edge_cases() {
+        assert_eq!(strip_v("v1.2.3"), "1.2.3");
+        assert_eq!(strip_v("1.2.3"), "1.2.3");
+        assert_eq!(strip_v("v0.0.1"), "0.0.1");
+        assert_eq!(strip_v(""), "");
+        assert_eq!(strip_v("v"), "");
+    }
+
+    #[test]
+    fn test_asset_name_returns_correct_format() {
+        let name = asset_name();
+        assert!(name.is_some());
+        let name = name.unwrap();
+        // Should contain platform and architecture
+        assert!(name.contains("darwin") || name.contains("linux"));
+        assert!(name.contains("aarch64") || name.contains("x86_64"));
+    }
+
+    #[test]
+    fn test_extract_binary_permissions() {
+        use flate2::write::GzEncoder;
+        use flate2::Compression;
+        use std::os::unix::fs::PermissionsExt;
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+        let tarball = dir.path().join("release.tar.gz");
+        let fake_exe = dir.path().join("fake_vex");
+
+        // Build a tar.gz with executable permissions
+        let gz = fs::File::create(&tarball).unwrap();
+        let enc = GzEncoder::new(gz, Compression::default());
+        let mut ar = tar::Builder::new(enc);
+        let content = b"#!/bin/sh\necho vex";
+        let mut header = tar::Header::new_gnu();
+        header.set_size(content.len() as u64);
+        header.set_mode(0o755);
+        header.set_cksum();
+        ar.append_data(
+            &mut header,
+            "vex-0.1.7-aarch64-apple-darwin/vex",
+            &content[..],
+        )
+        .unwrap();
+        ar.into_inner().unwrap().finish().unwrap();
+
+        let result = extract_binary_from_tarball(&tarball, &fake_exe);
+        assert!(result.is_ok());
+
+        let out = result.unwrap();
+        let metadata = fs::metadata(&out).unwrap();
+        let permissions = metadata.permissions();
+        // Check that executable bit is set
+        assert!(permissions.mode() & 0o111 != 0);
+    }
 }

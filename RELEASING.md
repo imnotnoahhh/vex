@@ -352,6 +352,10 @@ git push origin :refs/tags/v0.1.7
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.0.0 | 2026-03-10 | Breaking: install auto-switch, Python binary expansion, security hardening |
+| 0.2.3 | 2026-03-08 | Fix self-update, static liblzma linking |
+| 0.2.2 | 2026-03-08 | ⚠️ Critical bugs - do not use |
+| 0.2.1 | 2026-03-08 | ⚠️ Critical bugs - do not use |
 | 0.2.0 | 2026-03-08 | Self-update, Python support, dynamic binary detection |
 | 0.1.6 | 2026-03-02 | Fish/Nushell support, vex doctor, security improvements |
 | 0.1.5 | 2026-03-01 | Colorful output |
