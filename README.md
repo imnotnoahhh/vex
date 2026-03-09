@@ -10,21 +10,21 @@
 
 > **⚠️ IMPORTANT: Manual Update Required for v0.2.2 and Earlier**
 >
-> If you're using vex v0.2.2 or earlier, `vex self-update` has a bug that prevents automatic updates. Please manually install v0.2.3 or later:
+> If you're using vex v0.2.2 or earlier, `vex self-update` has a bug that prevents automatic updates. Please manually install v1.0.0 or later:
 >
 > ```bash
 > # Apple Silicon (M1/M2/M3)
-> curl -L https://github.com/imnotnoahhh/vex/releases/download/v0.2.3/vex-aarch64-apple-darwin.tar.gz | tar xz
+> curl -L https://github.com/imnotnoahhh/vex/releases/download/v1.0.0/vex-aarch64-apple-darwin.tar.gz | tar xz
 > mv vex ~/.local/bin/vex
 > chmod +x ~/.local/bin/vex
 >
 > # Intel
-> curl -L https://github.com/imnotnoahhh/vex/releases/download/v0.2.3/vex-x86_64-apple-darwin.tar.gz | tar xz
+> curl -L https://github.com/imnotnoahhh/vex/releases/download/v1.0.0/vex-x86_64-apple-darwin.tar.gz | tar xz
 > mv vex ~/.local/bin/vex
 > chmod +x ~/.local/bin/vex
 > ```
 >
-> After upgrading to v0.2.3, `vex self-update` will work correctly for all future updates.
+> After upgrading to v1.0.0, `vex self-update` will work correctly for all future updates.
 
 <p align="center">
   <a href="https://github.com/imnotnoahhh/vex/actions/workflows/ci.yml">
@@ -60,18 +60,23 @@
 - **Symlink-based switching** — version changes take effect instantly, no shim overhead
 - **Multi-language** — manage Node.js, Go, Java (Eclipse Temurin), Rust, and Python from one tool
 - **Python venv integration** — `vex python init/freeze/sync` for venv and lockfile management; shell hook auto-activates `.venv` on `cd`
+- **Shell auto-configuration** — `vex init --shell auto` detects and configures your shell automatically (zsh, bash, fish, nushell)
 - **Fuzzy version matching** — `node@20` resolves to latest 20.x, `node@lts` to latest LTS
 - **Version aliases** — `latest`, `lts`, `lts-<codename>`, `stable`, minor version matching
 - **One-command upgrade** — `vex upgrade node` installs and switches to the latest version
 - **`.tool-versions` support** — per-project pinning, auto-switch on `cd`, batch install
 - **Interactive selection** — `vex install node` lets you pick from a version list
+- **Smart version filtering** — `vex list-remote node --filter lts` shows only LTS versions
 - **Remote version cache** — cached for 5 min by default, configurable via `config.toml`
 - **Concurrent install protection** — file-based locking prevents parallel install corruption
 - **Checksum verification** — Node.js uses official SHA256 verification; Go/Java/Rust follow upstream checksum metadata availability
+- **Parallel downloads** — atomic writes with automatic cleanup, up to 3 concurrent downloads
+- **Parallel extraction** — fast archive extraction using parallel file processing
+- **Security hardening** — TOCTOU protection, ownership validation, path traversal protection, atomic operations
 - **Self-update** — `vex self-update` upgrades vex itself to the latest GitHub release
 - **Health check** — `vex doctor` validates installation, PATH, shell hooks, and provides actionable fixes
 - **Disk space check** — prevents installation when less than 500 MB free space available
-- **Security hardening** — path traversal protection for tar extraction, HTTP timeouts with retry logic
+- **Homebrew support** — install via `brew install imnotnoahhh/tap/vex` (coming soon)
 - **Multi-shell support** — zsh, bash, fish, and nushell integration for auto-switching
 - **macOS native** — supports both Apple Silicon and Intel macOS environments
 
@@ -162,9 +167,13 @@ echo 'source ~/.config/nushell/vex.nu' >> ~/.config/nushell/config.nu
 vex install node
 
 # Install a specific version (fuzzy matching)
+# Note: Automatically switches to the installed version
 vex install node@20          # → latest 20.x
 vex install node@lts         # → latest LTS
 vex install node@20.11.0     # → exact version
+
+# Install without switching (preserve current version)
+vex install node@20 --no-switch
 
 # Version aliases
 vex install node@lts-iron    # → specific LTS codename
@@ -192,6 +201,8 @@ vex install
 | Command | Description | Example |
 |---------|-------------|---------|
 | `vex init` | Initialize directory structure | `vex init` |
+| `vex init --shell auto` | Initialize and auto-configure shell | `vex init --shell auto` |
+| `vex init --shell zsh` | Initialize and configure specific shell | `vex init --shell zsh` |
 | `vex install <tool>` | Interactive install | `vex install node` |
 | `vex install <tool@version>` | Install specific version | `vex install node@20` |
 | `vex install` | Install all from `.tool-versions` | `vex install` |
@@ -200,8 +211,9 @@ vex install
 | `vex local <tool@version>` | Pin version in `.tool-versions` | `vex local node@20.11.0` |
 | `vex global <tool@version>` | Pin version in `~/.vex/tool-versions` | `vex global go@1.23` |
 | `vex list <tool>` | List installed versions | `vex list node` |
-| `vex list-remote <tool>` | List remote versions (interactive, latest 20) | `vex list-remote node` |
-| `vex list-remote <tool> --all` | List all remote versions | `vex list-remote node --all` |
+| `vex list-remote <tool>` | List all remote versions | `vex list-remote node` |
+| `vex list-remote <tool> -f lts` | List only LTS versions | `vex list-remote node -f lts` |
+| `vex list-remote <tool> -f major` | List latest of each major version | `vex list-remote node -f major` |
 | `vex list-remote <tool> --no-cache` | List remote versions (skip cache) | `vex list-remote node --no-cache` |
 | `vex upgrade <tool>` | Upgrade to latest version | `vex upgrade node` |
 | `vex alias <tool>` | Show available version aliases | `vex alias node` |
@@ -222,7 +234,7 @@ vex install
 | Go | go, gofmt | Official binaries |
 | Java | java, javac, jar, javadoc + 26 more JDK tools | Eclipse Temurin JDK |
 | Rust | rustc, rustdoc, cargo, rustfmt, clippy, rust-analyzer + 5 more | Official stable binaries |
-| Python | python3, pip3 | python-build-standalone (astral-sh) |
+| Python | python3, pip3, python, pip, 2to3, idle3, pydoc3, python3-config | python-build-standalone (astral-sh) |
 
 ## Fuzzy Version Matching
 
@@ -438,6 +450,7 @@ Benchmarked operations:
 - Directory traversal for version resolution
 - Symlink creation and updates (version switching)
 - Cache read/write operations
+- Parallel vs sequential file extraction
 
 Note: Benchmarks are not run in CI to keep build times fast. Run them locally to measure performance improvements.
 

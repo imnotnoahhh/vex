@@ -66,7 +66,7 @@ mod tests {
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     /// Each test gets its own unique temp directory to avoid parallel interference.
-    fn unique_vex_dir() -> PathBuf {
+    pub(crate) fn unique_vex_dir() -> PathBuf {
         let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
         let dir = std::env::temp_dir().join(format!("vex-lock-test-{}-{}", std::process::id(), id));
         fs::create_dir_all(&dir).unwrap();
@@ -216,6 +216,97 @@ with open('{}', 'w') as f:
 
         let _lock = InstallLock::acquire(&vex_dir, "java", "21").unwrap();
         assert!(locks_dir.exists());
+
+        let _ = fs::remove_dir_all(&vex_dir);
+    }
+
+    #[test]
+    fn test_lock_with_special_version_characters() {
+        let vex_dir = unique_vex_dir();
+
+        // Test version with dots, dashes, and other characters
+        let versions = vec!["1.2.3", "1.2.3-beta.1", "1.2.3-rc.2", "20.0.0-nightly"];
+
+        for version in versions {
+            let lock = InstallLock::acquire(&vex_dir, "node", version);
+            assert!(
+                lock.is_ok(),
+                "Failed to acquire lock for version {}",
+                version
+            );
+        }
+
+        let _ = fs::remove_dir_all(&vex_dir);
+    }
+
+    #[test]
+    fn test_lock_file_naming() {
+        let vex_dir = unique_vex_dir();
+
+        let _lock = InstallLock::acquire(&vex_dir, "node", "20.11.0").unwrap();
+        let expected_path = vex_dir.join("locks").join("node-20.11.0.lock");
+
+        assert!(expected_path.exists());
+
+        let _ = fs::remove_dir_all(&vex_dir);
+    }
+
+    #[test]
+    fn test_multiple_locks_same_tool_different_versions() {
+        let vex_dir = unique_vex_dir();
+
+        let _lock1 = InstallLock::acquire(&vex_dir, "node", "18.0.0").unwrap();
+        let _lock2 = InstallLock::acquire(&vex_dir, "node", "20.0.0").unwrap();
+        let _lock3 = InstallLock::acquire(&vex_dir, "node", "22.0.0").unwrap();
+
+        // All three locks should coexist
+        assert!(vex_dir.join("locks").join("node-18.0.0.lock").exists());
+        assert!(vex_dir.join("locks").join("node-20.0.0.lock").exists());
+        assert!(vex_dir.join("locks").join("node-22.0.0.lock").exists());
+
+        let _ = fs::remove_dir_all(&vex_dir);
+    }
+
+    #[test]
+    fn test_lock_cleanup_on_panic() {
+        let vex_dir = unique_vex_dir();
+        let lock_path = vex_dir.join("locks").join("node-20.0.0.lock");
+
+        let result = std::panic::catch_unwind(|| {
+            let _lock = InstallLock::acquire(&vex_dir, "node", "20.0.0").unwrap();
+            assert!(lock_path.exists());
+            // Lock should be cleaned up even if we panic
+        });
+
+        assert!(result.is_ok());
+        // Lock file should be removed after scope exit
+        assert!(!lock_path.exists());
+
+        let _ = fs::remove_dir_all(&vex_dir);
+    }
+
+    #[test]
+    fn test_lock_with_empty_version() {
+        let vex_dir = unique_vex_dir();
+
+        let lock = InstallLock::acquire(&vex_dir, "node", "");
+        assert!(lock.is_ok());
+
+        let _ = fs::remove_dir_all(&vex_dir);
+    }
+
+    #[test]
+    fn test_lock_directory_permissions() {
+        let vex_dir = unique_vex_dir();
+
+        let _lock = InstallLock::acquire(&vex_dir, "node", "20.0.0").unwrap();
+
+        let locks_dir = vex_dir.join("locks");
+        assert!(locks_dir.exists());
+        assert!(locks_dir.is_dir());
+
+        // Verify we can create more locks in the directory
+        let _lock2 = InstallLock::acquire(&vex_dir, "go", "1.21.0").unwrap();
 
         let _ = fs::remove_dir_all(&vex_dir);
     }

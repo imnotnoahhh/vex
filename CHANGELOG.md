@@ -7,6 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-03-10
+
+### Breaking Changes
+
+- **Auto-switch after install** — `vex install` now automatically switches to the installed version:
+  - After installation completes, the new version is immediately activated
+  - Use `--no-switch` flag to preserve the old behavior (install without switching)
+  - This improves user experience by eliminating the need for a separate `vex use` command
+  - **Migration**: If you rely on installing without switching, add `--no-switch` to your scripts
+  - Example: `vex install node@20 --no-switch` to install without activating
+
+### Security
+
+- **[P0] TOCTOU race condition in symlink switching** — Fixed time-of-check-time-of-use vulnerability in `switcher.rs`:
+  - Use UUID v4 for random temporary filenames instead of predictable `.tmp` extension
+  - Add ownership verification to prevent privilege escalation attacks
+  - Verify toolchain directory owner matches current user before creating symlinks
+- **[P0] Atomic write protection** — All downloads now use UUID-based temporary files to prevent corruption
+- **[P0] Directory ownership validation** — Added Unix UID checks to prevent malicious symlink attacks
+- **[P0] Secure temporary file handling** — Automatic cleanup of temporary files on failure
+
+### Added
+
+- **Shell auto-configuration** — `vex init --shell auto` automatically detects and configures your shell:
+  - Auto-detect shell from `$SHELL` environment variable or config files
+  - Support for zsh, bash, fish, and nushell
+  - `--dry-run` flag to preview changes without modifying files
+  - Checks if vex is already configured to avoid duplicate entries
+  - Interactive prompts for shell configuration during installation
+- **list-remote filtering** — `vex list-remote <tool> --filter <type>` for targeted version queries:
+  - `--filter lts` - Show only LTS versions
+  - `--filter major` - Show latest version of each major release
+  - `--filter latest` - Show only the latest version
+  - `--filter all` - Show all versions (default)
+- **Parallel download support** — Downloads now use atomic writes with UUID-based temporary files:
+  - Write to `.tmp.{uuid}` first, then atomically rename to final destination
+  - Automatic cleanup of temporary files on failure
+  - `download_parallel()` function supports up to 3 concurrent downloads
+  - Prevents file corruption from interrupted downloads
+- **Parallel extraction** — Archive extraction now processes files in parallel:
+  - Directories created sequentially to avoid race conditions
+  - Files extracted in parallel using rayon for improved performance
+  - All path safety validations preserved (path traversal protection)
+  - Maintains file permissions during parallel extraction
+- **Homebrew integration** — Official Homebrew tap for easy installation:
+  - `homebrew/vex.rb.template` - Formula template for releases
+  - `homebrew/README.md` - Installation and maintenance guide
+  - Automated formula generation for new releases
+- **macOS CI matrix** — GitHub Actions now test on multiple macOS versions:
+  - macOS 14 (Apple Silicon M-series)
+  - macOS 13 (Intel x86_64)
+  - Parallel testing across Ubuntu and macOS
+  - Platform-specific caching for faster builds
+- **Performance benchmarks** — Added benchmarks for parallel vs sequential extraction:
+  - `bench_parallel_extraction` measures parallel file writing performance
+  - `bench_sequential_extraction` provides baseline comparison
+  - Run with `cargo bench` to measure improvements
+
+### Changed
+
+- **Python binary coverage** — Expanded from 2 to 8 binaries for complete toolchain support:
+  - Now includes: python3, pip3, python, pip, 2to3, idle3, pydoc3, python3-config
+  - Automatically links version-specific binaries (e.g., python3.12, pip3.12)
+  - Ensures all Python development tools are accessible after installation
+- **Download module** — Enhanced with atomic write support and parallel capabilities:
+  - All downloads now use temporary files with UUID naming to avoid conflicts
+  - Failed downloads automatically clean up temporary files
+  - Maximum concurrent downloads limited to 3 for optimal performance
+- **Installer module** — Improved extraction performance:
+  - Archive entries read into memory first, then processed in parallel
+  - File permissions preserved during parallel extraction
+  - Error collection from parallel operations for better debugging
+- **Shell module** — New helper functions for shell detection and configuration:
+  - `detect_shell()` - Auto-detect current shell
+  - `get_shell_config_path()` - Get config file path for shell
+  - `is_vex_configured()` - Check if vex hook is already present
+- **Init command** — Enhanced with shell configuration options:
+  - `--shell auto` - Auto-detect and configure shell
+  - `--shell skip` - Skip shell configuration (default)
+  - `--dry-run` - Preview changes without modifying files
+
+### Performance
+
+- Archive extraction speed improved significantly for large toolchains (Node.js, Java JDK)
+- Download reliability improved with atomic writes preventing partial file corruption
+- Parallel file operations reduce installation time for multi-file archives
+- CI build times reduced with platform-specific caching
+
 ## [0.2.3] - 2026-03-08
 
 ### Fixed

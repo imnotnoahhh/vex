@@ -2,14 +2,24 @@
 //!
 //! Provides file download (with progress bar), SHA256 checksum verification, and automatic retry.
 //! 4xx client errors are not retried, server/network errors are retried up to 3 times.
+//!
+//! # Features
+//!
+//! - **Atomic writes**: Downloads write to temporary files first, then atomically rename to avoid corruption
+//! - **Parallel downloads**: Support for downloading multiple files concurrently (max 3 concurrent)
+//! - **Automatic cleanup**: Failed downloads automatically clean up temporary files
+//! - **Retry logic**: Network errors are retried up to 3 times with exponential backoff
 
 use crate::error::{Result, VexError};
 use indicatif::{ProgressBar, ProgressStyle};
+use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use uuid::Uuid;
 
 /// HTTP connection timeout (30 seconds)
 const CONNECT_TIMEOUT_SECS: u64 = 30;
@@ -26,6 +36,9 @@ const CHECKSUM_BUFFER_SIZE: usize = 65536;
 /// Retry interval (seconds)
 const RETRY_DELAY_SECS: u64 = 2;
 
+/// Maximum concurrent downloads
+const MAX_CONCURRENT_DOWNLOADS: usize = 3;
+
 /// Create HTTP client with timeout configuration
 fn create_http_client() -> Result<reqwest::blocking::Client> {
     reqwest::blocking::Client::builder()
@@ -36,7 +49,7 @@ fn create_http_client() -> Result<reqwest::blocking::Client> {
         .map_err(VexError::Network)
 }
 
-/// Download file to specified path with progress bar
+/// Download file to specified path with progress bar (atomic write)
 ///
 /// # Arguments
 /// - `url` - Download URL
@@ -64,21 +77,35 @@ pub fn download_file(url: &str, dest: &Path) -> Result<()> {
     );
     pb.set_message(format!("Downloading {}", url));
 
-    let mut file = File::create(dest)?;
+    // Use atomic write: write to temp file first, then rename
+    let temp_path = dest.with_extension(format!("tmp.{}", Uuid::new_v4()));
+    let mut file = File::create(&temp_path)?;
     let mut downloaded = 0u64;
     let mut buffer = vec![0u8; DOWNLOAD_BUFFER_SIZE];
 
-    loop {
-        let bytes_read = response.read(&mut buffer)?;
-        if bytes_read == 0 {
-            break;
-        }
+    let result = (|| -> Result<()> {
+        loop {
+            let bytes_read = response.read(&mut buffer)?;
+            if bytes_read == 0 {
+                break;
+            }
 
-        file.write_all(&buffer[..bytes_read])?;
-        downloaded += bytes_read as u64;
-        pb.set_position(downloaded);
+            file.write_all(&buffer[..bytes_read])?;
+            downloaded += bytes_read as u64;
+            pb.set_position(downloaded);
+        }
+        Ok(())
+    })();
+
+    // Clean up on error
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temp_path);
+        pb.finish_with_message("Download failed");
+        return result;
     }
 
+    // Atomic rename
+    std::fs::rename(&temp_path, dest)?;
     pb.finish_with_message("Download complete");
     Ok(())
 }
@@ -154,6 +181,48 @@ pub fn download_with_retry(url: &str, dest: &Path, retries: u32) -> Result<()> {
             }
         }
     }
+}
+
+/// Download multiple files in parallel with retry
+///
+/// Downloads up to MAX_CONCURRENT_DOWNLOADS files concurrently.
+/// Each download uses atomic write (temp file + rename).
+///
+/// # Arguments
+/// - `downloads` - List of (url, dest_path) tuples
+/// - `retries` - Maximum retry attempts per download
+///
+/// # Returns
+/// - `Ok(())` if all downloads succeed
+/// - `Err(VexError)` with first error encountered
+#[allow(dead_code)]
+pub fn download_parallel(downloads: &[(String, PathBuf)], retries: u32) -> Result<()> {
+    let errors = Arc::new(Mutex::new(Vec::new()));
+
+    // Configure rayon thread pool with max concurrency
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(MAX_CONCURRENT_DOWNLOADS)
+        .build()
+        .map_err(|e| VexError::Parse(format!("Failed to create thread pool: {}", e)))?;
+
+    pool.install(|| {
+        downloads.par_iter().for_each(|(url, dest)| {
+            if let Err(e) = download_with_retry(url, dest, retries) {
+                // Store error message instead of error itself (reqwest::Error is not Clone)
+                errors.lock().unwrap().push(format!("{}", e));
+            }
+        });
+    });
+
+    let errors = errors.lock().unwrap();
+    if !errors.is_empty() {
+        return Err(VexError::Parse(format!(
+            "Parallel download failed: {}",
+            errors[0]
+        )));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -233,6 +302,7 @@ mod tests {
         assert_eq!(DOWNLOAD_BUFFER_SIZE, 65536);
         assert_eq!(CHECKSUM_BUFFER_SIZE, 65536);
         assert_eq!(RETRY_DELAY_SECS, 2);
+        assert_eq!(MAX_CONCURRENT_DOWNLOADS, 3);
     }
 
     #[test]
@@ -276,5 +346,37 @@ mod tests {
         }
 
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_atomic_write_cleanup_on_error() {
+        let dir = std::env::temp_dir().join("vex_test_atomic_cleanup");
+        std::fs::create_dir_all(&dir).unwrap();
+        let dest = dir.join("test.txt");
+
+        // Try to download from invalid URL
+        let result = download_file("http://invalid.url.that.does.not.exist.local/file", &dest);
+        assert!(result.is_err());
+
+        // Verify no temp files left behind
+        let entries: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .collect();
+        assert_eq!(entries.len(), 0, "Temp files should be cleaned up on error");
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_download_parallel_empty() {
+        let downloads: Vec<(String, PathBuf)> = vec![];
+        let result = download_parallel(&downloads, 3);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_max_concurrent_downloads_constant() {
+        assert_eq!(MAX_CONCURRENT_DOWNLOADS, 3);
     }
 }

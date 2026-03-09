@@ -24,7 +24,7 @@ struct GithubAsset {
 }
 
 /// Python support status based on lifecycle
-/// See: https://devguide.python.org/versions/
+/// See: <https://devguide.python.org/versions/>
 #[derive(Debug, Clone, PartialEq)]
 pub enum SupportStatus {
     Bugfix,
@@ -223,7 +223,16 @@ impl Tool for PythonTool {
     }
 
     fn bin_names(&self) -> Vec<&str> {
-        vec!["python3", "pip3"]
+        vec![
+            "python3",
+            "pip3",
+            "python",
+            "pip",
+            "2to3",
+            "idle3",
+            "pydoc3",
+            "python3-config",
+        ]
     }
 
     fn bin_subpath(&self) -> &str {
@@ -245,6 +254,13 @@ mod tests {
         let bins = PythonTool.bin_names();
         assert!(bins.contains(&"python3"));
         assert!(bins.contains(&"pip3"));
+        assert!(bins.contains(&"python"));
+        assert!(bins.contains(&"pip"));
+        assert!(bins.contains(&"2to3"));
+        assert!(bins.contains(&"idle3"));
+        assert!(bins.contains(&"pydoc3"));
+        assert!(bins.contains(&"python3-config"));
+        assert_eq!(bins.len(), 8);
     }
 
     #[test]
@@ -257,6 +273,13 @@ mod tests {
         let paths = PythonTool.bin_paths();
         assert!(paths.contains(&("python3", "bin")));
         assert!(paths.contains(&("pip3", "bin")));
+        assert!(paths.contains(&("python", "bin")));
+        assert!(paths.contains(&("pip", "bin")));
+        assert!(paths.contains(&("2to3", "bin")));
+        assert!(paths.contains(&("idle3", "bin")));
+        assert!(paths.contains(&("pydoc3", "bin")));
+        assert!(paths.contains(&("python3-config", "bin")));
+        assert_eq!(paths.len(), 8);
     }
 
     #[test]

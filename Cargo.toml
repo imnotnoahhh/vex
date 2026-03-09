@@ -1,6 +1,6 @@
 [package]
 name = "vex"
-version = "0.2.3"
+version = "1.0.0"
 edition = "2021"
 license = "MIT"
 authors = ["Noah Qin"]
@@ -47,6 +47,15 @@ fs2 = "0.4"
 
 # 终端颜色
 owo-colors = "4"
+
+# UUID 生成（用于临时文件名）
+uuid = { version = "1", features = ["v4"] }
+
+# Unix 系统调用（用于所有权检查）
+libc = "0.2"
+
+# 并行处理
+rayon = "1.10"
 
 # The profile that 'dist' will build with
 [profile.dist]

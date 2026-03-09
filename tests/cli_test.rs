@@ -557,3 +557,213 @@ fn test_use_auto_with_python_version_file() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// --- init shell configuration tests ---
+
+#[test]
+fn test_init_with_shell_auto() {
+    let home = std::env::temp_dir().join("vex_test_init_auto");
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+
+    let output = vex_bin()
+        .args(["init", "--shell", "auto"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Should either detect a shell or warn about inability to detect
+    assert!(stdout.contains("Configured") || stdout.contains("Unable to detect"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_init_with_shell_zsh() {
+    let home = std::env::temp_dir().join("vex_test_init_zsh");
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+
+    let output = vex_bin()
+        .args(["init", "--shell", "zsh"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Check for "Configured" and "zsh" (may have ANSI codes)
+    assert!(stdout.contains("Configured") && stdout.contains("zsh"));
+
+    // Verify .zshrc was created and contains vex hook
+    let zshrc = std::fs::read_to_string(home.join(".zshrc")).unwrap();
+    assert!(zshrc.contains("vex env zsh"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_init_with_shell_bash() {
+    let home = std::env::temp_dir().join("vex_test_init_bash");
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+
+    let output = vex_bin()
+        .args(["init", "--shell", "bash"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Configured") && stdout.contains("bash"));
+
+    // Verify .bashrc or .bash_profile was created
+    let bashrc_exists = home.join(".bashrc").exists();
+    let bash_profile_exists = home.join(".bash_profile").exists();
+    assert!(bashrc_exists || bash_profile_exists);
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_init_with_shell_fish() {
+    let home = std::env::temp_dir().join("vex_test_init_fish");
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+
+    let output = vex_bin()
+        .args(["init", "--shell", "fish"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Configured") && stdout.contains("fish"));
+
+    // Verify fish config was created
+    let fish_config = home.join(".config/fish/config.fish");
+    assert!(fish_config.exists());
+    let content = std::fs::read_to_string(fish_config).unwrap();
+    assert!(content.contains("vex env fish"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_init_with_dry_run_zsh() {
+    let home = std::env::temp_dir().join("vex_test_init_dry_run");
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+
+    let output = vex_bin()
+        .args(["init", "--shell", "zsh", "--dry-run"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Would") || stdout.contains("Preview"));
+
+    // Verify .zshrc was NOT created
+    assert!(!home.join(".zshrc").exists());
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_init_with_shell_skip_manual() {
+    let home = std::env::temp_dir().join("vex_test_init_skip");
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+
+    let output = vex_bin()
+        .args(["init", "--shell", "skip"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("vex init --shell auto") || stdout.contains("manually configure"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_init_already_configured_zsh() {
+    let home = std::env::temp_dir().join("vex_test_init_already");
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+
+    // Pre-create .zshrc with vex hook
+    std::fs::write(
+        home.join(".zshrc"),
+        "# existing config\neval \"$(vex env zsh)\"\n",
+    )
+    .unwrap();
+
+    let output = vex_bin()
+        .args(["init", "--shell", "zsh"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("already") && stdout.contains("configured"));
+
+    // Verify .zshrc was not modified (no duplicate hook)
+    let zshrc = std::fs::read_to_string(home.join(".zshrc")).unwrap();
+    assert_eq!(zshrc.matches("vex env zsh").count(), 1);
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_init_unsupported_shell_powershell() {
+    let home = std::env::temp_dir().join("vex_test_init_unsupported");
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+
+    let output = vex_bin()
+        .args(["init", "--shell", "powershell"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success()); // Should not fail, just warn
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    // Check both stdout and stderr for the error message
+    assert!(stdout.contains("Unsupported shell") || stderr.contains("Unsupported shell"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+// --- install --no-switch 测试 ---
+
+#[test]
+fn test_install_no_switch_flag() {
+    let output = vex_bin()
+        .args(["install", "node@20.11.0", "--no-switch"])
+        .output()
+        .unwrap();
+
+    // 命令应该成功（即使版本未安装，也会显示提示）
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    // 应该包含提示信息，告诉用户如何激活版本
+    assert!(
+        stdout.contains("To activate this version") || stderr.contains("already installed"),
+        "Should show activation hint or already installed message"
+    );
+}
+
+#[test]
+fn test_install_help_shows_no_switch() {
+    let output = vex_bin().args(["install", "--help"]).output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("--no-switch"),
+        "Help should document --no-switch flag"
+    );
+}

@@ -40,34 +40,50 @@ Security issues in scope include:
 
 vex includes the following security protections:
 
-1. **Path Traversal Protection** (v0.1.6+)
+1. **TOCTOU Race Condition Protection** (v1.0.0+)
+   - UUID v4-based temporary filenames prevent predictable paths
+   - Directory ownership validation prevents privilege escalation
+   - Atomic symlink operations with verification
+
+2. **Atomic Write Protection** (v1.0.0+)
+   - All downloads use UUID-based temporary files
+   - Atomic rename operations prevent corruption
+   - Automatic cleanup of temporary files on failure
+
+3. **Path Traversal Protection** (v0.1.6+)
    - Validates all archive entry paths before extraction
    - Rejects paths containing `..` (parent directory references)
    - Rejects absolute paths
    - Prevents zip-slip style attacks
 
-2. **HTTP Timeout Configuration** (v0.1.6+)
+4. **HTTP Timeout Configuration** (v0.1.6+)
    - Connection timeout: 30 seconds
    - Total timeout: 5 minutes
    - Automatic retry: 3 attempts with 2-second intervals
    - 4xx client errors (e.g., 404) are not retried
    - Prevents indefinite hangs and resource exhaustion
 
-3. **Disk Space Check** (v0.1.6+)
+5. **Disk Space Check** (v0.1.6+)
    - Validates at least 500 MB free space before installation
    - Prevents partial installations on full disks
    - Mitigates disk space exhaustion DoS attacks
 
-4. **Checksum Verification**
-   - SHA256 verification for Node.js downloads
-   - Go, Java, and Rust follow upstream checksum metadata availability
+6. **Checksum Verification**
+   - SHA256 verification for all downloads (Node.js, Python, Java, Rust)
+   - Go checksums embedded in API response
    - Detects corrupted or tampered downloads
 
-5. **Installation Locking**
+7. **Installation Locking** (v0.1.1+)
    - File-based locking prevents concurrent installation corruption
+   - PID validation prevents deadlocks (v1.0.0+)
    - Automatic cleanup of stale locks
 
-6. **Error Handling**
+8. **Parallel Operation Safety** (v1.0.0+)
+   - Parallel downloads limited to 3 concurrent operations
+   - Parallel extraction with proper error handling
+   - Resource exhaustion prevention
+
+9. **Error Handling**
    - Actionable error messages with troubleshooting steps
    - No sensitive information leaked in error messages
 
@@ -75,4 +91,8 @@ vex includes the following security protections:
 
 | Version | Supported |
 |---------|-----------|
-| 0.1.x   | Yes       |
+| 1.0.x   | Yes       |
+| 0.2.x   | Yes (until 2026-06-01) |
+| 0.1.x   | No        |
+
+**Note**: Users on v0.2.2 or earlier must manually upgrade to v1.0.0 or later due to bugs in the `self-update` command. See README.md for upgrade instructions.

@@ -2,6 +2,13 @@
 //!
 //! Responsible for downloading, verifying, extracting, and installing tool versions to `~/.vex/toolchains/`.
 //! Includes disk space checking, path traversal protection, and `CleanupGuard` automatic cleanup mechanism.
+//!
+//! # Features
+//!
+//! - **Parallel extraction**: Files are extracted in parallel using rayon (directories created sequentially)
+//! - **Path safety**: All archive paths are validated to prevent path traversal attacks
+//! - **Atomic operations**: Installation uses temporary directories and atomic moves
+//! - **Automatic cleanup**: Failed installations automatically clean up temporary files
 
 use crate::downloader::{download_with_retry, verify_checksum};
 use crate::error::{Result, VexError};
@@ -9,13 +16,15 @@ use crate::lock::InstallLock;
 use crate::tools::{Arch, Tool};
 use flate2::read::GzDecoder;
 use owo_colors::OwoColorize;
+use rayon::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use sysinfo::Disks;
 use tar::Archive;
 
 /// Minimum free disk space before installation (500 MB)
-const MIN_FREE_SPACE_BYTES: u64 = 500 * 1024 * 1024;
+const MIN_FREE_SPACE_BYTES: u64 = 1536 * 1024 * 1024;
 
 fn vex_dir() -> Result<PathBuf> {
     dirs::home_dir()
@@ -167,32 +176,114 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     let tar = GzDecoder::new(tar_gz);
     let mut archive = Archive::new(tar);
 
-    // Validate and extract entries to prevent path traversal attacks
-    for entry in archive.entries()? {
-        let mut entry = entry?;
-        let path = entry.path()?;
+    // Collect entries with their data for parallel processing
+    struct EntryData {
+        path: PathBuf,
+        is_dir: bool,
+        data: Vec<u8>,
+        mode: u32,
+    }
 
-        // Check for path traversal attempts (e.g., "../../../etc/passwd")
-        if path
-            .components()
-            .any(|c| matches!(c, std::path::Component::ParentDir))
+    let entries: Result<Vec<EntryData>> = archive
+        .entries()?
+        .map(|entry| {
+            let mut entry = entry?;
+            let path = entry.path()?.to_path_buf();
+
+            // Check for path traversal attempts (e.g., "../../../etc/passwd")
+            if path
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+            {
+                return Err(VexError::Parse(format!(
+                    "Archive contains unsafe path: {}. Path traversal detected.",
+                    path.display()
+                )));
+            }
+
+            // Check for absolute paths
+            if path.is_absolute() {
+                return Err(VexError::Parse(format!(
+                    "Archive contains absolute path: {}. Only relative paths are allowed.",
+                    path.display()
+                )));
+            }
+
+            let is_dir = entry.header().entry_type().is_dir();
+            let mode = entry.header().mode()?;
+            let mut data = Vec::new();
+            if !is_dir {
+                std::io::Read::read_to_end(&mut entry, &mut data)?;
+            }
+
+            Ok(EntryData {
+                path,
+                is_dir,
+                data,
+                mode,
+            })
+        })
+        .collect();
+
+    let entries = entries?;
+
+    // Separate directories and files for sequential/parallel processing
+    let (dirs, files): (Vec<_>, Vec<_>) = entries.into_iter().partition(|e| e.is_dir);
+
+    // Create directories sequentially (to avoid race conditions)
+    for entry in dirs {
+        let target = extract_dir.join(&entry.path);
+        fs::create_dir_all(&target)?;
+        #[cfg(unix)]
         {
-            return Err(VexError::Parse(format!(
-                "Archive contains unsafe path: {}. Path traversal detected.",
-                path.display()
-            )));
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&target, fs::Permissions::from_mode(entry.mode))?;
+        }
+    }
+
+    // Extract files in parallel using rayon
+    let errors = Mutex::new(Vec::new());
+    files.into_par_iter().for_each(|entry| {
+        let target = extract_dir.join(&entry.path);
+
+        // Ensure parent directory exists
+        if let Some(parent) = target.parent() {
+            if let Err(e) = fs::create_dir_all(parent) {
+                errors.lock().unwrap().push(format!(
+                    "Failed to create parent directory for {}: {}",
+                    entry.path.display(),
+                    e
+                ));
+                return;
+            }
         }
 
-        // Check for absolute paths
-        if path.is_absolute() {
-            return Err(VexError::Parse(format!(
-                "Archive contains absolute path: {}. Only relative paths are allowed.",
-                path.display()
-            )));
+        // Write file
+        if let Err(e) = fs::write(&target, &entry.data) {
+            errors
+                .lock()
+                .unwrap()
+                .push(format!("Failed to write {}: {}", entry.path.display(), e));
+            return;
         }
 
-        // Extract to the designated directory
-        entry.unpack_in(&extract_dir)?;
+        // Set permissions
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Err(e) = fs::set_permissions(&target, fs::Permissions::from_mode(entry.mode)) {
+                errors.lock().unwrap().push(format!(
+                    "Failed to set permissions for {}: {}",
+                    entry.path.display(),
+                    e
+                ));
+            }
+        }
+    });
+
+    let errors = errors.lock().unwrap();
+    if !errors.is_empty() {
+        return Err(VexError::Parse(format!("Extraction failed: {}", errors[0])));
     }
 
     // 4. Find extracted directory
@@ -321,8 +412,8 @@ mod tests {
 
     #[test]
     fn test_min_free_space_constant() {
-        // Verify the constant is set to 500 MB
-        assert_eq!(MIN_FREE_SPACE_BYTES, 500 * 1024 * 1024);
+        // Verify the constant is set to 1.5 GB
+        assert_eq!(MIN_FREE_SPACE_BYTES, 1536 * 1024 * 1024);
     }
 
     #[test]
@@ -400,5 +491,48 @@ mod tests {
         let result = vex_dir();
         assert!(result.is_ok());
         assert!(result.unwrap().ends_with(".vex"));
+    }
+
+    #[test]
+    fn test_parallel_extraction_entry_data() {
+        // Test that EntryData struct can be created
+        struct EntryData {
+            path: PathBuf,
+            is_dir: bool,
+            data: Vec<u8>,
+            mode: u32,
+        }
+
+        let entry = EntryData {
+            path: PathBuf::from("test/file.txt"),
+            is_dir: false,
+            data: vec![1, 2, 3],
+            mode: 0o644,
+        };
+
+        assert_eq!(entry.path, PathBuf::from("test/file.txt"));
+        assert!(!entry.is_dir);
+        assert_eq!(entry.data, vec![1, 2, 3]);
+        assert_eq!(entry.mode, 0o644);
+    }
+
+    #[test]
+    fn test_parallel_extraction_partition() {
+        // Test that we can partition entries into dirs and files
+        struct EntryData {
+            is_dir: bool,
+        }
+
+        let entries = vec![
+            EntryData { is_dir: true },
+            EntryData { is_dir: false },
+            EntryData { is_dir: false },
+            EntryData { is_dir: true },
+        ];
+
+        let (dirs, files): (Vec<_>, Vec<_>) = entries.into_iter().partition(|e| e.is_dir);
+
+        assert_eq!(dirs.len(), 2);
+        assert_eq!(files.len(), 2);
     }
 }

@@ -399,3 +399,97 @@ fn test_e2e_concurrent_install_protection() {
         "At least one install should succeed or be protected"
     );
 }
+
+// --- 全局版本管理测试 ---
+
+#[test]
+fn test_e2e_global_version_fallback() {
+    let global_versions = dirs::home_dir().unwrap().join(".vex/tool-versions");
+
+    // 备份现有的全局配置
+    let backup = if global_versions.exists() {
+        Some(fs::read_to_string(&global_versions).unwrap())
+    } else {
+        None
+    };
+
+    // 设置全局版本
+    let output = vex_bin().args(["global", "node@20.11.0"]).output().unwrap();
+    assert!(output.status.success(), "global command should succeed");
+
+    // 验证全局配置文件已创建
+    assert!(
+        global_versions.exists(),
+        "global tool-versions should exist"
+    );
+    let content = fs::read_to_string(&global_versions).unwrap();
+    assert!(
+        content.contains("node 20.11.0"),
+        "should contain node version"
+    );
+
+    // 恢复备份
+    if let Some(backup_content) = backup {
+        fs::write(&global_versions, backup_content).unwrap();
+    } else {
+        let _ = fs::remove_file(&global_versions);
+    }
+}
+
+#[test]
+fn test_e2e_current_shows_source() {
+    let output = vex_bin().arg("current").output().unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // 应该显示版本来源信息（如果有激活的工具）
+    if stdout.contains("→") {
+        // 有激活的工具，应该显示来源
+        assert!(
+            stdout.contains("Global default")
+                || stdout.contains("Project override")
+                || stdout.contains("Manual activation"),
+            "current should show version source"
+        );
+    }
+}
+
+#[test]
+fn test_e2e_project_override_priority() {
+    let temp_dir = TempDir::new().unwrap();
+    let global_versions = dirs::home_dir().unwrap().join(".vex/tool-versions");
+
+    // 备份全局配置
+    let backup = if global_versions.exists() {
+        Some(fs::read_to_string(&global_versions).unwrap())
+    } else {
+        None
+    };
+
+    // 设置全局版本
+    let _ = vex_bin().args(["global", "node@18.0.0"]).output().unwrap();
+
+    // 在项目目录设置不同的版本
+    let output = vex_bin()
+        .args(["local", "node@20.11.0"])
+        .current_dir(temp_dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "local command should succeed");
+
+    // 验证项目配置文件
+    let local_versions = temp_dir.path().join(".tool-versions");
+    assert!(local_versions.exists(), "local tool-versions should exist");
+    let content = fs::read_to_string(&local_versions).unwrap();
+    assert!(
+        content.contains("node 20.11.0"),
+        "should contain project version"
+    );
+
+    // 恢复全局配置
+    if let Some(backup_content) = backup {
+        fs::write(&global_versions, backup_content).unwrap();
+    } else {
+        let _ = fs::remove_file(&global_versions);
+    }
+}

@@ -21,28 +21,41 @@ jobs:
       - run: cargo fmt --all -- --check
 
   clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
+    name: Clippy (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-14, macos-13]
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-14, macos-13]
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
       - run: cargo test --all-features
 
   audit:
-    name: Security Audit
-    runs-on: ubuntu-latest
+    name: Security Audit (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-14, macos-13]
     steps:
       - uses: actions/checkout@v6
       - uses: rustsec/audit-check@v2
