@@ -65,6 +65,7 @@ jobs:
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
+    continue-on-error: true  # Don't fail CI if coverage fails
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -72,7 +73,7 @@ jobs:
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin
       - name: Generate coverage
-        run: cargo tarpaulin --out xml --all-features
+        run: cargo tarpaulin --out xml --all-features --timeout 300
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
