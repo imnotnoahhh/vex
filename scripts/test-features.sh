@@ -94,32 +94,92 @@ check "Node 20 has corepack" \
     "vex use node@20 > /dev/null 2>&1 && ls ~/.vex/bin/corepack" "corepack"
 echo ""
 
-# ── 7. Python binary completeness ─────────────────────────
+# ── 7. Python binary completeness + execution ─────────────
 echo "[ 7. Python binaries ]"
 vex use python@3.12 > /dev/null 2>&1 || true
+# Check symlinks exist
 for bin in python3 pip3 python pip 2to3 idle3 pydoc3 python3-config; do
     if ls ~/.vex/bin/$bin > /dev/null 2>&1; then
-        pass "$bin is linked"
+        pass "$bin symlink exists"
     else
-        fail "$bin is missing"
+        fail "$bin symlink missing"
     fi
 done
+# Check executables actually work
+check "python3 --version works"   "python3 --version"      "Python 3"
+check "python3 -V works"          "python3 -V"             "Python 3"
+check "python --version works"    "python --version"       "Python 3"
+check "pip3 --version works"      "pip3 --version"         "pip"
+check "pip --version works"       "pip --version"          "pip"
+check "2to3 --version works"      "2to3 --version"         "2to3"
+check "pydoc3 outputs help"       "pydoc3 pydoc | head -1" "pydoc"
+check "python3-config outputs"    "python3-config --prefix" "/"
 echo ""
 
-# ── 8. Rust binary completeness ───────────────────────────
+# ── 8. Rust binary completeness + execution ───────────────
 echo "[ 8. Rust binaries ]"
 vex use rust@stable > /dev/null 2>&1 || true
+# Check symlinks exist
 for bin in rustc rustdoc cargo rustfmt cargo-fmt cargo-clippy clippy-driver rust-analyzer rust-gdb rust-lldb; do
     if ls ~/.vex/bin/$bin > /dev/null 2>&1; then
-        pass "$bin is linked"
+        pass "$bin symlink exists"
     else
-        fail "$bin is missing"
+        fail "$bin symlink missing"
     fi
 done
+# Check executables actually work
+check "rustc --version works"          "rustc --version"          "rustc"
+check "cargo --version works"          "cargo --version"          "cargo"
+check "rustfmt --version works"        "rustfmt --version"        "rustfmt"
+check "cargo-clippy --version works"   "cargo-clippy --version"   "clippy"
+check "rust-analyzer --version works"  "rust-analyzer --version"  "rust-analyzer"
 echo ""
 
-# ── 9. Concurrent install protection ──────────────────────
-echo "[ 9. Concurrent install protection ]"
+# ── 9. Node binary completeness + execution ───────────────
+echo "[ 9. Node binaries ]"
+vex use node@20 > /dev/null 2>&1 || true
+for bin in node npm npx corepack; do
+    if ls ~/.vex/bin/$bin > /dev/null 2>&1; then
+        pass "$bin symlink exists"
+    else
+        fail "$bin symlink missing"
+    fi
+done
+check "node --version works"  "node --version"  "v"
+check "npm --version works"   "npm --version"   "."
+check "npx --version works"   "npx --version"   "."
+echo ""
+
+# ── 10. Go binary completeness + execution ─────────────────
+echo "[ 10. Go binaries ]"
+vex use go@latest > /dev/null 2>&1 || true
+for bin in go gofmt; do
+    if ls ~/.vex/bin/$bin > /dev/null 2>&1; then
+        pass "$bin symlink exists"
+    else
+        fail "$bin symlink missing"
+    fi
+done
+check "go version works"   "go version"   "go"
+check "gofmt -h works"     "gofmt -h 2>&1 | head -1" "usage"
+echo ""
+
+# ── 11. Java binary completeness + execution ───────────────
+echo "[ 11. Java binaries ]"
+vex use java@21 > /dev/null 2>&1 || true
+for bin in java javac jar javadoc javap jshell keytool; do
+    if ls ~/.vex/bin/$bin > /dev/null 2>&1; then
+        pass "$bin symlink exists"
+    else
+        fail "$bin symlink missing"
+    fi
+done
+check "java --version works"   "java --version 2>&1 | head -1"  "openjdk"
+check "javac --version works"  "javac --version"                "javac"
+echo ""
+
+# ── 12. Concurrent install protection ─────────────────────
+echo "[ 12. Concurrent install protection ]"
 # Create a fake stale lock to simulate conflict
 mkdir -p ~/.vex/locks
 echo "99999" > ~/.vex/locks/node-18.0.0.lock
