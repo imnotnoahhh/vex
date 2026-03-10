@@ -238,6 +238,64 @@ impl Tool for PythonTool {
     fn bin_subpath(&self) -> &str {
         "bin"
     }
+
+    /// After extraction, replace empty placeholder files with symlinks to the
+    /// versioned binaries (e.g. python3 → python3.12).
+    /// python-build-standalone's install_only tarball ships python3, python,
+    /// 2to3, idle3, pydoc3, python3-config as zero-byte placeholders.
+    fn post_install(&self, install_dir: &std::path::Path, _arch: Arch) -> Result<()> {
+        use std::fs;
+
+        let bin_dir = install_dir.join("bin");
+
+        // Find the versioned python binary (e.g. python3.12)
+        let versioned = fs::read_dir(&bin_dir)?
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .find(|name| {
+                name.starts_with("python3.")
+                    && name
+                        .chars()
+                        .last()
+                        .map(|c| c.is_ascii_digit())
+                        .unwrap_or(false)
+            });
+
+        let versioned = match versioned {
+            Some(v) => v,
+            None => return Ok(()), // nothing to fix
+        };
+
+        // e.g. "3.12" from "python3.12"
+        let minor = versioned.trim_start_matches("python");
+
+        // Map: placeholder name → versioned target
+        let replacements = [
+            ("python3", versioned.as_str()),
+            ("python", versioned.as_str()),
+            ("2to3", &format!("2to3{}", minor) as &str),
+            ("idle3", &format!("idle{}", minor) as &str),
+            ("pydoc3", &format!("pydoc{}", minor) as &str),
+            ("python3-config", &format!("python{}-config", minor) as &str),
+        ];
+
+        for (placeholder, target) in &replacements {
+            let placeholder_path = bin_dir.join(placeholder);
+            let target_path = bin_dir.join(target);
+
+            // Only replace if placeholder is empty and target exists and is non-empty
+            if placeholder_path.exists()
+                && target_path.exists()
+                && fs::metadata(&placeholder_path)?.len() == 0
+                && fs::metadata(&target_path)?.len() > 0
+            {
+                fs::remove_file(&placeholder_path)?;
+                std::os::unix::fs::symlink(target, &placeholder_path)?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

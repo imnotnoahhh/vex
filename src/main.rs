@@ -545,10 +545,19 @@ fn show_current() -> Result<()> {
                             }
                         }
                         found_source.unwrap_or_else(|| {
-                            (
-                                "Project override".to_string(),
-                                pwd.join(".tool-versions").display().to_string(),
-                            )
+                            // No local file found — fall back to global check
+                            if let Some(global_ver) = global_versions.get(&tool_name) {
+                                if global_ver == &version_str {
+                                    (
+                                        "Global default".to_string(),
+                                        global_path.display().to_string(),
+                                    )
+                                } else {
+                                    ("Manual activation".to_string(), "N/A".to_string())
+                                }
+                            } else {
+                                ("Manual activation".to_string(), "N/A".to_string())
+                            }
                         })
                     } else if let Some(global_ver) = global_versions.get(&tool_name) {
                         if global_ver == &version_str {
@@ -762,11 +771,15 @@ fn list_remote(tool_name: &str, filter: FilterType, use_cache: bool) -> Result<(
                 .collect();
             // Sort by version number descending
             result.sort_by(|a, b| {
-                let a_parts: Vec<u32> = a.version.trim_start_matches('v')
+                let a_parts: Vec<u32> = a
+                    .version
+                    .trim_start_matches('v')
                     .split('.')
                     .filter_map(|s| s.parse().ok())
                     .collect();
-                let b_parts: Vec<u32> = b.version.trim_start_matches('v')
+                let b_parts: Vec<u32> = b
+                    .version
+                    .trim_start_matches('v')
                     .split('.')
                     .filter_map(|s| s.parse().ok())
                     .collect();
