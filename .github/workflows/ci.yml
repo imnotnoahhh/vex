@@ -48,7 +48,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.os }}
-      - run: cargo test --all-features
+      - run: cargo test --all-features -- --test-threads=1
 
   audit:
     name: Security Audit (${{ matrix.os }})
