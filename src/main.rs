@@ -550,17 +550,27 @@ fn show_current() -> Result<()> {
                                 pwd.join(".tool-versions").display().to_string(),
                             )
                         })
+                    } else if let Some(global_ver) = global_versions.get(&tool_name) {
+                        if global_ver == &version_str {
+                            (
+                                "Global default".to_string(),
+                                global_path.display().to_string(),
+                            )
+                        } else {
+                            ("Manual activation".to_string(), "N/A".to_string())
+                        }
                     } else {
+                        ("Manual activation".to_string(), "N/A".to_string())
+                    }
+                } else if let Some(global_ver) = global_versions.get(&tool_name) {
+                    if global_ver == &version_str {
                         (
                             "Global default".to_string(),
                             global_path.display().to_string(),
                         )
+                    } else {
+                        ("Manual activation".to_string(), "N/A".to_string())
                     }
-                } else if global_versions.contains_key(&tool_name) {
-                    (
-                        "Global default".to_string(),
-                        global_path.display().to_string(),
-                    )
                 } else {
                     ("Manual activation".to_string(), "N/A".to_string())
                 };
@@ -746,10 +756,23 @@ fn list_remote(tool_name: &str, filter: FilterType, use_cache: bool) -> Result<(
                 let major = extract_major_version(&v.version);
                 major_versions.entry(major).or_insert_with(Vec::new).push(v);
             }
-            major_versions
+            let mut result: Vec<_> = major_versions
                 .into_values()
                 .filter_map(|mut versions| versions.pop())
-                .collect()
+                .collect();
+            // Sort by version number descending
+            result.sort_by(|a, b| {
+                let a_parts: Vec<u32> = a.version.trim_start_matches('v')
+                    .split('.')
+                    .filter_map(|s| s.parse().ok())
+                    .collect();
+                let b_parts: Vec<u32> = b.version.trim_start_matches('v')
+                    .split('.')
+                    .filter_map(|s| s.parse().ok())
+                    .collect();
+                b_parts.cmp(&a_parts)
+            });
+            result
         }
         FilterType::Latest => versions.into_iter().take(1).collect(),
     };
@@ -775,11 +798,20 @@ fn list_remote(tool_name: &str, filter: FilterType, use_cache: bool) -> Result<(
             .map(|cv| cv == version_str || cv == &version.version)
             .unwrap_or(false);
 
-        // Format version string
+        // Build visible text (no ANSI) for width calculation
+        let mut visible = version_str.to_string();
+        if let Some(lts) = &version.lts {
+            visible.push_str(&format!(" (LTS: {})", lts));
+        }
+        if is_current {
+            visible.push_str(" ← current");
+        }
+        let visible_len = visible.len();
+
+        // Build colored display string
         let mut display = if is_current {
             format!("{}", version_str.green().bold())
         } else {
-            // Check if version is outdated (heuristic: major version < latest major - 2)
             let is_outdated = is_version_outdated(&version.version, &versions[0].version);
             if is_outdated {
                 format!("{}", version_str.dimmed())
@@ -788,17 +820,21 @@ fn list_remote(tool_name: &str, filter: FilterType, use_cache: bool) -> Result<(
             }
         };
 
-        // Add LTS marker
         if let Some(lts) = &version.lts {
             display.push_str(&format!(" {}", format!("(LTS: {})", lts).cyan()));
         }
-
-        // Add current marker
         if is_current {
             display.push_str(&format!(" {}", "← current".green()));
         }
 
-        print!("  {:<40}", display);
+        // Pad based on visible length, not ANSI-inflated length
+        let col_width = 28;
+        let padding = if visible_len < col_width {
+            " ".repeat(col_width - visible_len)
+        } else {
+            "  ".to_string()
+        };
+        print!("  {}{}", display, padding);
         count += 1;
         if count % 3 == 0 {
             println!();
@@ -1119,7 +1155,7 @@ fn python_freeze() -> Result<()> {
     let pip = cwd.join(".venv").join("bin").join("pip");
 
     if !pip.exists() {
-        return Err(error::VexError::Parse(
+        return Err(error::VexError::PythonEnv(
             "No .venv found. Run 'vex python init' first.".to_string(),
         ));
     }
@@ -1160,7 +1196,7 @@ fn python_sync() -> Result<()> {
     let lock_path = cwd.join("requirements.lock");
 
     if !lock_path.exists() {
-        return Err(error::VexError::Parse(
+        return Err(error::VexError::PythonEnv(
             "No requirements.lock found. Run 'vex python freeze' first.".to_string(),
         ));
     }

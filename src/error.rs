@@ -64,6 +64,10 @@ pub enum VexError {
     #[error("Parse error: {0}\n\nExpected format:\n  - tool@version (e.g., node@20.11.0)\n  - tool@alias (e.g., node@latest)\n  - tool (for interactive selection)")]
     Parse(String),
 
+    /// Python environment error (missing .venv, requirements.lock, etc.)
+    #[error("{0}")]
+    PythonEnv(String),
+
     /// Interactive dialog error (non-interactive terminal, etc.)
     #[error("Dialog error: {0}\n\nThis may happen if:\n  - Terminal doesn't support interactive input\n  - Running in non-interactive mode\n\nTry: Specify version explicitly (e.g., 'vex install node@20')")]
     Dialog(String),
