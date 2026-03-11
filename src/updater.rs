@@ -88,9 +88,13 @@ fn detect_and_repair_broken_installations(old_version: &str) -> Result<()> {
         return Ok(()); // Already on 1.1.0+, no need to check
     }
 
-    println!("\n{} Checking for broken installations from old vex...", "→".cyan());
+    println!(
+        "\n{} Checking for broken installations from old vex...",
+        "→".cyan()
+    );
 
-    let home = dirs::home_dir().ok_or_else(|| VexError::Parse("Cannot find home directory".to_string()))?;
+    let home = dirs::home_dir()
+        .ok_or_else(|| VexError::Parse("Cannot find home directory".to_string()))?;
     let toolchains_dir = home.join(".vex/toolchains");
 
     if !toolchains_dir.exists() {
@@ -154,13 +158,23 @@ fn detect_and_repair_broken_installations(old_version: &str) -> Result<()> {
         return Ok(());
     }
 
-    println!("\n{} Found {} broken installation(s):", "!".yellow(), broken_versions.len());
+    println!(
+        "\n{} Found {} broken installation(s):",
+        "!".yellow(),
+        broken_versions.len()
+    );
     for (tool, version) in &broken_versions {
         println!("  • {}@{}", tool, version);
     }
 
-    println!("\n{}", "These versions were installed with an old vex version that had a symlink bug.".dimmed());
-    println!("{}", "They need to be reinstalled to work correctly.".dimmed());
+    println!(
+        "\n{}",
+        "These versions were installed with an old vex version that had a symlink bug.".dimmed()
+    );
+    println!(
+        "{}",
+        "They need to be reinstalled to work correctly.".dimmed()
+    );
     println!("\nReinstall them? [y/N]: ");
 
     use std::io::{self, Write};
@@ -170,7 +184,10 @@ fn detect_and_repair_broken_installations(old_version: &str) -> Result<()> {
     io::stdin().read_line(&mut input)?;
 
     if !input.trim().eq_ignore_ascii_case("y") {
-        println!("\n{} Skipped repair. Run 'vex doctor' to check again.", "→".cyan());
+        println!(
+            "\n{} Skipped repair. Run 'vex doctor' to check again.",
+            "→".cyan()
+        );
         return Ok(());
     }
 
@@ -180,7 +197,12 @@ fn detect_and_repair_broken_installations(old_version: &str) -> Result<()> {
 
         // Use vex install command with --force to overwrite broken files
         let status = std::process::Command::new("vex")
-            .args(&["install", &format!("{}@{}", tool, version), "--no-switch", "--force"])
+            .args([
+                "install",
+                &format!("{}@{}", tool, version),
+                "--no-switch",
+                "--force",
+            ])
             .status();
 
         match status {
@@ -193,7 +215,10 @@ fn detect_and_repair_broken_installations(old_version: &str) -> Result<()> {
         }
     }
 
-    println!("\n{} Repair complete. Run 'vex doctor' to verify.", "✓".green());
+    println!(
+        "\n{} Repair complete. Run 'vex doctor' to verify.",
+        "✓".green()
+    );
 
     Ok(())
 }

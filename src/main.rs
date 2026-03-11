@@ -1619,7 +1619,11 @@ fn run() -> Result<()> {
         Commands::Init { shell, dry_run } => {
             init_vex(&shell, dry_run)?;
         }
-        Commands::Install { spec, no_switch, force } => {
+        Commands::Install {
+            spec,
+            no_switch,
+            force,
+        } => {
             if let Some(spec) = spec {
                 let (tool_name, version) = parse_spec(&spec)?;
                 if version.is_empty() {
