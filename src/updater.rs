@@ -178,9 +178,9 @@ fn detect_and_repair_broken_installations(old_version: &str) -> Result<()> {
     for (tool, version) in &broken_versions {
         println!("{} Reinstalling {}@{}...", "→".cyan(), tool, version);
 
-        // Use vex install command via subprocess
+        // Use vex install command with --force to overwrite broken files
         let status = std::process::Command::new("vex")
-            .args(&["install", &format!("{}@{}", tool, version), "--no-switch"])
+            .args(&["install", &format!("{}@{}", tool, version), "--no-switch", "--force"])
             .status();
 
         match status {
