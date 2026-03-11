@@ -131,12 +131,11 @@ if command -v vex >/dev/null 2>&1; then
     if [ -d ~/.vex/locks ]; then
         # Check for stale lock files
         STALE_LOCKS=0
-        for lock in ~/.vex/locks/*.lock 2>/dev/null; do
-            if [ -f "$lock" ]; then
-                PID=$(cat "$lock" 2>/dev/null || echo "0")
-                if ! kill -0 "$PID" 2>/dev/null; then
-                    ((STALE_LOCKS++))
-                fi
+        for lock in ~/.vex/locks/*.lock; do
+            [ -f "$lock" ] || continue
+            PID=$(cat "$lock" 2>/dev/null || echo "0")
+            if ! kill -0 "$PID" 2>/dev/null; then
+                ((STALE_LOCKS++))
             fi
         done
 
