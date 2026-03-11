@@ -110,7 +110,7 @@ if command -v vex >/dev/null 2>&1; then
 
     # Test symlink resolution speed
     START=$(date +%s%N)
-    for i in {1..100}; do
+    for _ in {1..100}; do
         ~/.vex/bin/node --version >/dev/null 2>&1
     done
     END=$(date +%s%N)
