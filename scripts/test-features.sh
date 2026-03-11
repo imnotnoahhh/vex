@@ -494,7 +494,7 @@ echo "[ 14. Missing Commands Coverage ]"
 # Test init command
 INIT_TEST_DIR=$(mktemp -d)
 check "init creates vex directory structure" \
-    "(HOME=$INIT_TEST_DIR vex init 2>&1)" "Created"
+    "HOME=$INIT_TEST_DIR vex init 2>&1" "Created"
 if [ -d "$INIT_TEST_DIR/.vex/bin" ] && [ -d "$INIT_TEST_DIR/.vex/toolchains" ]; then
     pass "init creates bin and toolchains directories"
 else
@@ -521,7 +521,7 @@ LOCAL_TEST_DIR=$(mktemp -d)
 (cd "$LOCAL_TEST_DIR" && vex local node@20.11.0 > /dev/null 2>&1)
 if [ -f "$LOCAL_TEST_DIR/.tool-versions" ]; then
     pass "local creates .tool-versions"
-    check "local pins version" "cat $LOCAL_TEST_DIR/.tool-versions" "node 20.11.0"
+    check "local pins version" "cat \"$LOCAL_TEST_DIR/.tool-versions\"" "node 20.11.0"
 else
     fail "local failed to create .tool-versions"
 fi
