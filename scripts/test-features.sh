@@ -441,8 +441,8 @@ else
 fi
 
 # Node corepack (removed in Node 25+)
-vex use node@20 > /dev/null 2>&1
-if ls ~/.vex/bin/corepack > /dev/null 2>&1; then
+vex use node@20.11.0 > /dev/null 2>&1
+if [ -e ~/.vex/bin/corepack ]; then
     pass "Node 20 has corepack"
 else
     fail "Node 20 should have corepack"

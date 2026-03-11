@@ -184,7 +184,7 @@
 | 动态检测 | 2 |
 | 并发保护 | 1 |
 | Doctor 检查 | 7 |
-| **总计** | **171 项测试** |
+| **总计** | **176 项测试** |
 
 ---
 
@@ -272,7 +272,7 @@ bash scripts/test-features.sh
 ╔════════════════════════════════════════════════════════════╗
 ║                    Test Summary                            ║
 ╠════════════════════════════════════════════════════════════╣
-║  Passed:                                               171 ║
+║  Passed:                                               176 ║
 ║  Failed:                                                 0 ║
 ╚════════════════════════════════════════════════════════════╝
 
@@ -281,16 +281,16 @@ bash scripts/test-features.sh
 
 ---
 
-## 测试时间估算
+## Test Time Estimation
 
-- Node.js 安装: ~10s
-- Python 安装: ~30s
-- Go 安装: ~5s
-- Rust 安装: ~10s
-- Java 安装: ~15s
-- 所有测试执行: ~30s
+- Node.js installation: ~10s
+- Python installation: ~30s
+- Go installation: ~5s
+- Rust installation: ~10s
+- Java installation: ~15s
+- All test execution: ~30s
 
-**总计**: 约 **100 秒**（1.5 分钟）
+**Total**: Approximately **100 seconds** (1.5 minutes)
 
 ---
 
@@ -316,6 +316,6 @@ vex install node@20.11.0  # 改为新版本
 
 ---
 
-**最后更新**: 2026-03-11
-**测试覆盖**: 47 个二进制，171 项测试
-**状态**: ✅ 全面覆盖
+**Last Updated**: 2026-03-11
+**Test Coverage**: 47 binaries, 176 tests
+**Status**: ✅ Comprehensive coverage
