@@ -71,6 +71,133 @@ fn is_newer(local: &str, remote: &str) -> bool {
     parse(remote) > parse(local)
 }
 
+/// Detect and repair broken installations from old vex versions (< 1.1.0).
+/// Old versions had a symlink bug that created 0-byte npm/npx files.
+fn detect_and_repair_broken_installations(old_version: &str) -> Result<()> {
+    // Only check if upgrading from < 1.1.0
+    let parse = |s: &str| -> (u64, u64, u64) {
+        let parts: Vec<u64> = s.split('.').filter_map(|p| p.parse().ok()).collect();
+        (
+            parts.first().copied().unwrap_or(0),
+            parts.get(1).copied().unwrap_or(0),
+            parts.get(2).copied().unwrap_or(0),
+        )
+    };
+
+    if parse(old_version) >= (1, 1, 0) {
+        return Ok(()); // Already on 1.1.0+, no need to check
+    }
+
+    println!("\n{} Checking for broken installations from old vex...", "→".cyan());
+
+    let home = dirs::home_dir().ok_or_else(|| VexError::Parse("Cannot find home directory".to_string()))?;
+    let toolchains_dir = home.join(".vex/toolchains");
+
+    if !toolchains_dir.exists() {
+        return Ok(()); // No installations yet
+    }
+
+    let mut broken_versions = Vec::new();
+
+    // Scan all installed tools
+    for tool_entry in fs::read_dir(&toolchains_dir)? {
+        let tool_entry = tool_entry?;
+        let tool_name = tool_entry.file_name();
+        let tool_path = tool_entry.path();
+
+        if !tool_path.is_dir() {
+            continue;
+        }
+
+        // Scan all versions of this tool
+        for version_entry in fs::read_dir(&tool_path)? {
+            let version_entry = version_entry?;
+            let version = version_entry.file_name();
+            let version_path = version_entry.path();
+
+            if !version_path.is_dir() {
+                continue;
+            }
+
+            // Check for 0-byte files in bin directory (sign of broken symlinks)
+            let bin_dir = version_path.join("bin");
+            if !bin_dir.exists() {
+                continue;
+            }
+
+            let mut has_broken_files = false;
+            for bin_entry in fs::read_dir(&bin_dir)? {
+                let bin_entry = bin_entry?;
+                let bin_path = bin_entry.path();
+
+                if bin_path.is_file() {
+                    if let Ok(metadata) = fs::metadata(&bin_path) {
+                        if metadata.len() == 0 {
+                            has_broken_files = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if has_broken_files {
+                broken_versions.push((
+                    tool_name.to_string_lossy().to_string(),
+                    version.to_string_lossy().to_string(),
+                ));
+            }
+        }
+    }
+
+    if broken_versions.is_empty() {
+        println!("{} No broken installations found", "✓".green());
+        return Ok(());
+    }
+
+    println!("\n{} Found {} broken installation(s):", "!".yellow(), broken_versions.len());
+    for (tool, version) in &broken_versions {
+        println!("  • {}@{}", tool, version);
+    }
+
+    println!("\n{}", "These versions were installed with an old vex version that had a symlink bug.".dimmed());
+    println!("{}", "They need to be reinstalled to work correctly.".dimmed());
+    println!("\nReinstall them? [y/N]: ");
+
+    use std::io::{self, Write};
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+
+    if !input.trim().eq_ignore_ascii_case("y") {
+        println!("\n{} Skipped repair. Run 'vex doctor' to check again.", "→".cyan());
+        return Ok(());
+    }
+
+    println!();
+    for (tool, version) in &broken_versions {
+        println!("{} Reinstalling {}@{}...", "→".cyan(), tool, version);
+
+        // Use vex install command via subprocess
+        let status = std::process::Command::new("vex")
+            .args(&["install", &format!("{}@{}", tool, version), "--no-switch"])
+            .status();
+
+        match status {
+            Ok(s) if s.success() => {
+                println!("{} Reinstalled {}@{}", "✓".green(), tool, version);
+            }
+            _ => {
+                println!("{} Failed to reinstall {}@{}", "✗".red(), tool, version);
+            }
+        }
+    }
+
+    println!("\n{} Repair complete. Run 'vex doctor' to verify.", "✓".green());
+
+    Ok(())
+}
+
 /// Run the self-update flow.
 pub fn self_update() -> Result<()> {
     let current_version = env!("CARGO_PKG_VERSION");
@@ -165,6 +292,9 @@ pub fn self_update() -> Result<()> {
         "✓".green(),
         latest_version.cyan().bold()
     );
+
+    // Detect and repair broken installations from old vex versions
+    detect_and_repair_broken_installations(current_version)?;
 
     Ok(())
 }
@@ -383,5 +513,28 @@ mod tests {
         let permissions = metadata.permissions();
         // Check that executable bit is set
         assert!(permissions.mode() & 0o111 != 0);
+    }
+
+    #[test]
+    fn test_version_comparison_for_repair() {
+        // Test that repair only triggers for < 1.1.0
+        let parse = |s: &str| -> (u64, u64, u64) {
+            let parts: Vec<u64> = s.split('.').filter_map(|p| p.parse().ok()).collect();
+            (
+                parts.first().copied().unwrap_or(0),
+                parts.get(1).copied().unwrap_or(0),
+                parts.get(2).copied().unwrap_or(0),
+            )
+        };
+
+        // Should trigger repair
+        assert!(parse("1.0.0") < (1, 1, 0));
+        assert!(parse("1.0.1") < (1, 1, 0));
+        assert!(parse("0.9.9") < (1, 1, 0));
+
+        // Should NOT trigger repair
+        assert!(parse("1.1.0") >= (1, 1, 0));
+        assert!(parse("1.1.1") >= (1, 1, 0));
+        assert!(parse("2.0.0") >= (1, 1, 0));
     }
 }
