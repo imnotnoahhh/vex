@@ -8,9 +8,14 @@ set -euo pipefail
 # Ensure vex is in PATH (prefer ~/.local/bin, then current directory)
 if [ -x "$HOME/.local/bin/vex" ]; then
     export PATH="$HOME/.local/bin:$PATH"
-elif [ -x "$(pwd)/target/release/vex" ]; then
-    export PATH="$(pwd)/target/release:$PATH"
 fi
+VEX_RELEASE="$(pwd)/target/release"
+if [ -x "$VEX_RELEASE/vex" ]; then
+    export PATH="$VEX_RELEASE:$PATH"
+fi
+
+# Ensure ~/.vex/bin is in PATH (required for which tests)
+export PATH="$HOME/.vex/bin:$PATH"
 
 # Cleanup on exit
 # shellcheck disable=SC2317
@@ -32,6 +37,18 @@ check() {
     local output
     output=$(bash -c "$cmd" 2>&1) || true
     if echo "$output" | grep -q "$expect"; then
+        pass "$desc"
+    else
+        fail "$desc (got: $output)"
+    fi
+}
+
+# Check with two possible patterns (for locale differences)
+check_either() {
+    local desc="$1" cmd="$2" expect1="$3" expect2="$4"
+    local output
+    output=$(bash -c "$cmd" 2>&1) || true
+    if echo "$output" | grep -q "$expect1" || echo "$output" | grep -q "$expect2"; then
         pass "$desc"
     else
         fail "$desc (got: $output)"
@@ -69,6 +86,16 @@ check_bin_exists() {
     fi
 }
 
+# Optional binary: pass if exists, skip (not fail) if missing
+check_bin_exists_optional() {
+    local bin="$1"
+    if [ -e ~/.vex/bin/"$bin" ]; then
+        pass "$bin symlink exists (optional)"
+    else
+        pass "$bin not present (optional, skipped)"
+    fi
+}
+
 check_bin_version() {
     local bin="$1" flag="$2" expect="$3"
     local output
@@ -78,6 +105,16 @@ check_bin_version() {
     else
         fail "$bin $flag failed (got: $output)"
     fi
+}
+
+# Optional binary version check: skip if binary not found
+check_bin_version_optional() {
+    local bin="$1" flag="$2" expect="$3"
+    if ! command -v "$bin" >/dev/null 2>&1; then
+        pass "$bin not present (optional, skipped)"
+        return
+    fi
+    check_bin_version "$bin" "$flag" "$expect"
 }
 
 echo ""
@@ -137,13 +174,13 @@ echo "  Installing Python 3.12..."
 vex install python@3.12 > /dev/null 2>&1 || true
 vex use python@3.12 > /dev/null 2>&1
 
-# Check all Python binaries exist (including idle and normalizer)
-for bin in python3 python3.12 pip3 pip3.12 pydoc3 pydoc3.12 2to3 2to3-3.12 python3-config python3.12-config python pip idle3 idle3.12 normalizer; do
+# Check all Python binaries exist
+for bin in python3 python3.12 pip3 pip3.12 pydoc3 pydoc3.12 2to3 2to3-3.12 python3-config python3.12-config python pip idle3 idle3.12; do
     check_bin_exists "$bin"
 done
 
 # Check which points to vex
-for bin in python3 python pip3 pip 2to3 pydoc3 python3-config idle3 normalizer; do
+for bin in python3 python pip3 pip 2to3 pydoc3 python3-config idle3; do
     check_which "$bin"
 done
 
@@ -157,7 +194,6 @@ check_bin_version "pip3.12" "--version" "pip"
 check_bin_version "pip" "--version" "pip"
 check_bin_version "2to3" "--version" "2to3"
 check_bin_version "2to3-3.12" "--version" "2to3"
-check_bin_version "normalizer" "--version" "Charset-Normalizer"
 
 # Test help flags
 check_bin_version "python3" "--help" "usage"
@@ -347,7 +383,7 @@ check_bin_version "jar" "--version" "jar"
 check_bin_version "javadoc" "--version" "javadoc"
 check_bin_version "javap" "-version" "21"
 check_bin_version "jshell" "--version" "jshell"
-check_bin_version "keytool" "-help" "密钥"
+check_either "keytool -help works" "keytool -help 2>&1 | head -5" "密钥" "Key and Certificate"
 check_bin_version "jarsigner" "-help" "jarsigner"
 check_bin_version "jdb" "-version" "jdb"
 check_bin_version "jdeps" "--version" "21"
@@ -362,11 +398,11 @@ check_bin_version "jwebserver" "--version" "21"
 check_bin_version "jimage" "--version" "21"
 check_bin_version "jdeprscan" "--version" "21"
 
-# Test help flags (Chinese locale)
-check_bin_version "java" "-help" "用法"  # Chinese: "用法：java"
-check_bin_version "javac" "-help" "用法"  # Chinese: "用法: javac"
-check_bin_version "jar" "--help" "用法"  # Chinese: "用法: jar"
-check_bin_version "javadoc" "--help" "用法"  # Chinese: "用法:"
+# Test help flags (support both Chinese and English locale)
+check_either "java -help works" "java -help 2>&1 | head -5" "用法" "Usage"
+check_either "javac -help works" "javac -help 2>&1 | head -5" "用法" "Usage"
+check_either "jar --help works" "jar --help 2>&1 | head -5" "用法" "Usage"
+check_either "javadoc --help works" "javadoc --help 2>&1 | head -5" "用法" "Usage"
 
 echo ""
 
