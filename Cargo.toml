@@ -1,6 +1,6 @@
 [package]
 name = "vex"
-version = "1.0.1"
+version = "1.1.0"
 edition = "2021"
 license = "MIT"
 authors = ["Noah Qin"]
@@ -57,13 +57,19 @@ libc = "0.2"
 # 并行处理
 rayon = "1.10"
 
+# 日志框架
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# 临时文件 RAII
+tempfile = "3"
+
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
 lto = "thin"
 
 [dev-dependencies]
-tempfile = "3"
 criterion = "0.8"
 
 [[bench]]

@@ -10,6 +10,7 @@
 //! - **Automatic cleanup**: Failed downloads automatically clean up temporary files
 //! - **Retry logic**: Network errors are retried up to 3 times with exponential backoff
 
+use crate::config;
 use crate::error::{Result, VexError};
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
@@ -18,32 +19,16 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use uuid::Uuid;
-
-/// HTTP connection timeout (30 seconds)
-const CONNECT_TIMEOUT_SECS: u64 = 30;
-
-/// HTTP read timeout (5 minutes, suitable for large file downloads)
-const READ_TIMEOUT_SECS: u64 = 300;
-
-/// Download buffer size (64 KB)
-const DOWNLOAD_BUFFER_SIZE: usize = 65536;
-
-/// Checksum calculation buffer size (64 KB)
-const CHECKSUM_BUFFER_SIZE: usize = 65536;
-
-/// Retry interval (seconds)
-const RETRY_DELAY_SECS: u64 = 2;
-
-/// Maximum concurrent downloads
-const MAX_CONCURRENT_DOWNLOADS: usize = 3;
+use tracing::{debug, error, info, warn};
 
 /// Create HTTP client with timeout configuration
 fn create_http_client() -> Result<reqwest::blocking::Client> {
     reqwest::blocking::Client::builder()
-        .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
-        .timeout(Duration::from_secs(READ_TIMEOUT_SECS))
+        .connect_timeout(config::CONNECT_TIMEOUT)
+        .timeout(config::READ_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::limited(
+            config::MAX_HTTP_REDIRECTS,
+        ))
         .user_agent(concat!("vex/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(VexError::Network)
@@ -59,14 +44,17 @@ fn create_http_client() -> Result<reqwest::blocking::Client> {
 /// - `VexError::Network` - HTTP request failed
 /// - `VexError::Io` - File write failed
 pub fn download_file(url: &str, dest: &Path) -> Result<()> {
+    info!("Starting download: {} -> {}", url, dest.display());
     let client = create_http_client()?;
     let mut response = client.get(url).send()?;
 
     if !response.status().is_success() {
+        error!("Download failed with status: {}", response.status());
         return Err(VexError::Network(response.error_for_status().unwrap_err()));
     }
 
     let total_size = response.content_length().unwrap_or(0);
+    debug!("Download size: {} bytes", total_size);
 
     let pb = ProgressBar::new(total_size);
     pb.set_style(
@@ -77,11 +65,15 @@ pub fn download_file(url: &str, dest: &Path) -> Result<()> {
     );
     pb.set_message(format!("Downloading {}", url));
 
-    // Use atomic write: write to temp file first, then rename
-    let temp_path = dest.with_extension(format!("tmp.{}", Uuid::new_v4()));
-    let mut file = File::create(&temp_path)?;
+    // Use tempfile for RAII cleanup on panic/error
+    let mut temp_file = tempfile::NamedTempFile::new_in(dest.parent().ok_or_else(|| {
+        VexError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Destination has no parent directory",
+        ))
+    })?)?;
     let mut downloaded = 0u64;
-    let mut buffer = vec![0u8; DOWNLOAD_BUFFER_SIZE];
+    let mut buffer = vec![0u8; config::DOWNLOAD_BUFFER_SIZE];
 
     let result = (|| -> Result<()> {
         loop {
@@ -90,22 +82,20 @@ pub fn download_file(url: &str, dest: &Path) -> Result<()> {
                 break;
             }
 
-            file.write_all(&buffer[..bytes_read])?;
+            temp_file.write_all(&buffer[..bytes_read])?;
             downloaded += bytes_read as u64;
             pb.set_position(downloaded);
         }
         Ok(())
     })();
 
-    // Clean up on error
     if result.is_err() {
-        let _ = std::fs::remove_file(&temp_path);
         pb.finish_with_message("Download failed");
         return result;
     }
 
-    // Atomic rename
-    std::fs::rename(&temp_path, dest)?;
+    // Atomic persist (rename)
+    temp_file.persist(dest).map_err(|e| VexError::Io(e.error))?;
     pb.finish_with_message("Download complete");
     Ok(())
 }
@@ -122,7 +112,7 @@ pub fn download_file(url: &str, dest: &Path) -> Result<()> {
 pub fn verify_checksum(file_path: &Path, expected: &str) -> Result<bool> {
     let mut file = File::open(file_path)?;
     let mut hasher = Sha256::new();
-    let mut buffer = vec![0u8; CHECKSUM_BUFFER_SIZE];
+    let mut buffer = vec![0u8; config::CHECKSUM_BUFFER_SIZE];
 
     loop {
         let bytes_read = file.read(&mut buffer)?;
@@ -154,11 +144,15 @@ pub fn verify_checksum(file_path: &Path, expected: &str) -> Result<bool> {
 /// - `dest` - Destination file path
 /// - `retries` - Maximum retry attempts
 pub fn download_with_retry(url: &str, dest: &Path, retries: u32) -> Result<()> {
+    info!("Download with retry: {} (max retries: {})", url, retries);
     let mut attempts = 0;
 
     loop {
         match download_file(url, dest) {
-            Ok(_) => return Ok(()),
+            Ok(_) => {
+                info!("Download successful after {} attempts", attempts + 1);
+                return Ok(());
+            }
             Err(e) => {
                 // Don't retry 4xx client errors (e.g., 404)
                 if let VexError::Network(ref req_err) = e {
@@ -167,15 +161,23 @@ pub fn download_with_retry(url: &str, dest: &Path, retries: u32) -> Result<()> {
                         .map(|s| s.is_client_error())
                         .unwrap_or(false)
                     {
+                        error!("Client error, not retrying: {}", e);
                         return Err(e);
                     }
                 }
                 if attempts < retries {
+                    warn!(
+                        "Download failed (attempt {}/{}): {}",
+                        attempts + 1,
+                        retries,
+                        e
+                    );
                     eprintln!("Download failed: {}", e);
                     eprintln!("Retrying... ({}/{} attempts)", attempts + 1, retries);
                     attempts += 1;
-                    std::thread::sleep(Duration::from_secs(RETRY_DELAY_SECS));
+                    std::thread::sleep(config::RETRY_BASE_DELAY);
                 } else {
+                    error!("Download failed after {} attempts", retries);
                     return Err(e);
                 }
             }
@@ -185,7 +187,7 @@ pub fn download_with_retry(url: &str, dest: &Path, retries: u32) -> Result<()> {
 
 /// Download multiple files in parallel with retry
 ///
-/// Downloads up to MAX_CONCURRENT_DOWNLOADS files concurrently.
+/// Downloads up to config::MAX_CONCURRENT_DOWNLOADS files concurrently.
 /// Each download uses atomic write (temp file + rename).
 ///
 /// # Arguments
@@ -201,7 +203,7 @@ pub fn download_parallel(downloads: &[(String, PathBuf)], retries: u32) -> Resul
 
     // Configure rayon thread pool with max concurrency
     let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(MAX_CONCURRENT_DOWNLOADS)
+        .num_threads(config::MAX_CONCURRENT_DOWNLOADS)
         .build()
         .map_err(|e| VexError::Parse(format!("Failed to create thread pool: {}", e)))?;
 
@@ -297,12 +299,13 @@ mod tests {
 
     #[test]
     fn test_constants_defined() {
-        assert_eq!(CONNECT_TIMEOUT_SECS, 30);
-        assert_eq!(READ_TIMEOUT_SECS, 300);
-        assert_eq!(DOWNLOAD_BUFFER_SIZE, 65536);
-        assert_eq!(CHECKSUM_BUFFER_SIZE, 65536);
-        assert_eq!(RETRY_DELAY_SECS, 2);
-        assert_eq!(MAX_CONCURRENT_DOWNLOADS, 3);
+        use crate::config;
+        assert_eq!(config::CONNECT_TIMEOUT.as_secs(), 30);
+        assert_eq!(config::READ_TIMEOUT.as_secs(), 300);
+        assert_eq!(config::DOWNLOAD_BUFFER_SIZE, 65536);
+        assert_eq!(config::CHECKSUM_BUFFER_SIZE, 65536);
+        assert_eq!(config::RETRY_BASE_DELAY.as_secs(), 1);
+        assert_eq!(config::MAX_CONCURRENT_DOWNLOADS, 3);
     }
 
     #[test]
@@ -377,6 +380,6 @@ mod tests {
 
     #[test]
     fn test_max_concurrent_downloads_constant() {
-        assert_eq!(MAX_CONCURRENT_DOWNLOADS, 3);
+        assert_eq!(config::MAX_CONCURRENT_DOWNLOADS, 3);
     }
 }

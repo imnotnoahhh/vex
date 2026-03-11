@@ -3,14 +3,12 @@
 //! Caches tool remote version lists to `~/.vex/cache/remote-<tool>.json`,
 //! default TTL 300 seconds, configurable via `cache_ttl_secs` in `~/.vex/config.toml`.
 
+use crate::config;
 use crate::tools::Version;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
-
-/// Default cache TTL (300 seconds = 5 minutes)
-const DEFAULT_TTL_SECS: u64 = 300;
 
 #[derive(Serialize, Deserialize)]
 struct CachedVersionEntry {
@@ -112,17 +110,17 @@ pub fn read_cache_ttl(vex_dir: &std::path::Path) -> u64 {
     let config_path = vex_dir.join("config.toml");
     let content = match fs::read_to_string(&config_path) {
         Ok(c) => c,
-        Err(_) => return DEFAULT_TTL_SECS,
+        Err(_) => return config::CACHE_TTL.as_secs(),
     };
     let table: toml::Table = match content.parse() {
         Ok(t) => t,
-        Err(_) => return DEFAULT_TTL_SECS,
+        Err(_) => return config::CACHE_TTL.as_secs(),
     };
     table
         .get("cache_ttl_secs")
         .and_then(|v| v.as_integer())
         .map(|v| v as u64)
-        .unwrap_or(DEFAULT_TTL_SECS)
+        .unwrap_or(config::CACHE_TTL.as_secs())
 }
 
 #[cfg(test)]
