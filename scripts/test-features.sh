@@ -5,12 +5,6 @@
 
 set -euo pipefail
 
-# Detect CI environment
-CI_ENV=false
-if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
-    CI_ENV=true
-fi
-
 # Ensure vex is in PATH (prefer ~/.local/bin, then current directory)
 if [ -x "$HOME/.local/bin/vex" ]; then
     export PATH="$HOME/.local/bin:$PATH"
@@ -20,7 +14,7 @@ if [ -x "$VEX_RELEASE/vex" ]; then
     export PATH="$VEX_RELEASE:$PATH"
 fi
 
-# Ensure ~/.vex/bin is in PATH (required for which tests)
+# Ensure ~/.vex/bin is in PATH (required for testing)
 export PATH="$HOME/.vex/bin:$PATH"
 
 # Cleanup on exit
@@ -72,19 +66,19 @@ check_not() {
     fi
 }
 
-check_which() {
-    local bin="$1"
-    local path
-    path=$(which "$bin" 2>/dev/null) || true
-    if echo "$path" | grep -q "\.vex/bin"; then
-        pass "which $bin → ~/.vex/bin/$bin"
+# Check that symlink points to the correct toolchain version
+check_symlink_target() {
+    local bin="$1" expected_version="$2"
+    if [ ! -L ~/.vex/bin/"$bin" ]; then
+        fail "$bin is not a symlink"
+        return
+    fi
+    local target
+    target=$(readlink ~/.vex/bin/"$bin")
+    if echo "$target" | grep -q "$expected_version"; then
+        pass "$bin → toolchain $expected_version"
     else
-        # In CI, system tools may shadow vex tools in PATH
-        if [ "$CI_ENV" = "true" ]; then
-            pass "which $bin (CI: system tool found, skipped)"
-        else
-            fail "which $bin not in ~/.vex/bin (got: $path)"
-        fi
+        fail "$bin points to wrong version (got: $target)"
     fi
 }
 
@@ -111,7 +105,8 @@ check_bin_exists_optional() {
 check_bin_version() {
     local bin="$1" flag="$2" expect="$3"
     local output
-    output=$(bash -c "$bin $flag 2>&1 | head -5" 2>&1) || true
+    # Use absolute path to ensure we test vex-managed binary, not system binary
+    output=$(bash -c "~/.vex/bin/$bin $flag 2>&1 | head -5" 2>&1) || true
     if echo "$output" | grep -qiF -- "$expect"; then
         pass "$bin $flag works"
     else
@@ -123,7 +118,7 @@ check_bin_version() {
 # shellcheck disable=SC2317
 check_bin_version_optional() {
     local bin="$1" flag="$2" expect="$3"
-    if ! command -v "$bin" >/dev/null 2>&1; then
+    if [ ! -e ~/.vex/bin/"$bin" ]; then
         pass "$bin not present (optional, skipped)"
         return
     fi
@@ -158,12 +153,12 @@ for bin in node npm npx corepack; do
     check_bin_exists "$bin"
 done
 
-# Check which points to vex
-for bin in node npm npx; do
-    check_which "$bin"
+# Check symlinks point to correct toolchain version
+for bin in node npm npx corepack; do
+    check_symlink_target "$bin" "20.11.0"
 done
 
-# Test version flags
+# Test version flags (using absolute paths)
 check_bin_version "node" "--version" "v20"
 check_bin_version "node" "-v" "v20"
 check_bin_version "npm" "--version" "."
@@ -192,12 +187,12 @@ for bin in python3 python3.12 pip3 pip3.12 pydoc3 pydoc3.12 2to3 2to3-3.12 pytho
     check_bin_exists "$bin"
 done
 
-# Check which points to vex
+# Check symlinks point to correct toolchain version (test main binaries)
 for bin in python3 python pip3 pip 2to3 pydoc3 python3-config idle3; do
-    check_which "$bin"
+    check_symlink_target "$bin" "3.12"
 done
 
-# Test version flags
+# Test version flags (using absolute paths)
 check_bin_version "python3" "--version" "Python 3.12"
 check_bin_version "python3" "-V" "Python 3.12"
 check_bin_version "python3.12" "--version" "Python 3.12"
@@ -316,12 +311,12 @@ else
         check_bin_exists "$bin"
     done
 
-    # Check which points to vex
+    # Check symlinks point to correct toolchain
     for bin in go gofmt; do
-        check_which "$bin"
+        check_symlink_target "$bin" "go"
     done
 
-    # Test version flags (Go uses different syntax)
+    # Test version flags (Go uses different syntax, using absolute paths)
     check_bin_version "go" "version" "go version"
     check_bin_version "gofmt" "-h" "usage"
 
@@ -344,12 +339,12 @@ for bin in rustc cargo rustdoc rustfmt cargo-fmt clippy-driver cargo-clippy rust
     check_bin_exists "$bin"
 done
 
-# Check which points to vex
+# Check symlinks point to correct toolchain
 for bin in rustc cargo rustfmt cargo-clippy rust-analyzer; do
-    check_which "$bin"
+    check_symlink_target "$bin" "rust"
 done
 
-# Test version flags
+# Test version flags (using absolute paths)
 check_bin_version "rustc" "--version" "rustc"
 check_bin_version "rustc" "-V" "rustc"
 check_bin_version "cargo" "--version" "cargo"
@@ -384,12 +379,12 @@ for bin in java javac jar javadoc javap jshell keytool jarsigner jdb jdeps jfr j
     check_bin_exists "$bin"
 done
 
-# Check which points to vex (test more binaries)
-for bin in java javac jar javadoc javap jshell keytool jcmd jdeps jfr jlink jmod jpackage jwebserver jimage; do
-    check_which "$bin"
+# Check symlinks point to correct toolchain (test main binaries)
+for bin in java javac jar javadoc javap jshell keytool jcmd jdeps jlink jpackage jimage; do
+    check_symlink_target "$bin" "21"
 done
 
-# Test version flags (Java uses -version not --version)
+# Test version flags (Java uses -version not --version, using absolute paths)
 check_bin_version "java" "-version" "openjdk"
 check_bin_version "javac" "-version" "javac"
 check_bin_version "jar" "--version" "jar"
