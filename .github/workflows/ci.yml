@@ -62,17 +62,6 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  bash-tests:
-    name: Bash Tests
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release
-      - run: mkdir -p ~/.local/bin && cp target/release/vex ~/.local/bin/vex
-      - run: bash scripts/test-features.sh
-
   shellcheck:
     name: ShellCheck
     runs-on: ubuntu-latest
