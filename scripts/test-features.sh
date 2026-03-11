@@ -87,6 +87,7 @@ check_bin_exists() {
 }
 
 # Optional binary: pass if exists, skip (not fail) if missing
+# shellcheck disable=SC2317
 check_bin_exists_optional() {
     local bin="$1"
     if [ -e ~/.vex/bin/"$bin" ]; then
@@ -108,6 +109,7 @@ check_bin_version() {
 }
 
 # Optional binary version check: skip if binary not found
+# shellcheck disable=SC2317
 check_bin_version_optional() {
     local bin="$1" flag="$2" expect="$3"
     if ! command -v "$bin" >/dev/null 2>&1; then
