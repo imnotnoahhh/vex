@@ -140,7 +140,7 @@ echo ""
 echo "[ 2. Node.js v20 - All Binaries ]"
 echo "  Installing Node.js 20..."
 vex install node@20.11.0 > /dev/null 2>&1 || true
-vex use node@20.11.0 > /dev/null 2>&1
+vex use node@20.11.0 > /dev/null 2>&1 || true
 
 # Check all Node.js binaries exist
 for bin in node npm npx corepack; do
@@ -174,7 +174,7 @@ echo ""
 echo "[ 3. Python v3.12 - All Binaries ]"
 echo "  Installing Python 3.12..."
 vex install python@3.12 > /dev/null 2>&1 || true
-vex use python@3.12 > /dev/null 2>&1
+vex use python@3.12 > /dev/null 2>&1 || true
 
 # Check all Python binaries exist
 for bin in python3 python3.12 pip3 pip3.12 pydoc3 pydoc3.12 2to3 2to3-3.12 python3-config python3.12-config python pip idle3 idle3.12; do
@@ -298,7 +298,7 @@ if [ "$GO_INSTALLED" = "false" ]; then
     fail "Go installation failed after 3 attempts (check network/proxy)"
     echo ""
 else
-    vex use go@latest > /dev/null 2>&1
+    vex use go@latest > /dev/null 2>&1 || true
 
     # Check all Go binaries exist
     for bin in go gofmt; do
@@ -326,7 +326,7 @@ fi
 echo "[ 6. Rust - All Binaries ]"
 echo "  Installing Rust (latest stable)..."
 vex install rust@stable > /dev/null 2>&1 || true
-vex use rust@stable > /dev/null 2>&1
+vex use rust@stable > /dev/null 2>&1 || true
 
 # Check all Rust binaries exist (including rust-gdbgui)
 for bin in rustc cargo rustdoc rustfmt cargo-fmt clippy-driver cargo-clippy rust-gdb rust-gdbgui rust-lldb rust-analyzer; do
@@ -366,7 +366,7 @@ echo ""
 echo "[ 7. Java JDK 21 - All Binaries ]"
 echo "  Installing Java 21..."
 vex install java@21 > /dev/null 2>&1 || true
-vex use java@21 > /dev/null 2>&1
+vex use java@21 > /dev/null 2>&1 || true
 
 # Check all Java binaries exist (all 29 JDK 21 tools for macOS)
 for bin in java javac jar javadoc javap jshell keytool jarsigner jdb jdeps jfr jhsdb jinfo jmap jps jstack jstat serialver jrunscript jcmd jconsole jdeprscan jimage jlink jmod jpackage jstatd jwebserver rmiregistry; do
@@ -485,7 +485,7 @@ echo ""
 echo "[ 12. Dynamic Binary Detection ]"
 
 # Java jnativescan (only in Java 25+)
-vex use java@21 > /dev/null 2>&1
+vex use java@21 > /dev/null 2>&1 || true
 if ls ~/.vex/bin/jnativescan > /dev/null 2>&1; then
     fail "Java 21 should NOT have jnativescan"
 else
@@ -493,7 +493,7 @@ else
 fi
 
 # Node corepack (removed in Node 25+)
-vex use node@20.11.0 > /dev/null 2>&1
+vex use node@20.11.0 > /dev/null 2>&1 || true
 if [ -e ~/.vex/bin/corepack ]; then
     pass "Node 20 has corepack"
 else
