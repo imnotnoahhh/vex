@@ -18,7 +18,7 @@ fi
 export PATH="$HOME/.vex/bin:$PATH"
 
 # Cleanup on exit
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317,SC2329
 cleanup() {
     echo ""
     echo "Cleaning up test artifacts..."
@@ -92,7 +92,7 @@ check_bin_exists() {
 }
 
 # Optional binary: pass if exists, skip (not fail) if missing
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317,SC2329
 check_bin_exists_optional() {
     local bin="$1"
     if [ -e ~/.vex/bin/"$bin" ]; then
@@ -106,7 +106,7 @@ check_bin_version() {
     local bin="$1" flag="$2" expect="$3"
     local output
     # Use absolute path to ensure we test vex-managed binary, not system binary
-    output=$(bash -c "~/.vex/bin/$bin $flag 2>&1 | head -5" 2>&1) || true
+    output=$(bash -c "$HOME/.vex/bin/$bin $flag 2>&1 | head -5" 2>&1) || true
     if echo "$output" | grep -qiF -- "$expect"; then
         pass "$bin $flag works"
     else
@@ -115,7 +115,7 @@ check_bin_version() {
 }
 
 # Optional binary version check: skip if binary not found
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317,SC2329
 check_bin_version_optional() {
     local bin="$1" flag="$2" expect="$3"
     if [ ! -e ~/.vex/bin/"$bin" ]; then
