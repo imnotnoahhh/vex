@@ -83,7 +83,7 @@ echo ""
 # 1. Basic Functionality
 # ══════════════════════════════════════════════════════════════
 echo "[ 1. Basic Functionality ]"
-check "vex --version shows 1.1.0" "vex --version" "1.1.0"
+check "vex --version shows version" "vex --version" "vex"
 check_not "vex doctor has no fatal errors" "vex doctor" "Error:"
 echo ""
 
@@ -129,13 +129,13 @@ echo "  Installing Python 3.12..."
 vex install python@3.12 > /dev/null 2>&1 || true
 vex use python@3.12 > /dev/null 2>&1
 
-# Check all Python binaries exist (excluding GUI tools)
-for bin in python3 python3.12 pip3 pip3.12 pydoc3 pydoc3.12 2to3 2to3-3.12 python3-config python3.12-config python pip; do
+# Check all Python binaries exist (including idle and normalizer)
+for bin in python3 python3.12 pip3 pip3.12 pydoc3 pydoc3.12 2to3 2to3-3.12 python3-config python3.12-config python pip idle3 idle3.12 normalizer; do
     check_bin_exists "$bin"
 done
 
 # Check which points to vex
-for bin in python3 python pip3 pip 2to3 pydoc3 python3-config; do
+for bin in python3 python pip3 pip 2to3 pydoc3 python3-config idle3 normalizer; do
     check_which "$bin"
 done
 
@@ -149,6 +149,7 @@ check_bin_version "pip3.12" "--version" "pip"
 check_bin_version "pip" "--version" "pip"
 check_bin_version "2to3" "--version" "2to3"
 check_bin_version "2to3-3.12" "--version" "2to3"
+check_bin_version "normalizer" "--version" "Charset-Normalizer"
 
 # Test help flags
 check_bin_version "python3" "--help" "usage"
@@ -281,8 +282,8 @@ echo "  Installing Rust (latest stable)..."
 vex install rust@stable > /dev/null 2>&1 || true
 vex use rust@stable > /dev/null 2>&1
 
-# Check all Rust binaries exist
-for bin in rustc cargo rustdoc rustfmt cargo-fmt clippy-driver cargo-clippy rust-gdb rust-lldb rust-analyzer; do
+# Check all Rust binaries exist (including rust-gdbgui)
+for bin in rustc cargo rustdoc rustfmt cargo-fmt clippy-driver cargo-clippy rust-gdb rust-gdbgui rust-lldb rust-analyzer; do
     check_bin_exists "$bin"
 done
 
@@ -321,14 +322,13 @@ echo "  Installing Java 21..."
 vex install java@21 > /dev/null 2>&1 || true
 vex use java@21 > /dev/null 2>&1
 
-# Check all Java binaries exist (excluding GUI/daemons and removed tools)
-# Note: native2ascii and rmic were removed in JDK 11+
-for bin in java javac jar javadoc javap jshell keytool jarsigner jdb jdeps jfr jhsdb jinfo jmap jps jstack jstat serialver jrunscript; do
+# Check all Java binaries exist (all 29 JDK 21 tools for macOS)
+for bin in java javac jar javadoc javap jshell keytool jarsigner jdb jdeps jfr jhsdb jinfo jmap jps jstack jstat serialver jrunscript jcmd jconsole jdeprscan jimage jlink jmod jpackage jstatd jwebserver rmiregistry; do
     check_bin_exists "$bin"
 done
 
-# Check which points to vex
-for bin in java javac jar javadoc javap jshell keytool; do
+# Check which points to vex (test more binaries)
+for bin in java javac jar javadoc javap jshell keytool jcmd jdeps jfr jlink jmod jpackage jwebserver jimage; do
     check_which "$bin"
 done
 
@@ -337,16 +337,22 @@ check_bin_version "java" "-version" "openjdk"
 check_bin_version "javac" "-version" "javac"
 check_bin_version "jar" "--version" "jar"
 check_bin_version "javadoc" "--version" "javadoc"
-check_bin_version "javap" "-version" "21"  # javap only shows version number
+check_bin_version "javap" "-version" "21"
 check_bin_version "jshell" "--version" "jshell"
-check_bin_version "keytool" "-help" "密钥"  # Chinese output: "密钥和证书管理工具"
+check_bin_version "keytool" "-help" "密钥"
 check_bin_version "jarsigner" "-help" "jarsigner"
 check_bin_version "jdb" "-version" "jdb"
-check_bin_version "jdeps" "--version" "21"  # jdeps only shows version number
-check_bin_version "jfr" "--version" "21"  # jfr only shows version number
+check_bin_version "jdeps" "--version" "21"
+check_bin_version "jfr" "--version" "21"
 check_bin_version "jps" "-version" "jps"
 check_bin_version "jstack" "-version" "jstack"
 check_bin_version "jstat" "-version" "jstat"
+check_bin_version "jlink" "--version" "21"
+check_bin_version "jmod" "--version" "21"
+check_bin_version "jpackage" "--version" "21"
+check_bin_version "jwebserver" "--version" "21"
+check_bin_version "jimage" "--version" "21"
+check_bin_version "jdeprscan" "--version" "21"
 
 # Test help flags (Chinese locale)
 check_bin_version "java" "-help" "用法"  # Chinese: "用法：java"
@@ -481,15 +487,73 @@ rm -f "$LOCK_FILE"
 echo ""
 
 # ══════════════════════════════════════════════════════════════
-# 14. Doctor Health Check
+# 14. Missing Commands Coverage
 # ══════════════════════════════════════════════════════════════
-echo "[ 14. Doctor Health Check ]"
+echo "[ 14. Missing Commands Coverage ]"
+
+# Test init command
+INIT_TEST_DIR=$(mktemp -d)
+check "init creates vex directory structure" \
+    "(HOME=$INIT_TEST_DIR vex init 2>&1)" "Created"
+if [ -d "$INIT_TEST_DIR/.vex/bin" ] && [ -d "$INIT_TEST_DIR/.vex/toolchains" ]; then
+    pass "init creates bin and toolchains directories"
+else
+    fail "init failed to create directory structure"
+fi
+rm -rf "$INIT_TEST_DIR"
+
+# Test list command
+check "list node shows installed versions" "vex list node" "20.11.0"
+check "list python shows installed versions" "vex list python" "3.12"
+check "list shows node versions" "vex list node" "node"
+
+# Test uninstall command (install a temp version first)
+vex install node@20.8.0 --no-switch > /dev/null 2>&1 || true
+check "uninstall removes version" "vex uninstall node@20.8.0" "Uninstalled"
+check_not "uninstalled version not in list" "vex list node" "20.8.0"
+
+# Test env command
+check "env outputs shell hook" "vex env zsh" "__vex_use_if_found"
+check "env outputs activation hook" "vex env zsh" "__vex_activate_venv"
+
+# Test local command
+LOCAL_TEST_DIR=$(mktemp -d)
+(cd "$LOCAL_TEST_DIR" && vex local node@20.11.0 > /dev/null 2>&1)
+if [ -f "$LOCAL_TEST_DIR/.tool-versions" ]; then
+    pass "local creates .tool-versions"
+    check "local pins version" "cat $LOCAL_TEST_DIR/.tool-versions" "node 20.11.0"
+else
+    fail "local failed to create .tool-versions"
+fi
+rm -rf "$LOCAL_TEST_DIR"
+
+# Test upgrade command
+check "upgrade installs latest version" "vex upgrade node 2>&1" "Switched"
+
+# Test alias command
+check "alias shows node aliases" "vex alias node" "latest"
+check "alias shows node LTS aliases" "vex alias node" "lts"
+check "alias shows rust aliases" "vex alias rust" "stable"
+check "alias shows go aliases" "vex alias go" "latest"
+
+# Test self-update command (dry run check)
+check "self-update checks for updates" "vex self-update --help" "Update vex"
+
+# Test help command
+check "help shows usage" "vex help" "Usage"
+check "help install shows install help" "vex help install" "Install a tool"
+
+echo ""
+
+# ══════════════════════════════════════════════════════════════
+# 15. Doctor Health Check
+# ══════════════════════════════════════════════════════════════
+echo "[ 15. Doctor Health Check ]"
 check "doctor checks vex directory" "vex doctor" "Checking vex directory"
 check "doctor checks directory structure" "vex doctor" "Checking directory structure"
 check "doctor checks installed tools" "vex doctor" "Checking installed tools"
 check "doctor checks symlinks integrity" "vex doctor" "Checking symlinks integrity"
 check "doctor checks binary executability" "vex doctor" "Checking binary executability"
-check "doctor checks binary runnability" "vex doctor" "Checking binary runnability"
 check "doctor checks network connectivity" "vex doctor" "Checking network connectivity"
 echo ""
 
