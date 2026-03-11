@@ -49,7 +49,7 @@ if command -v vex >/dev/null 2>&1; then
 
     # Test multiple switches
     START=$(date +%s%N)
-    for i in {1..5}; do
+    for _ in {1..5}; do
         vex use node@20.11.0 >/dev/null 2>&1
         vex use node@22.0.0 >/dev/null 2>&1
     done

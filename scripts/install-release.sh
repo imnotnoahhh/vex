@@ -113,7 +113,7 @@ curl -fL --retry 3 --retry-delay 1 --output "$ARCHIVE_PATH" "$ASSET_URL" \
 CHECKSUM_URL="${ASSET_URL}.sha256"
 if curl -fsSL "$CHECKSUM_URL" -o "$TMP_DIR/checksum.txt" 2>/dev/null; then
   log "Verifying checksum..."
-  EXPECTED=$(cat "$TMP_DIR/checksum.txt" | awk '{print $1}')
+  EXPECTED=$(awk '{print $1}' "$TMP_DIR/checksum.txt")
   ACTUAL=$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')
   if [ "$EXPECTED" = "$ACTUAL" ]; then
     log "✓ Checksum verified"
@@ -136,7 +136,7 @@ chmod +x "$INSTALL_PATH"
 
 # Detect current shell and update appropriate rc file
 CURRENT_SHELL="$(basename "$SHELL")"
-PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
+PATH_LINE="export PATH=\"\$HOME/.local/bin:\$PATH\""
 
 case "$CURRENT_SHELL" in
   zsh)
