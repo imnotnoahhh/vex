@@ -6,6 +6,7 @@
 set -euo pipefail
 
 # Cleanup on exit
+# shellcheck disable=SC2317
 cleanup() {
     echo ""
     echo "Cleaning up test artifacts..."
@@ -54,7 +55,7 @@ check_which() {
 
 check_bin_exists() {
     local bin="$1"
-    if [ -e ~/.vex/bin/$bin ]; then
+    if [ -e ~/.vex/bin/"$bin" ]; then
         pass "$bin symlink exists"
     else
         fail "$bin symlink missing"
