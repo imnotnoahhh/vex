@@ -5,6 +5,13 @@
 
 set -euo pipefail
 
+# Ensure vex is in PATH (prefer ~/.local/bin, then current directory)
+if [ -x "$HOME/.local/bin/vex" ]; then
+    export PATH="$HOME/.local/bin:$PATH"
+elif [ -x "$(pwd)/target/release/vex" ]; then
+    export PATH="$(pwd)/target/release:$PATH"
+fi
+
 # Cleanup on exit
 # shellcheck disable=SC2317
 cleanup() {
