@@ -70,6 +70,10 @@ enum Commands {
         /// Skip automatic version switching after installation
         #[arg(long)]
         no_switch: bool,
+
+        /// Force reinstall even if already installed
+        #[arg(long)]
+        force: bool,
     },
 
     /// Switch to a different version
@@ -1615,7 +1619,7 @@ fn run() -> Result<()> {
         Commands::Init { shell, dry_run } => {
             init_vex(&shell, dry_run)?;
         }
-        Commands::Install { spec, no_switch } => {
+        Commands::Install { spec, no_switch, force } => {
             if let Some(spec) = spec {
                 let (tool_name, version) = parse_spec(&spec)?;
                 if version.is_empty() {
@@ -1623,6 +1627,17 @@ fn run() -> Result<()> {
                 } else {
                     let tool = tools::get_tool(&tool_name)?;
                     let resolved = tools::resolve_fuzzy_version(tool.as_ref(), &version)?;
+
+                    // If --force, uninstall first
+                    if force {
+                        let vex = vex_dir()?;
+                        let install_dir = vex.join("toolchains").join(&tool_name).join(&resolved);
+                        if install_dir.exists() {
+                            println!("{} Removing existing installation...", "→".cyan());
+                            fs::remove_dir_all(&install_dir)?;
+                        }
+                    }
+
                     installer::install(tool.as_ref(), &resolved)?;
 
                     // Auto-switch unless --no-switch is specified
