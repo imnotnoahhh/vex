@@ -331,7 +331,7 @@ fn test_e2e_list_command() {
 fn test_e2e_list_remote_command() {
     // 测试 list-remote 命令
     let output = vex_bin()
-        .args(["list-remote", "node", "--all"])
+        .args(["list-remote", "node", "--filter", "all"])
         .output()
         .unwrap();
     assert!(output.status.success());

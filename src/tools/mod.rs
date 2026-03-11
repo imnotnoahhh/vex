@@ -98,11 +98,6 @@ pub fn get_tool(name: &str) -> Result<Box<dyn Tool>> {
 
 /// Fuzzy version resolution: supports aliases (latest/lts/stable), partial version numbers (20→20.x), and exact versions
 pub fn resolve_fuzzy_version(tool: &dyn Tool, partial: &str) -> Result<String> {
-    // First, try alias resolution
-    if let Some(resolved) = tool.resolve_alias(partial)? {
-        return Ok(resolved);
-    }
-
     // Check if it already looks like a full version (has 2+ dots like 20.11.0, or is a single number for java)
     let normalized = partial.strip_prefix('v').unwrap_or(partial);
     let dot_count = normalized.chars().filter(|c| *c == '.').count();
@@ -111,6 +106,11 @@ pub fn resolve_fuzzy_version(tool: &dyn Tool, partial: &str) -> Result<String> {
     // For others, 2+ dots means full version (20.11.0, 1.23.5)
     if tool.name() == "java" || dot_count >= 2 {
         return Ok(normalized.to_string());
+    }
+
+    // Try alias resolution (latest/lts/stable)
+    if let Some(resolved) = tool.resolve_alias(partial)? {
+        return Ok(resolved);
     }
 
     // Partial version — query remote and prefix-match

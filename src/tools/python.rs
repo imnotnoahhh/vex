@@ -273,7 +273,7 @@ impl Tool for PythonTool {
         let replacements = [
             ("python3", versioned.as_str()),
             ("python", versioned.as_str()),
-            ("2to3", &format!("2to3{}", minor) as &str),
+            ("2to3", &format!("2to3-{}", minor) as &str),
             ("idle3", &format!("idle{}", minor) as &str),
             ("pydoc3", &format!("pydoc{}", minor) as &str),
             ("python3-config", &format!("python{}-config", minor) as &str),

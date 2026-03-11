@@ -109,6 +109,21 @@ log "Downloading $ASSET_NAME..."
 curl -fL --retry 3 --retry-delay 1 --output "$ARCHIVE_PATH" "$ASSET_URL" \
   || fail "Failed to download release asset"
 
+# Verify checksum if available
+CHECKSUM_URL="${ASSET_URL}.sha256"
+if curl -fsSL "$CHECKSUM_URL" -o "$TMP_DIR/checksum.txt" 2>/dev/null; then
+  log "Verifying checksum..."
+  EXPECTED=$(cat "$TMP_DIR/checksum.txt" | awk '{print $1}')
+  ACTUAL=$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')
+  if [ "$EXPECTED" = "$ACTUAL" ]; then
+    log "✓ Checksum verified"
+  else
+    fail "Checksum verification failed (expected: $EXPECTED, got: $ACTUAL)"
+  fi
+else
+  log "⚠ Checksum file not found, skipping verification"
+fi
+
 log "Extracting archive..."
 tar -xf "$ARCHIVE_PATH" -C "$EXTRACT_DIR" || fail "Failed to extract archive"
 

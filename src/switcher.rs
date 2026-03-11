@@ -9,6 +9,7 @@ use owo_colors::OwoColorize;
 use std::fs;
 use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 fn vex_dir() -> Result<PathBuf> {
@@ -29,10 +30,12 @@ fn vex_dir() -> Result<PathBuf> {
 /// - `VexError::VersionNotFound` - Version not installed
 /// - `VexError::Io` - Symlink operation failed
 pub fn switch_version(tool: &dyn Tool, version: &str) -> Result<()> {
+    info!("Switching version: {}@{}", tool.name(), version);
     switch_version_in(tool, version, &vex_dir()?)
 }
 
 fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<()> {
+    debug!("Switch version in base_dir: {}", base_dir.display());
     let toolchain_dir = base_dir.join("toolchains").join(tool.name()).join(version);
 
     if !toolchain_dir.exists() {
@@ -42,6 +45,19 @@ fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<
         });
     }
 
+    // Save current version for rollback
+    let current_dir = base_dir.join("current");
+    let current_link = current_dir.join(tool.name());
+    let old_version = if current_link.exists() {
+        fs::read_link(&current_link)
+            .ok()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+    } else {
+        None
+    };
+
+    debug!("Current version: {:?}", old_version);
+
     println!(
         "{} {} to version {}...",
         "Switching".cyan(),
@@ -49,6 +65,60 @@ fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<
         version.yellow()
     );
 
+    // Attempt version switch with rollback on failure
+    match perform_switch(tool, version, base_dir, &toolchain_dir) {
+        Ok(_) => {
+            println!("{} Switched to {}@{}", "✓".green(), tool.name(), version);
+            Ok(())
+        }
+        Err(e) => {
+            warn!("Version switch failed: {}, attempting rollback", e);
+
+            // Attempt rollback to previous version
+            if let Some(ref prev_version) = old_version {
+                eprintln!(
+                    "{} Version switch failed, rolling back to {}...",
+                    "⚠".yellow(),
+                    prev_version
+                );
+
+                let prev_toolchain_dir = base_dir
+                    .join("toolchains")
+                    .join(tool.name())
+                    .join(prev_version);
+
+                if prev_toolchain_dir.exists() {
+                    match perform_switch(tool, prev_version, base_dir, &prev_toolchain_dir) {
+                        Ok(_) => {
+                            eprintln!(
+                                "{} Rolled back to {}@{}",
+                                "✓".green(),
+                                tool.name(),
+                                prev_version
+                            );
+                        }
+                        Err(rollback_err) => {
+                            warn!("Rollback also failed: {}", rollback_err);
+                            eprintln!("{} Rollback failed: {}", "✗".red(), rollback_err);
+                        }
+                    }
+                } else {
+                    warn!("Previous version {} no longer exists", prev_version);
+                }
+            }
+
+            Err(e)
+        }
+    }
+}
+
+/// Perform the actual version switch operation
+fn perform_switch(
+    tool: &dyn Tool,
+    _version: &str,
+    base_dir: &Path,
+    toolchain_dir: &Path,
+) -> Result<()> {
     // 1. Update current/ symlink
     let current_dir = base_dir.join("current");
     fs::create_dir_all(&current_dir)?;
@@ -63,19 +133,20 @@ fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<
     {
         use std::os::unix::fs::MetadataExt;
         let current_uid = unsafe { libc::getuid() };
-        if let Ok(metadata) = fs::metadata(&toolchain_dir) {
-            if metadata.uid() != current_uid {
-                return Err(VexError::Parse(format!(
-                    "Security: toolchain directory owner mismatch (expected uid {}, got {})",
-                    current_uid,
-                    metadata.uid()
-                )));
-            }
+        // Use fstat (file descriptor-based) instead of stat to prevent TOCTOU race
+        let file = fs::File::open(toolchain_dir)?;
+        let metadata = file.metadata()?;
+        if metadata.uid() != current_uid {
+            return Err(VexError::Parse(format!(
+                "Security: toolchain directory owner mismatch (expected uid {}, got {})",
+                current_uid,
+                metadata.uid()
+            )));
         }
     }
 
     let _ = fs::remove_file(&temp_link);
-    unix_fs::symlink(&toolchain_dir, &temp_link)?;
+    unix_fs::symlink(toolchain_dir, &temp_link)?;
     fs::rename(&temp_link, &current_link)?;
 
     // 2. Update executable links in bin/
@@ -156,29 +227,6 @@ fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<
             }
         }
     }
-
-    println!(
-        "{} Switched {} to version {}",
-        "✓".green(),
-        tool.name().yellow(),
-        version.yellow()
-    );
-    println!();
-    let verify_flag = if tool.name() == "go" {
-        "version"
-    } else {
-        "--version"
-    };
-    println!(
-        "{} {}",
-        "Verify with:".dimmed(),
-        format!("{} {}", tool.bin_names()[0], verify_flag).cyan()
-    );
-    println!(
-        "{} {}",
-        "Note:".dimmed(),
-        "If 'which' shows old paths, run: hash -r".dimmed()
-    );
 
     Ok(())
 }

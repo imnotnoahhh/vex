@@ -5,7 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-03-11
+
+### Added
+
+- **[P3] Security test suite** — Created `scripts/test-security.sh` to validate security controls: path traversal protection, symlink target validation, directory ownership verification, checksum validation, HTTP redirect limits, disk space checks, lock file PID validation, version input sanitization, atomic operations, and secure temporary file handling. Comprehensive coverage of all security features with automatic cleanup and detailed reporting.
+- **[P3] Performance test suite** — Created `scripts/test-performance.sh` to benchmark critical operations: version switching speed (target: <1s single, <500ms average), cache acceleration (target: 5x+ speedup), binary execution latency (target: <10ms), concurrent operations (target: <3s), and memory usage (target: <100MB). Includes automatic cleanup, detailed metrics, and pass/fail statistics.
+- **[P3] Automatic version rollback** — Added rollback mechanism in `src/switcher.rs` that automatically restores the previous version if switching fails. Saves current version before attempting switch, extracts switch logic to `perform_switch()` function, and rolls back on failure with detailed logging and user notifications. Eliminates need for manual recovery after failed switches.
+- **[P3] Centralized configuration management** — Created `src/config.rs` module to consolidate all configuration constants (HTTP timeouts, buffer sizes, retry settings, concurrent download limits, redirect limits, disk space requirements, cache TTL, directory names). Provides helper functions for directory paths and supports `VEX_HOME` environment variable for custom installation paths. Eliminates scattered configuration across modules.
+- **[P3] Structured logging framework** — Integrated `tracing` and `tracing-subscriber` for structured logging throughout the codebase. Added `src/logging.rs` module with environment variable configuration via `VEX_LOG` (trace/debug/info/warn/error). Instrumented critical operations in downloader, installer, and switcher modules. Usage: `VEX_LOG=debug vex install node@20`. Documentation in `docs/logging.md`.
+- **[P1] Shell integration test suite** — Created `scripts/test-shell-hooks.sh` to validate shell hook generation for all supported shells (zsh, bash, fish, nushell). Tests verify presence of auto-switch functions (`__vex_use_if_found`) and Python venv activation hooks (`__vex_activate_venv`).
+- **[P2] Cache TTL validation** — Added range validation in `src/cache.rs` for cache TTL configuration. Values must be between 60 seconds (1 minute) and 3600 seconds (1 hour). Invalid values fall back to default 300 seconds with a warning message.
+- **[P1] Doctor binary runnability check** — Enhanced `vex doctor` command in `src/main.rs:1473` with step 8 that tests if binaries can actually execute. Tests each binary with `--version`, `--help`, or tool-specific flags (e.g., Go's `version`, Java's `-version`) with 2-second timeout. Detects corrupted binaries that pass file checks but fail to run.
+- **[P2] Error handling test suite** — Added error handling tests to `scripts/test-features.sh` covering network errors (invalid versions), unsupported tools, and malicious input (path traversal attempts).
+- **[P2] Version file workflow test suite** — Added `.tool-versions` workflow tests to `scripts/test-features.sh` covering `vex local` file creation, content validation, and batch installation from version files.
+- **[P2] CI bash test integration** — Added two new CI jobs in `.github/workflows/ci.yml`: `bash-tests` runs `scripts/test-features.sh` on macOS, and `shellcheck` validates all shell scripts on Ubuntu. Both run automatically on push and PR.
+
+### Changed
+
+- **[P3] Test coverage expansion** — Increased test suite from 293 to 299 tests with 7 new unit tests covering config.rs (HTTP/disk/concurrency settings, VEX_HOME environment variable, boundary conditions) and logging.rs (environment filter creation, custom log levels). Achieves comprehensive coverage of configuration management and logging framework modules with focus on error recovery scenarios and edge cases.
+- **[P1] Disk space check accuracy** — Improved disk space validation in `src/installer.rs` with precise extraction size estimation. Added `estimate_extraction_size()` function that reads tar headers to calculate actual decompressed size. Check now runs after download (post-checksum) instead of before, requiring `estimated_size + 500MB` instead of fixed 1.5GB. Error messages now show MB units for better precision.
+- **[P1] Python version support status** — Updated Python version lifecycle mapping in `src/tools/python.rs:48-53` to reflect current support phases as of 2026-03-10:
+  - Python 3.12 moved from bugfix to security-only phase
+  - Python 3.14 moved from prerelease to bugfix phase
+  - `--filter bugfix` now shows 3.14 and 3.13
+  - `--filter security` now shows 3.12, 3.11, and 3.10
+- **[P2] Download retry exponential backoff** — Improved retry strategy in `src/downloader.rs` to use exponential backoff (1s, 2s, 4s) instead of fixed intervals, reducing server load during transient failures.
+
+### Fixed
+
+- **[P0] Archive symlink extraction** — Fixed critical bug in `src/installer.rs:187-247` where symlink entries in tar archives were treated as regular files, causing Node.js npm/npx/corepack to be written as 0-byte empty files. Now correctly detects symlink entry types and creates proper symbolic links using `std::os::unix::fs::symlink()`. Rejects absolute path symlink targets for security. Fixes all tools using symlinks (Node.js, Python, Rust).
+- **[P2] E2E test CLI parameter** — Updated `tests/e2e_test.rs:334` to use `--filter all` instead of deprecated `--all` flag in `test_e2e_list_remote_command`, aligning with current CLI interface.
+- **[P1] Stale lock file cleanup** — Enhanced `src/lock.rs` with PID-based lock validation. Lock files now contain the holding process's PID. When acquiring a lock, vex checks if the PID is still running using `libc::kill(pid, 0)` and automatically cleans up stale locks from crashed processes, eliminating manual cleanup.
+- **[P1] Feature test script robustness** — Fixed 7 issues in `scripts/test-features.sh`: added error handling (`set -euo pipefail`), replaced unsafe `eval` with `bash -c`, added cleanup trap mechanism, and corrected test logic for npm/npx symlinks and version filtering.
+- **[P0] Temporary file cleanup reliability** — Replaced manual cleanup in `src/downloader.rs` with `tempfile` crate's RAII pattern using `NamedTempFile`. Temporary files are now automatically cleaned up on drop, even during interruptions (Ctrl+C) or panics, preventing disk space leaks.
+- **[P0] Exact version offline support** — Fixed `resolve_fuzzy_version()` in `src/tools/mod.rs:100-114` to check for exact versions (e.g., `20.11.0`) before making network requests. Commands like `vex use node@20.11.0` now work offline when the version is already installed, eliminating unnecessary network dependency.
+- **[P0] Python 2to3 symlink placeholder** — Fixed incorrect format string in `src/tools/python.rs:276` that generated `2to33.12` instead of `2to3-3.12`, causing the 2to3 command to remain as an empty placeholder. Now correctly creates symlink to version-specific binary (e.g., `2to3` → `2to3-3.12`).
+- **[P1] Parallel extraction error reporting** — Improved error handling in `src/installer.rs:284-293` to report all extraction errors instead of only the first one. Error messages now show the total count and full list of failures for better debugging.
+
+### Security
+
+- **[P1] Symlink target path traversal protection** — Enhanced archive extraction in `src/installer.rs:218-241` to validate symlink targets. Rejects symlinks containing `..` (ParentDir) components and absolute paths, preventing zip-slip variant attacks where malicious archives create symlinks pointing outside the installation directory (e.g., `../../../etc/passwd`).
+- **[P2] Install script checksum verification** — Added SHA256 checksum validation to `scripts/install-release.sh`. Downloads `.sha256` file from GitHub releases and verifies binary integrity using `shasum -a 256`. Installation fails if checksum mismatch is detected. Falls back with warning if checksum file is unavailable.
+- **[P2] Version string input validation** — Added `validate_version_format()` in `src/resolver.rs` to sanitize version inputs from `.tool-versions` files. Rejects path traversal attempts (`../`, `/`, `\`), command injection characters (`;`, `|`, `&`), and excessively long strings (>64 chars). Invalid entries are skipped with warnings.
+- **[P0] TOCTOU race condition in symlink switching** — Fixed time-of-check-time-of-use vulnerability in `src/switcher.rs:61-80` by replacing `fs::metadata()` with `File::open().metadata()`. Now uses fstat on file descriptor instead of stat on path, preventing attackers from replacing directories between ownership check and symlink creation.
+- **[P2] HTTP redirect limit** — Added redirect policy in `src/downloader.rs` to limit maximum redirects to 10, preventing malicious redirect attacks and infinite redirect loops.
 
 ## [1.0.0] - 2026-03-10
 

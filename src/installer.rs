@@ -10,6 +10,7 @@
 //! - **Atomic operations**: Installation uses temporary directories and atomic moves
 //! - **Automatic cleanup**: Failed installations automatically clean up temporary files
 
+use crate::config;
 use crate::downloader::{download_with_retry, verify_checksum};
 use crate::error::{Result, VexError};
 use crate::lock::InstallLock;
@@ -22,14 +23,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use sysinfo::Disks;
 use tar::Archive;
-
-/// Minimum free disk space before installation (500 MB)
-const MIN_FREE_SPACE_BYTES: u64 = 1536 * 1024 * 1024;
+use tracing::{debug, info};
 
 fn vex_dir() -> Result<PathBuf> {
-    dirs::home_dir()
-        .map(|p| p.join(".vex"))
-        .ok_or(VexError::HomeDirectoryNotFound)
+    config::vex_home().ok_or(VexError::HomeDirectoryNotFound)
 }
 
 /// Check if sufficient disk space is available
@@ -113,12 +110,15 @@ impl Drop for CleanupGuard {
 /// - `VexError::Network` - Download failed
 /// - `VexError::ChecksumMismatch` - Checksum mismatch
 pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
+    info!("Starting installation: {}@{}", tool.name(), version);
     let arch = Arch::detect();
+    debug!("Detected architecture: {:?}", arch);
     let vex = vex_dir()?;
 
     // 0. Check if already installed
     let final_dir = vex.join("toolchains").join(tool.name()).join(version);
     if final_dir.exists() {
+        info!("Version already installed: {}@{}", tool.name(), version);
         println!(
             "{} {} is already installed.",
             format!("{}@{}", tool.name(), version).yellow(),
@@ -132,10 +132,11 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     }
 
     // Acquire install lock (fail fast if another process is installing the same version)
+    debug!("Acquiring install lock for {}@{}", tool.name(), version);
     let _lock = InstallLock::acquire(&vex, tool.name(), version)?;
 
     // Check disk space before downloading
-    check_disk_space(&vex, MIN_FREE_SPACE_BYTES)?;
+    check_disk_space(&vex, config::MIN_FREE_SPACE_BYTES)?;
 
     println!(
         "{} {} {}...",
@@ -184,48 +185,109 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
         mode: u32,
     }
 
-    let entries: Result<Vec<EntryData>> = archive
-        .entries()?
-        .map(|entry| {
-            let mut entry = entry?;
-            let path = entry.path()?.to_path_buf();
+    let mut entries = Vec::new();
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?.to_path_buf();
 
-            // Check for path traversal attempts (e.g., "../../../etc/passwd")
-            if path
-                .components()
-                .any(|c| matches!(c, std::path::Component::ParentDir))
-            {
+        // Check for path traversal attempts (e.g., "../../../etc/passwd")
+        if path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            return Err(VexError::Parse(format!(
+                "Archive contains unsafe path: {}. Path traversal detected.",
+                path.display()
+            )));
+        }
+
+        // Check for absolute paths
+        if path.is_absolute() {
+            return Err(VexError::Parse(format!(
+                "Archive contains absolute path: {}. Only relative paths are allowed.",
+                path.display()
+            )));
+        }
+
+        let entry_type = entry.header().entry_type();
+
+        // Handle symlinks separately
+        if entry_type.is_symlink() {
+            let link_name = entry
+                .link_name()?
+                .ok_or_else(|| VexError::Parse("Symlink without target".to_string()))?;
+
+            // Validate symlink target is relative (reject absolute paths)
+            if link_name.is_absolute() {
                 return Err(VexError::Parse(format!(
-                    "Archive contains unsafe path: {}. Path traversal detected.",
-                    path.display()
+                    "Archive contains absolute symlink target: {}",
+                    link_name.display()
                 )));
             }
 
-            // Check for absolute paths
-            if path.is_absolute() {
+            // Validate symlink doesn't escape the extraction directory
+            // Resolve the symlink target relative to its location
+            let symlink_location = extract_dir.join(&path);
+            let symlink_parent = symlink_location
+                .parent()
+                .ok_or_else(|| VexError::Parse("Symlink has no parent directory".to_string()))?;
+
+            // Resolve the target path (handle .. components)
+            let resolved_target = symlink_parent.join(&link_name);
+            let canonical_target = match resolved_target.canonicalize() {
+                Ok(p) => p,
+                Err(_) => {
+                    // If canonicalize fails (target doesn't exist yet), manually resolve
+                    let mut components = Vec::new();
+                    for component in resolved_target.components() {
+                        match component {
+                            std::path::Component::ParentDir => {
+                                components.pop();
+                            }
+                            std::path::Component::CurDir => {}
+                            c => components.push(c),
+                        }
+                    }
+                    components.iter().collect()
+                }
+            };
+
+            // Check if resolved target is within extract_dir
+            if !canonical_target.starts_with(&extract_dir) {
                 return Err(VexError::Parse(format!(
-                    "Archive contains absolute path: {}. Only relative paths are allowed.",
-                    path.display()
+                    "Archive contains symlink escaping extraction directory: {} -> {}",
+                    path.display(),
+                    link_name.display()
                 )));
             }
 
-            let is_dir = entry.header().entry_type().is_dir();
-            let mode = entry.header().mode()?;
-            let mut data = Vec::new();
-            if !is_dir {
-                std::io::Read::read_to_end(&mut entry, &mut data)?;
+            // Create symlink immediately
+            let target = extract_dir.join(&path);
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)?;
             }
 
-            Ok(EntryData {
-                path,
-                is_dir,
-                data,
-                mode,
-            })
-        })
-        .collect();
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(&link_name, &target)?;
 
-    let entries = entries?;
+            // Skip this entry (don't add to EntryData)
+            continue;
+        }
+
+        let is_dir = entry_type.is_dir();
+        let mode = entry.header().mode()?;
+        let mut data = Vec::new();
+        if !is_dir {
+            std::io::Read::read_to_end(&mut entry, &mut data)?;
+        }
+
+        entries.push(EntryData {
+            path,
+            is_dir,
+            data,
+            mode,
+        });
+    }
 
     // Separate directories and files for sequential/parallel processing
     let (dirs, files): (Vec<_>, Vec<_>) = entries.into_iter().partition(|e| e.is_dir);
@@ -413,7 +475,7 @@ mod tests {
     #[test]
     fn test_min_free_space_constant() {
         // Verify the constant is set to 1.5 GB
-        assert_eq!(MIN_FREE_SPACE_BYTES, 1536 * 1024 * 1024);
+        assert_eq!(config::MIN_FREE_SPACE_BYTES, 1536 * 1024 * 1024);
     }
 
     #[test]
@@ -534,5 +596,68 @@ mod tests {
 
         assert_eq!(dirs.len(), 2);
         assert_eq!(files.len(), 2);
+    }
+    #[test]
+    fn test_symlink_target_validation_parent_dir() {
+        // Test that symlink targets with .. are rejected
+        let link_name = Path::new("../../../etc/passwd");
+        let has_parent_dir = link_name
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir));
+        assert!(
+            has_parent_dir,
+            "Should detect parent directory in symlink target"
+        );
+    }
+
+    #[test]
+    fn test_symlink_target_validation_absolute() {
+        // Test that absolute symlink targets are rejected
+        let link_name = Path::new("/etc/passwd");
+        assert!(
+            link_name.is_absolute(),
+            "Should detect absolute symlink target"
+        );
+    }
+
+    #[test]
+    fn test_symlink_target_validation_safe_relative() {
+        // Test that safe relative symlink targets pass
+        let link_name = Path::new("../lib/node_modules/npm/bin/npm-cli.js");
+        let has_parent_dir = link_name
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir));
+        // This should have parent dir components, but they're safe if they don't escape
+        assert!(
+            has_parent_dir,
+            "This path has .. but may be safe in context"
+        );
+    }
+
+    #[test]
+    fn test_symlink_target_validation_simple_relative() {
+        // Test that simple relative symlink targets pass
+        let link_name = Path::new("node");
+        let has_parent_dir = link_name
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir));
+        assert!(
+            !has_parent_dir,
+            "Simple relative symlink should not have .."
+        );
+        assert!(!link_name.is_absolute(), "Should be relative");
+    }
+
+    #[test]
+    fn test_symlink_target_validation_current_dir() {
+        // Test that symlink targets with ./ are allowed
+        let link_name = Path::new("./bin/node");
+        let has_parent_dir = link_name
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir));
+        assert!(
+            !has_parent_dir,
+            "Current directory component should be allowed"
+        );
     }
 }

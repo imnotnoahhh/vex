@@ -11,10 +11,12 @@ use std::fs;
 use std::path::PathBuf;
 
 mod cache;
+mod config;
 mod downloader;
 mod error;
 mod installer;
 mod lock;
+mod logging;
 mod resolver;
 mod shell;
 mod switcher;
@@ -1470,7 +1472,109 @@ fn run_doctor() -> Result<()> {
         warnings += 1;
     }
 
-    // 8. Check network connectivity
+    // 8. Check binary runnability (--version or --help)
+    print!("Checking binary runnability... ");
+    let mut failed_binaries = Vec::new();
+
+    if bin_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&bin_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let bin_path = entry.path();
+                let bin_name = entry.file_name().to_string_lossy().to_string();
+
+                // Skip known non-runnable binaries and special tools
+                if bin_name.ends_with(".so")
+                    || bin_name.ends_with(".dylib")
+                    || bin_name.ends_with("-config")
+                    || bin_name.starts_with("idle")
+                    || bin_name == "corepack" // Corepack requires enable first
+                    || bin_name == "rust-gdb" // Requires script argument
+                    || bin_name == "rust-lldb" // Requires script argument
+                    || bin_name == "rmiregistry" // Java RMI registry daemon
+                    || bin_name == "serialver" // Java serialization tool
+                    || bin_name == "jconsole" // Java GUI tool
+                    || bin_name == "jstatd"
+                // Java daemon
+                {
+                    continue;
+                }
+
+                // Try different command patterns based on tool type
+                let test_commands: Vec<Vec<&str>> = if bin_name.starts_with("go") {
+                    vec![vec!["version"], vec!["--version"], vec!["--help"]]
+                } else if bin_name.starts_with("j") && bin_name.len() > 1 {
+                    // Java tools often don't support standard flags
+                    vec![vec!["-version"], vec!["--version"], vec!["--help"]]
+                } else {
+                    vec![vec!["--version"], vec!["--help"], vec!["-V"]]
+                };
+
+                let mut success = false;
+
+                for args in test_commands {
+                    match Command::new(&bin_path)
+                        .args(&args)
+                        .stdout(std::process::Stdio::piped())
+                        .stderr(std::process::Stdio::piped())
+                        .spawn()
+                    {
+                        Ok(mut child) => {
+                            // Wait with 2 second timeout
+                            use std::time::Duration;
+                            let timeout = Duration::from_secs(2);
+                            let start = std::time::Instant::now();
+
+                            loop {
+                                match child.try_wait() {
+                                    Ok(Some(status)) => {
+                                        if status.success() {
+                                            if let Ok(output) = child.wait_with_output() {
+                                                if !output.stdout.is_empty()
+                                                    || !output.stderr.is_empty()
+                                                {
+                                                    success = true;
+                                                }
+                                            }
+                                        }
+                                        break;
+                                    }
+                                    Ok(None) => {
+                                        if start.elapsed() > timeout {
+                                            let _ = child.kill();
+                                            break;
+                                        }
+                                        std::thread::sleep(Duration::from_millis(50));
+                                    }
+                                    Err(_) => break,
+                                }
+                            }
+
+                            if success {
+                                break;
+                            }
+                        }
+                        Err(_) => continue,
+                    }
+                }
+
+                if !success {
+                    failed_binaries.push(bin_name);
+                }
+            }
+        }
+    }
+
+    if failed_binaries.is_empty() {
+        println!("{}", "✓".green());
+    } else {
+        println!("{}", "⚠ Binaries failed to run".yellow());
+        for bin in &failed_binaries {
+            println!("  {}", bin.yellow());
+        }
+        warnings += 1;
+    }
+
+    // 9. Check network connectivity
     print!("Checking network connectivity... ");
     match Command::new("ping")
         .args(["-c", "1", "-W", "2", "nodejs.org"])
@@ -1736,6 +1840,9 @@ fn run() -> Result<()> {
 }
 
 fn main() {
+    // Initialize logging system
+    logging::init();
+
     if let Err(e) = run() {
         eprintln!("Error: {}", e);
         std::process::exit(1);
