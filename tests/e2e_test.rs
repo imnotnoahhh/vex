@@ -270,17 +270,15 @@ fn test_e2e_local_command() {
 
 #[test]
 fn test_e2e_global_command() {
-    let global_versions = dirs::home_dir().unwrap().join(".vex/tool-versions");
-
-    // 备份现有的全局配置（如果存在）
-    let backup = if global_versions.exists() {
-        Some(fs::read_to_string(&global_versions).unwrap())
-    } else {
-        None
-    };
+    let home = TempDir::new().unwrap();
+    let global_versions = home.path().join(".vex/tool-versions");
 
     // 执行 global 命令
-    let output = vex_bin().args(["global", "node@20.11.0"]).output().unwrap();
+    let output = vex_bin()
+        .args(["global", "node@20.11.0"])
+        .env("HOME", home.path())
+        .output()
+        .unwrap();
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -301,13 +299,6 @@ fn test_e2e_global_command() {
         content.contains("node 20.11.0"),
         "global .tool-versions should contain node 20.11.0"
     );
-
-    // 恢复备份
-    if let Some(backup_content) = backup {
-        fs::write(&global_versions, backup_content).unwrap();
-    } else {
-        let _ = fs::remove_file(&global_versions);
-    }
 }
 
 // --- list 命令测试 ---
@@ -404,17 +395,15 @@ fn test_e2e_concurrent_install_protection() {
 
 #[test]
 fn test_e2e_global_version_fallback() {
-    let global_versions = dirs::home_dir().unwrap().join(".vex/tool-versions");
-
-    // 备份现有的全局配置
-    let backup = if global_versions.exists() {
-        Some(fs::read_to_string(&global_versions).unwrap())
-    } else {
-        None
-    };
+    let home = TempDir::new().unwrap();
+    let global_versions = home.path().join(".vex/tool-versions");
 
     // 设置全局版本
-    let output = vex_bin().args(["global", "node@20.11.0"]).output().unwrap();
+    let output = vex_bin()
+        .args(["global", "node@20.11.0"])
+        .env("HOME", home.path())
+        .output()
+        .unwrap();
     assert!(output.status.success(), "global command should succeed");
 
     // 验证全局配置文件已创建
@@ -427,13 +416,6 @@ fn test_e2e_global_version_fallback() {
         content.contains("node 20.11.0"),
         "should contain node version"
     );
-
-    // 恢复备份
-    if let Some(backup_content) = backup {
-        fs::write(&global_versions, backup_content).unwrap();
-    } else {
-        let _ = fs::remove_file(&global_versions);
-    }
 }
 
 #[test]

@@ -119,10 +119,9 @@ impl Tool for GoTool {
     }
 
     fn resolve_alias(&self, alias: &str) -> Result<Option<String>> {
-        let versions = self.list_remote()?;
-
         match alias {
             "latest" => {
+                let versions = self.list_remote()?;
                 // Return the first version (most recent)
                 Ok(versions.first().map(|v| v.version.clone()))
             }
@@ -136,6 +135,7 @@ impl Tool for GoTool {
 
                         // Match "1.23" or "1.x"
                         if minor == "x" || minor.chars().all(|c| c.is_ascii_digit()) {
+                            let versions = self.list_remote()?;
                             let prefix = if minor == "x" {
                                 format!("{}.", major)
                             } else {

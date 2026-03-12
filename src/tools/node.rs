@@ -119,10 +119,9 @@ impl Tool for NodeTool {
     }
 
     fn resolve_alias(&self, alias: &str) -> Result<Option<String>> {
-        let versions = self.list_remote()?;
-
         match alias {
             "latest" => {
+                let versions = self.list_remote()?;
                 // Return the first version (most recent)
                 Ok(versions.first().map(|v| {
                     v.version
@@ -132,6 +131,7 @@ impl Tool for NodeTool {
                 }))
             }
             "lts" => {
+                let versions = self.list_remote()?;
                 // Return the first LTS version
                 Ok(versions.iter().find(|v| v.lts.is_some()).map(|v| {
                     v.version
@@ -141,6 +141,7 @@ impl Tool for NodeTool {
                 }))
             }
             _ if alias.starts_with("lts-") => {
+                let versions = self.list_remote()?;
                 // lts-<codename> (e.g., lts-iron, lts-hydrogen)
                 let codename = alias.strip_prefix("lts-").unwrap().to_lowercase();
                 Ok(versions
