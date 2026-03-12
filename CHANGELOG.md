@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Python release metadata fetch reliability** — Reworked `src/tools/python.rs` to resolve python-build-standalone versions via the latest release tag plus `SHA256SUMS` instead of decoding GitHub's large `releases/latest` JSON payload. This fixes transient `error decoding response body` failures seen in strict macOS CI and other network-sensitive environments when installing Python.
+- **Python lifecycle alias correctness** — Fixed Python alias resolution so `python@latest`, `python@stable`, and `python@bugfix` now resolve to the current official bugfix branch, while `python@security` follows the official security-only branch. This corrects stale lifecycle mappings that previously resolved `latest` to `3.13.12` instead of `3.14.3`.
+- **Strict macOS Java probe false negative** — Updated `scripts/test_vex_release_strict.py` so `serialver` is validated against its real help output format on modern JDKs, eliminating a strict CI false failure on Java 25.
+
+### Changed
+
+- **Python lifecycle status is now dynamic** — Python support phases are now derived from the official Python version-status page at runtime, with a built-in fallback when the upstream page is unavailable. This keeps `bugfix`, `security`, and future branch transitions aligned with the official Python release lifecycle.
+- **Python remote version labels now use `Status:` instead of `LTS:`** — `vex list-remote python` now displays lifecycle phases using Python's official terminology (`feature`, `bugfix`, `security`, `end-of-life`) instead of reusing the generic `LTS` label used by Node.js and Java.
+
 ## [1.1.1] - 2026-03-12
 
 ### Fixed
