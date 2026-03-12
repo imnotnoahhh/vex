@@ -1486,6 +1486,13 @@ def binary_probes(plan: ToolPlan, bin_name: str, version_major: str, version_min
             return [Probe(["--version"], [re.escape(version_major)], True), Probe(["--help"], [USAGE_RE], True)]
         if bin_name == "jhsdb":
             return [Probe(["--help"], [r"clhsdb|hsdb|jstack"], True), Probe(["-help"], [r"clhsdb|hsdb|jstack"], True)]
+        if bin_name == "serialver":
+            return [
+                Probe(["--help"], [r"use:\s+serialver|用法:\s*serialver"], True),
+                Probe(["-help"], [r"use:\s+serialver|用法:\s*serialver"], True),
+                Probe(["-?"], [r"use:\s+serialver|用法:\s*serialver"], True),
+                Probe(["-version"], [r"use:\s+serialver|用法:\s*serialver"], True),
+            ]
         return [
             Probe(["--help"], [USAGE_RE], True),
             Probe(["-help"], [USAGE_RE], True),
