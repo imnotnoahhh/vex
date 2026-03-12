@@ -4,24 +4,16 @@
 //! to provide prebuilt CPython binaries. Supports version aliases based on Python's
 //! support lifecycle (bugfix, security, end-of-life).
 
+use crate::config;
 use crate::error::Result;
+use crate::error::VexError;
 use crate::tools::{Arch, Tool, Version};
-use serde::Deserialize;
+use reqwest::blocking::Client;
+use std::collections::BTreeSet;
+use tracing::warn;
 
 /// Python tool (python-build-standalone prebuilt CPython)
 pub struct PythonTool;
-
-#[derive(Deserialize, Debug)]
-struct GithubRelease {
-    tag_name: String,
-    assets: Vec<GithubAsset>,
-}
-
-#[derive(Deserialize, Debug)]
-struct GithubAsset {
-    name: String,
-    browser_download_url: String,
-}
 
 /// Python support status based on lifecycle
 /// See: <https://devguide.python.org/versions/>
@@ -54,15 +46,115 @@ impl SupportStatus {
     }
 }
 
-/// Fetch the latest release tag from python-build-standalone
-fn fetch_latest_release() -> Result<GithubRelease> {
-    let url = "https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest";
-    let client = reqwest::blocking::Client::builder()
+fn create_github_client() -> Result<Client> {
+    reqwest::blocking::Client::builder()
         .user_agent("vex-version-manager")
-        .build()?;
-    let response = client.get(url).send()?;
-    let release: GithubRelease = response.json()?;
-    Ok(release)
+        .connect_timeout(config::CONNECT_TIMEOUT)
+        .timeout(config::READ_TIMEOUT)
+        .build()
+        .map_err(VexError::Network)
+}
+
+fn fetch_text_with_retry(client: &Client, url: &str) -> Result<String> {
+    let mut attempts = 0;
+
+    loop {
+        match client.get(url).send() {
+            Ok(response) => match response.error_for_status() {
+                Ok(ok_response) => match ok_response.text() {
+                    Ok(text) => return Ok(text),
+                    Err(err) => {
+                        if attempts < 2 {
+                            warn!(
+                                "Python upstream text fetch failed (attempt {}/3): {}",
+                                attempts + 1,
+                                err
+                            );
+                            attempts += 1;
+                            std::thread::sleep(config::RETRY_BASE_DELAY);
+                            continue;
+                        }
+                        return Err(VexError::Network(err));
+                    }
+                },
+                Err(err) => {
+                    if err.status().map(|s| s.is_client_error()).unwrap_or(false) {
+                        return Err(VexError::Network(err));
+                    }
+                    if attempts < 2 {
+                        warn!(
+                            "Python upstream request failed (attempt {}/3): {}",
+                            attempts + 1,
+                            err
+                        );
+                        attempts += 1;
+                        std::thread::sleep(config::RETRY_BASE_DELAY);
+                        continue;
+                    }
+                    return Err(VexError::Network(err));
+                }
+            },
+            Err(err) => {
+                if attempts < 2 {
+                    warn!(
+                        "Python upstream request failed (attempt {}/3): {}",
+                        attempts + 1,
+                        err
+                    );
+                    attempts += 1;
+                    std::thread::sleep(config::RETRY_BASE_DELAY);
+                    continue;
+                }
+                return Err(VexError::Network(err));
+            }
+        }
+    }
+}
+
+/// Resolve the latest python-build-standalone release tag without downloading the giant JSON payload.
+fn fetch_latest_release_tag() -> Result<String> {
+    let url = "https://github.com/astral-sh/python-build-standalone/releases/latest";
+    let client = create_github_client()?;
+    let response = client.get(url).send()?.error_for_status()?;
+    let final_url = response.url().clone();
+    let tag = final_url
+        .path_segments()
+        .and_then(|mut segments| segments.next_back())
+        .filter(|segment| !segment.is_empty())
+        .ok_or_else(|| {
+            VexError::Parse("Unable to determine python-build-standalone release tag".to_string())
+        })?;
+    Ok(tag.to_string())
+}
+
+fn fetch_sha256sums(tag: &str) -> Result<String> {
+    let client = create_github_client()?;
+    let sha256_url = format!(
+        "https://github.com/astral-sh/python-build-standalone/releases/download/{}/SHA256SUMS",
+        tag
+    );
+    fetch_text_with_retry(&client, &sha256_url)
+}
+
+fn asset_filename(version: &str, tag: &str, arch: Arch) -> String {
+    let arch_str = match arch {
+        Arch::Arm64 => "aarch64-apple-darwin",
+        Arch::X86_64 => "x86_64-apple-darwin",
+    };
+    format!(
+        "cpython-{}+{}-{}-install_only.tar.gz",
+        version, tag, arch_str
+    )
+}
+
+fn find_matching_checksum(content: &str, filename: &str) -> Option<String> {
+    for line in content.lines() {
+        let parts: Vec<&str> = line.splitn(2, "  ").collect();
+        if parts.len() == 2 && parts[1] == filename {
+            return Some(parts[0].to_string());
+        }
+    }
+    None
 }
 
 /// Extract Python version from asset name like:
@@ -90,22 +182,28 @@ impl Tool for PythonTool {
     }
 
     fn list_remote(&self) -> Result<Vec<Version>> {
-        let release = fetch_latest_release()?;
-        let arch_str = "aarch64-apple-darwin"; // We'll filter by arch at download time
+        let tag = fetch_latest_release_tag()?;
+        let content = fetch_sha256sums(&tag)?;
 
-        let mut versions: Vec<String> = Vec::new();
-        for asset in &release.assets {
-            if asset.name.contains(arch_str)
-                && asset.name.ends_with("install_only.tar.gz")
-                && !asset.name.contains("stripped")
+        let mut versions = BTreeSet::new();
+        for line in content.lines() {
+            let parts: Vec<&str> = line.splitn(2, "  ").collect();
+            if parts.len() != 2 {
+                continue;
+            }
+            let filename = parts[1];
+            if filename.contains("apple-darwin")
+                && filename.ends_with("install_only.tar.gz")
+                && !filename.contains("stripped")
             {
-                if let Some(ver) = extract_python_version(&asset.name) {
-                    versions.push(ver);
+                if let Some(ver) = extract_python_version(filename) {
+                    versions.insert(ver);
                 }
             }
         }
 
         // Sort descending by version
+        let mut versions: Vec<String> = versions.into_iter().collect();
         versions.sort_by(|a, b| {
             let a_parts: Vec<u32> = a.split('.').filter_map(|p| p.parse().ok()).collect();
             let b_parts: Vec<u32> = b.split('.').filter_map(|p| p.parse().ok()).collect();
@@ -128,25 +226,18 @@ impl Tool for PythonTool {
     }
 
     fn download_url(&self, version: &str, arch: Arch) -> Result<String> {
-        let release = fetch_latest_release()?;
-        let arch_str = match arch {
-            Arch::Arm64 => "aarch64-apple-darwin",
-            Arch::X86_64 => "x86_64-apple-darwin",
-        };
+        let tag = fetch_latest_release_tag()?;
+        let filename = asset_filename(version, &tag, arch);
+        let content = fetch_sha256sums(&tag)?;
 
-        // Find the matching asset
-        let prefix = format!("cpython-{}+", version);
-        for asset in &release.assets {
-            if asset.name.starts_with(&prefix)
-                && asset.name.contains(arch_str)
-                && asset.name.ends_with("install_only.tar.gz")
-                && !asset.name.contains("stripped")
-            {
-                return Ok(asset.browser_download_url.clone());
-            }
+        if find_matching_checksum(&content, &filename).is_some() {
+            return Ok(format!(
+                "https://github.com/astral-sh/python-build-standalone/releases/download/{}/{}",
+                tag, filename
+            ));
         }
 
-        Err(crate::error::VexError::VersionNotFound {
+        Err(VexError::VersionNotFound {
             tool: "python".to_string(),
             version: version.to_string(),
         })
@@ -159,42 +250,10 @@ impl Tool for PythonTool {
     }
 
     fn get_checksum(&self, version: &str, arch: Arch) -> Result<Option<String>> {
-        let release = fetch_latest_release()?;
-        let tag = &release.tag_name;
-
-        let arch_str = match arch {
-            Arch::Arm64 => "aarch64-apple-darwin",
-            Arch::X86_64 => "x86_64-apple-darwin",
-        };
-
-        let sha256_url = format!(
-            "https://github.com/astral-sh/python-build-standalone/releases/download/{}/SHA256SUMS",
-            tag
-        );
-
-        let client = reqwest::blocking::Client::builder()
-            .user_agent("vex-version-manager")
-            .build()?;
-        let content = client.get(&sha256_url).send()?.text()?;
-
-        // Find the matching filename in SHA256SUMS
-        let filename_prefix = format!("cpython-{}+", version);
-        for line in content.lines() {
-            let parts: Vec<&str> = line.splitn(2, "  ").collect();
-            if parts.len() == 2 {
-                let checksum = parts[0];
-                let filename = parts[1];
-                if filename.starts_with(&filename_prefix)
-                    && filename.contains(arch_str)
-                    && filename.ends_with("install_only.tar.gz")
-                    && !filename.contains("stripped")
-                {
-                    return Ok(Some(checksum.to_string()));
-                }
-            }
-        }
-
-        Ok(None)
+        let tag = fetch_latest_release_tag()?;
+        let content = fetch_sha256sums(&tag)?;
+        let filename = asset_filename(version, &tag, arch);
+        Ok(find_matching_checksum(&content, &filename))
     }
 
     fn resolve_alias(&self, alias: &str) -> Result<Option<String>> {
@@ -429,6 +488,27 @@ mod tests {
         assert_eq!(SupportStatus::Security.as_str(), "security");
         assert_eq!(SupportStatus::EndOfLife.as_str(), "end-of-life");
         assert_eq!(SupportStatus::PreRelease.as_str(), "pre-release");
+    }
+
+    #[test]
+    fn test_asset_filename_arm64() {
+        let filename = asset_filename("3.14.3", "20260310", Arch::Arm64);
+        assert_eq!(
+            filename,
+            "cpython-3.14.3+20260310-aarch64-apple-darwin-install_only.tar.gz"
+        );
+    }
+
+    #[test]
+    fn test_find_matching_checksum() {
+        let content = "\
+aaaaaaaa  cpython-3.13.12+20260310-aarch64-apple-darwin-install_only.tar.gz\n\
+bbbbbbbb  cpython-3.14.3+20260310-aarch64-apple-darwin-install_only.tar.gz\n";
+        let filename = "cpython-3.14.3+20260310-aarch64-apple-darwin-install_only.tar.gz";
+        assert_eq!(
+            find_matching_checksum(content, filename),
+            Some("bbbbbbbb".to_string())
+        );
     }
 
     #[test]
