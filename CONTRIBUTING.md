@@ -60,7 +60,8 @@ CI runs fmt, clippy, test, and audit checks.
 ## Documentation Organization
 
 - Keep stable, public project docs in the repository root (for example: `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`).
-- Put process or archival docs under `docs/archive/`.
+- Keep maintainer and process docs under `docs/development/`.
+- Put temporary notes or archival docs under `docs/archive/`.
 - `docs/archive/` should generally stay ignored in `.gitignore` to avoid committing temporary notes.
 
 ## Project Structure
@@ -100,7 +101,7 @@ src/
 **Permanent Branch:**
 - `main` — production branch, protected, only accepts PRs
   - Every merge to `main` should be release-ready
-  - Tagged with version numbers (e.g., `v0.1.1`)
+  - Tagged with version numbers (for example, `v1.1.1`)
   - CI runs on every push
 
 **Temporary Branches:**
@@ -195,4 +196,4 @@ When adding security features, ensure comprehensive test coverage:
 - **Checksum verification**: Test with corrupted downloads
 - **Lock mechanism**: Test concurrent installation attempts
 
-See `TESTING.md` for detailed testing guidelines.
+See `docs/development/testing.md` for detailed testing guidelines.

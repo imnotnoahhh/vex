@@ -24,9 +24,9 @@ MAJOR.MINOR.PATCH
 
 ### Version Examples
 
-- `0.1.0` → `0.1.1`: Bug fix
-- `0.1.1` → `0.2.0`: New feature (e.g., Python support)
-- `0.2.0` → `1.0.0`: Stable API, breaking changes
+- `1.1.0` → `1.1.1`: Bug fix
+- `1.1.1` → `1.2.0`: New feature (backward compatible)
+- `1.2.0` → `2.0.0`: Breaking change
 
 ### Pre-1.0 Versioning
 
@@ -77,7 +77,7 @@ Update version in the following files:
 - [ ] `Cargo.toml`
   ```toml
   [package]
-  version = "0.1.7"
+  version = "1.1.1"
   ```
 
 - [ ] `Cargo.lock` (run `cargo build` to update)
@@ -96,16 +96,13 @@ Update version in the following files:
 ```markdown
 ## [Unreleased]
 
-## [0.1.7] - 2026-03-15
-
-### Added
-- Python support via python-build-standalone
+## [1.1.1] - 2026-03-12
 
 ### Fixed
-- Node.js checksum verification on slow networks
+- Rust version-specific checksum resolution for historical releases
 
 ### Changed
-- Improved error messages for disk space issues
+- Documentation refresh and maintainer-doc reorganization
 ```
 
 ### 4. Update Documentation
@@ -119,7 +116,7 @@ Update version in the following files:
   - New implementation details
   - Updated architecture
 
-- [ ] Update ARCHITECTURE.md if needed
+- [ ] Update docs/development/architecture.md if needed
   - New modules
   - Changed data flows
 
@@ -129,13 +126,13 @@ Create a release preparation commit:
 
 ```bash
 git add Cargo.toml Cargo.lock CHANGELOG.md README.md
-git commit -m "chore: prepare v0.1.7 release"
+git commit -m "chore: prepare v1.1.1 release"
 ```
 
 ### 6. Create Pull Request
 
 - [ ] Open PR to `main` branch
-- [ ] Title: `chore: prepare v0.1.7 release`
+- [ ] Title: `chore: prepare v1.1.1 release`
 - [ ] Description: Link to CHANGELOG section
 - [ ] Wait for CI to pass
 - [ ] Get approval from maintainer
@@ -153,10 +150,10 @@ git checkout main
 git pull origin main
 
 # Create annotated tag
-git tag -a v0.1.7 -m "Release v0.1.7"
+git tag -a v1.1.1 -m "Release v1.1.1"
 
 # Push tag to GitHub
-git push origin v0.1.7
+git push origin v1.1.1
 ```
 
 ### 2. GitHub Release
@@ -170,8 +167,8 @@ GitHub Actions will automatically:
 
 1. Go to https://github.com/imnotnoahhh/vex/releases
 2. Click "Draft a new release"
-3. Choose tag: `v0.1.7`
-4. Release title: `v0.1.7`
+3. Choose tag: `v1.1.1`
+4. Release title: `v1.1.1`
 5. Description: Copy from CHANGELOG.md
 6. Attach binaries (if not automated):
    - `vex-aarch64-apple-darwin.tar.gz`
@@ -184,7 +181,7 @@ GitHub Actions will automatically:
 - [ ] Download and test binaries
   ```bash
   # Download
-  curl -LO https://github.com/imnotnoahhh/vex/releases/download/v0.1.7/vex-aarch64-apple-darwin.tar.gz
+  curl -LO https://github.com/imnotnoahhh/vex/releases/download/v1.1.1/vex-aarch64-apple-darwin.tar.gz
 
   # Extract
   tar -xzf vex-aarch64-apple-darwin.tar.gz
@@ -195,7 +192,7 @@ GitHub Actions will automatically:
 
 - [ ] Test installation script
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v0.1.7
+  curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.1.1
   ```
 
 ## CI/CD Pipeline
@@ -282,7 +279,7 @@ For critical bugs in production:
 ### 1. Create Hotfix Branch
 
 ```bash
-git checkout -b hotfix/v0.1.7.1 v0.1.7
+git checkout -b hotfix/v1.1.2 v1.1.1
 ```
 
 ### 2. Fix Bug
@@ -295,22 +292,22 @@ git commit -m "fix: critical bug description"
 
 ### 3. Update Version
 
-- Update `Cargo.toml` to `0.1.7.1` (PATCH bump)
+- Update `Cargo.toml` to `1.1.2` (PATCH bump)
 - Update `CHANGELOG.md`
 
 ### 4. Release
 
 ```bash
 # Commit version bump
-git commit -am "chore: prepare v0.1.7.1 hotfix"
+git commit -am "chore: prepare v1.1.2 hotfix"
 
 # Merge to main
 git checkout main
-git merge hotfix/v0.1.7.1
+git merge hotfix/v1.1.2
 
 # Tag and push
-git tag -a v0.1.7.1 -m "Hotfix v0.1.7.1"
-git push origin main v0.1.7.1
+git tag -a v1.1.2 -m "Hotfix v1.1.2"
+git push origin main v1.1.2
 ```
 
 ## Rollback Process
@@ -327,10 +324,10 @@ If a release has critical issues:
 
 ```bash
 # Delete tag locally
-git tag -d v0.1.7
+git tag -d v1.1.1
 
 # Delete tag on GitHub
-git push origin :refs/tags/v0.1.7
+git push origin :refs/tags/v1.1.1
 
 # Delete GitHub Release (manual)
 # Go to Releases page and delete
@@ -345,7 +342,7 @@ git push origin :refs/tags/v0.1.7
 ### 4. Fix and Re-Release
 
 - Fix the issue
-- Bump version (e.g., `0.1.7` → `0.1.8`)
+- Bump version (for example, `1.1.1` → `1.1.2`)
 - Follow normal release process
 
 ## Version History

@@ -3,6 +3,7 @@
 //! Parses `channel-rust-stable.toml` to get stable version information.
 //! Installs complete toolchain (rustc, cargo, clippy, rustfmt, rust-analyzer, etc., 11 binaries),
 //! `post_install` handles linking rust-std to sysroot and dynamic library path fixes.
+//! Version-specific checksum verification uses Rust's `.sha256` sidecar files.
 
 use crate::error::{Result, VexError};
 use crate::tools::{Arch, Tool, Version};
@@ -24,16 +25,25 @@ struct Packages {
 #[derive(Deserialize, Debug)]
 struct RustPackage {
     version: String,
-    target: std::collections::HashMap<String, TargetInfo>,
 }
 
-#[derive(Deserialize, Debug)]
-struct TargetInfo {
-    #[allow(dead_code)]
-    available: bool,
-    #[allow(dead_code)]
-    url: Option<String>,
-    hash: Option<String>,
+fn target_triple(arch: Arch) -> &'static str {
+    match arch {
+        Arch::Arm64 => "aarch64-apple-darwin",
+        Arch::X86_64 => "x86_64-apple-darwin",
+    }
+}
+
+fn dist_tarball_url(version: &str, arch: Arch) -> String {
+    format!(
+        "https://static.rust-lang.org/dist/rust-{}-{}.tar.gz",
+        version,
+        target_triple(arch)
+    )
+}
+
+fn parse_sha256_sidecar(content: &str) -> Option<String> {
+    content.split_whitespace().next().map(|value| value.to_string())
 }
 
 impl Tool for RustTool {
@@ -66,20 +76,11 @@ impl Tool for RustTool {
     }
 
     fn download_url(&self, version: &str, arch: Arch) -> Result<String> {
-        let target = match arch {
-            Arch::Arm64 => "aarch64-apple-darwin",
-            Arch::X86_64 => "x86_64-apple-darwin",
-        };
-
-        Ok(format!(
-            "https://static.rust-lang.org/dist/rust-{}-{}.tar.gz",
-            version, target
-        ))
+        Ok(dist_tarball_url(version, arch))
     }
 
-    fn checksum_url(&self, _version: &str, _arch: Arch) -> Option<String> {
-        // Rust's SHA256 is directly in TOML
-        None
+    fn checksum_url(&self, version: &str, arch: Arch) -> Option<String> {
+        Some(format!("{}.sha256", dist_tarball_url(version, arch)))
     }
 
     fn bin_names(&self) -> Vec<&str> {
@@ -118,26 +119,15 @@ impl Tool for RustTool {
         ]
     }
 
-    fn get_checksum(&self, _version: &str, arch: Arch) -> Result<Option<String>> {
-        let url = "https://static.rust-lang.org/dist/channel-rust-stable.toml";
-        let response = reqwest::blocking::get(url)?;
-        let content = response.text()?;
-
-        let manifest: RustManifest = toml::from_str(&content)
-            .map_err(|e| VexError::Parse(format!("Failed to parse Rust manifest: {}", e)))?;
-
-        let target = match arch {
-            Arch::Arm64 => "aarch64-apple-darwin",
-            Arch::X86_64 => "x86_64-apple-darwin",
+    fn get_checksum(&self, version: &str, arch: Arch) -> Result<Option<String>> {
+        let checksum_url = match self.checksum_url(version, arch) {
+            Some(url) => url,
+            None => return Ok(None),
         };
 
-        if let Some(target_info) = manifest.pkg.rust.target.get(target) {
-            if let Some(hash) = &target_info.hash {
-                return Ok(Some(hash.clone()));
-            }
-        }
-
-        Ok(None)
+        let response = reqwest::blocking::get(&checksum_url)?;
+        let content = response.text()?;
+        Ok(parse_sha256_sidecar(&content))
     }
 
     fn resolve_alias(&self, alias: &str) -> Result<Option<String>> {
@@ -234,8 +224,14 @@ mod tests {
     }
 
     #[test]
-    fn test_checksum_url_is_none() {
-        assert_eq!(RustTool.checksum_url("1.93.1", Arch::Arm64), None);
+    fn test_checksum_url_points_to_sidecar_file() {
+        assert_eq!(
+            RustTool.checksum_url("1.93.1", Arch::Arm64),
+            Some(
+                "https://static.rust-lang.org/dist/rust-1.93.1-aarch64-apple-darwin.tar.gz.sha256"
+                    .to_string()
+            )
+        );
     }
 
     #[test]
@@ -253,6 +249,25 @@ mod tests {
         assert_eq!(
             url,
             "https://static.rust-lang.org/dist/rust-1.93.1-x86_64-apple-darwin.tar.gz"
+        );
+    }
+
+    #[test]
+    fn test_parse_sha256_sidecar_with_filename() {
+        let content =
+            "6bafa3b5367019c576751741295e06717f8f28c9d0e6631dcb9496cd142a386a  rust-1.93.1-aarch64-apple-darwin.tar.gz\n";
+        assert_eq!(
+            parse_sha256_sidecar(content),
+            Some("6bafa3b5367019c576751741295e06717f8f28c9d0e6631dcb9496cd142a386a".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_sha256_sidecar_hash_only() {
+        let content = "6bafa3b5367019c576751741295e06717f8f28c9d0e6631dcb9496cd142a386a\n";
+        assert_eq!(
+            parse_sha256_sidecar(content),
+            Some("6bafa3b5367019c576751741295e06717f8f28c9d0e6631dcb9496cd142a386a".to_string())
         );
     }
 

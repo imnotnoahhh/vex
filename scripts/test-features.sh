@@ -1,5 +1,5 @@
 #!/bin/bash
-# vex v1.1.0 Comprehensive Feature Test Script
+# vex v1.1.1 Comprehensive Feature Test Script
 # Tests ALL binaries for ALL 5 languages (Node.js, Python, Go, Rust, Java)
 # Usage: bash scripts/test-features.sh
 
@@ -127,7 +127,7 @@ check_bin_version_optional() {
 
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
-echo "║  vex v1.1.0 Comprehensive Feature Test Suite              ║"
+echo "║  vex v1.1.1 Comprehensive Feature Test Suite              ║"
 echo "║  Testing ALL binaries for 5 languages                     ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""

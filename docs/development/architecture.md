@@ -141,14 +141,14 @@ User: vex install node@20
     Acquire installation lock
          │
          ▼
-    Check disk space (≥500 MB)
-         │
-         ▼
     Download tar.gz to cache/
     (with progress bar, timeout, retry)
          │
          ▼
     Verify SHA256 checksum
+         │
+         ▼
+    Estimate extraction size and check disk space
          │
          ▼
     Extract to temp directory
@@ -257,10 +257,9 @@ User: cd my-project/
 │
 ├── cache/                        # Temporary downloads
 │   ├── node-v20.11.0-darwin-arm64.tar.gz
-│   └── remote_versions/          # Cached API responses (5 min TTL)
-│       ├── node.json
-│       ├── go.json
-│       └── java.json
+│   ├── remote-node.json          # Cached remote version lists (5 min TTL)
+│   ├── remote-go.json
+│   └── remote-java.json
 │
 ├── locks/                        # Installation locks
 │   ├── node-20.11.0.lock
@@ -339,14 +338,21 @@ fs::rename(&temp_link, &final_link)?;
 - **User experience**: Large files (JDK) need longer timeouts
 - **Security**: Mitigate resource exhaustion attacks
 
+**Retry behavior**:
+- Up to 3 attempts with exponential backoff
+
 ### 6. Disk Space Check
 
-**Decision**: Require 500 MB free space before installation (v0.1.6+)
+**Decision**: Require an estimated extraction size plus 500 MB safety margin before installation
 
 **Rationale**:
 - **Safety**: Prevent partial installations on full disks
 - **User experience**: Fail fast with clear error message
 - **Security**: Mitigate disk space exhaustion DoS
+
+**Implementation notes**:
+- Download first, then estimate extracted size from archive headers
+- Require `estimated_size + 500 MB` free space before extracting
 
 ### 7. Version File Priority
 
@@ -398,7 +404,7 @@ This means entering a Python project directory automatically activates its `.ven
 - **Freshness**: 5 minutes is short enough for new releases
 
 **Implementation**:
-- Store in `~/.vex/cache/remote_versions/`
+- Store in `~/.vex/cache/remote-<tool>.json`
 - Check mtime before using cache
 - Configurable via `config.toml`
 
@@ -463,7 +469,7 @@ Python is supported via [python-build-standalone](https://github.com/astral-sh/p
 
 ## References
 
-- [CLAUDE.md](CLAUDE.md) - Development guidelines
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guide
-- [SECURITY.md](SECURITY.md) - Security policy
-- [TESTING.md](TESTING.md) - Testing guidelines
+- [../../CLAUDE.md](../../CLAUDE.md) - Development guidelines
+- [../../CONTRIBUTING.md](../../CONTRIBUTING.md) - Contribution guide
+- [../../SECURITY.md](../../SECURITY.md) - Security policy
+- [testing.md](testing.md) - Testing guidelines

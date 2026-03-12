@@ -363,7 +363,7 @@ ls -la ~/.vex/current/rust/
 
 ```bash
 # Check cache directory
-ls -la ~/.vex/cache/remote_versions/
+ls -la ~/.vex/cache/remote-*.json
 
 # Check config
 cat ~/.vex/config.toml
@@ -376,10 +376,11 @@ cat ~/.vex/config.toml
    # ~/.vex/config.toml
    cache_ttl_secs = 300  # 5 minutes
    ```
+   Valid values are `60` to `3600` seconds. Out-of-range values fall back to `300` seconds with a warning.
 
 2. **Clear cache**:
    ```bash
-   rm -rf ~/.vex/cache/remote_versions/*
+   rm -f ~/.vex/cache/remote-*.json
    ```
 
 #### Config file not found
