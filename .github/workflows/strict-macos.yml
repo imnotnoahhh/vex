@@ -1,0 +1,66 @@
+name: Strict macOS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 1"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: strict-macos-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  local-build:
+    name: Strict Local Build (macOS 14)
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: strict-local-build-macos-14
+      - name: Run strict local build validation
+        env:
+          VEX_TEST_HOME: /tmp/vex-audit-home
+          VEX_STRICT_TMP_ROOT: ${{ runner.temp }}/strict-local-build
+        run: python3 scripts/test_vex_local_build_strict.py
+      - name: Upload strict local build artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: strict-local-build-macos-14
+          path: ${{ runner.temp }}/strict-local-build
+          if-no-files-found: warn
+
+  release-binary:
+    name: Strict Release Binary (macOS 14)
+    if: github.event_name != 'push'
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: strict-release-binary-macos-14
+      - name: Run strict release validation
+        env:
+          VEX_TEST_HOME: /tmp/vex-release-audit-home
+          VEX_STRICT_TMP_ROOT: ${{ runner.temp }}/strict-release-binary
+        run: python3 scripts/test_vex_release_strict.py
+      - name: Upload strict release artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: strict-release-binary-macos-14
+          path: ${{ runner.temp }}/strict-release-binary
+          if-no-files-found: warn

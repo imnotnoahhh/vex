@@ -53,12 +53,19 @@ VEX_RELEASE_API = os.environ.get(
     "VEX_RELEASE_API",
     "https://api.github.com/repos/imnotnoahhh/vex/releases/latest",
 )
-TMP_ROOT = Path(tempfile.mkdtemp(prefix="vex-macos-strict-"))
+FRESH_RUN = os.environ.get("VEX_TEST_REUSE", "").lower() not in {"1", "true", "yes"}
+STRICT_TMP_ROOT = os.environ.get("VEX_STRICT_TMP_ROOT", "").strip()
+if STRICT_TMP_ROOT:
+    TMP_ROOT = Path(STRICT_TMP_ROOT).expanduser().resolve()
+    if FRESH_RUN and TMP_ROOT.exists():
+        shutil.rmtree(TMP_ROOT)
+    TMP_ROOT.mkdir(parents=True, exist_ok=True)
+else:
+    TMP_ROOT = Path(tempfile.mkdtemp(prefix="vex-macos-strict-"))
 PROJECT_ROOT = TMP_ROOT / "project"
 LOG_ROOT = TMP_ROOT / "logs"
 VEX_RELEASE_ROOT = TMP_ROOT / "vex-release"
 LOG_ROOT.mkdir(parents=True, exist_ok=True)
-FRESH_RUN = os.environ.get("VEX_TEST_REUSE", "").lower() not in {"1", "true", "yes"}
 
 
 NODE_BIN_RE = re.compile(r"^[^/]+/(bin/[^/]+)$")
