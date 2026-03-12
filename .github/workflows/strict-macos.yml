@@ -28,11 +28,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: strict-local-build-macos-14
+      - name: Build local vex binary
+        run: cargo build
       - name: Run strict local build validation
         env:
           VEX_TEST_HOME: /tmp/vex-audit-home
           VEX_STRICT_TMP_ROOT: ${{ runner.temp }}/strict-local-build
-        run: python3 scripts/test_vex_local_build_strict.py
+          VEX_STRICT_USE_LOCAL_BUILD: "1"
+          VEX_STRICT_VEX_BIN: ${{ github.workspace }}/target/debug/vex
+        run: python3 scripts/test_vex_release_strict.py
       - name: Upload strict local build artifacts
         if: always()
         uses: actions/upload-artifact@v7
