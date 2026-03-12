@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.1.1] - 2026-03-12
+
+### Fixed
+
+- **[P0] Rust historical version checksum verification** — Fixed `src/tools/rust.rs` so `vex install rust@<version>` fetches the checksum for the exact requested version instead of incorrectly reusing the current stable manifest. This fixes checksum mismatches for installs such as `rust@1.93.1`.
+
+### Changed
+
+- **Documentation refresh for v1.1.1** — Updated installation and release examples to `v1.1.1`, corrected cache-path and cache-TTL guidance, and refreshed validation coverage docs to match the current macOS strict test suite.
+- **Repository layout cleanup** — Moved maintainer-focused docs into `docs/development/` and moved the interactive test helper into `scripts/` to keep the repository root focused on user-facing files and core project metadata.
+
 ## [1.1.0] - 2026-03-11
 
 ### Added

@@ -1,321 +1,111 @@
-# test-features.sh 测试覆盖报告
+# vex 验证覆盖说明
 
-## 测试概览
+本文档描述仓库当前用于验证 vex 的主要测试入口，以及它们覆盖到的能力范围。
 
-**测试脚本**: `scripts/test-features.sh`
-**测试范围**: 5 种语言的所有二进制文件
-**测试类型**: 安装、切换、版本检查、帮助信息、which 路径、虚拟环境
+## 验证入口
 
----
+### 1. 快速功能回归
 
-## 完整测试覆盖清单
+脚本：`scripts/test-features.sh`
 
-### 1. Node.js (4 个二进制)
+用途：
+- 快速验证核心 CLI 功能
+- 检查常见二进制是否存在、能否调用
+- 覆盖 Python `.venv` 基础工作流
+- 适合本地开发中的快速 smoke test
 
-| 二进制 | 存在性 | which | --version | -v | --help | -h |
-|--------|--------|-------|-----------|----|---------|----|
-| node | ✓ | ✓ | ✓ | ✓ | ✓ | - |
-| npm | ✓ | ✓ | ✓ | ✓ | ✓ | - |
-| npx | ✓ | ✓ | ✓ | - | ✓ | - |
-| corepack | ✓ | - | ✓ | - | ✓ | - |
+### 2. 官方 release 严格验证
 
-**总计**: 4 个二进制 × 平均 4 项测试 = **16 项测试**
+脚本：`scripts/test_vex_release_strict.py`
 
----
+用途：
+- fresh 下载最新 GitHub release 二进制
+- 在隔离 HOME 中做全量 macOS 验证
+- 适合 release 前确认“线上发布物”是否健康
 
-### 2. Python (12 个二进制)
+### 3. 本地构建严格验证
 
-| 二进制 | 存在性 | which | --version | -V | --help | -h | 特殊测试 |
-|--------|--------|-------|-----------|----|---------|----|----------|
-| python3 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | - |
-| python3.12 | ✓ | - | ✓ | - | - | - | - |
-| python | ✓ | ✓ | ✓ | - | - | - | - |
-| pip3 | ✓ | ✓ | ✓ | - | ✓ | ✓ | - |
-| pip3.12 | ✓ | - | ✓ | - | - | - | - |
-| pip | ✓ | ✓ | ✓ | - | - | - | - |
-| pydoc3 | ✓ | ✓ | - | - | - | ✓ | - |
-| pydoc3.12 | ✓ | - | - | - | - | - | - |
-| 2to3 | ✓ | ✓ | ✓ | - | ✓ | ✓ | - |
-| 2to3-3.12 | ✓ | - | ✓ | - | - | - | - |
-| python3-config | ✓ | ✓ | - | - | ✓ | - | --prefix, --cflags |
-| python3.12-config | ✓ | - | - | - | - | - | - |
+脚本：`scripts/test_vex_local_build_strict.py`
 
-**总计**: 12 个二进制 × 平均 3 项测试 = **36 项测试**
+用途：
+- 使用本地 `target/debug/vex`
+- 复用和 release 严格版相同的验证逻辑
+- 适合验证修复后的本地代码是否已经通过端到端检查
 
-**Python 虚拟环境测试** (重中之重):
-- ✓ `vex python init` 创建 .venv
-- ✓ .venv/bin/python 存在
-- ✓ .venv/bin/pip 存在
-- ✓ .venv/bin/activate 脚本存在
-- ✓ `vex python freeze` 创建 requirements.lock
-- ✓ `vex python sync` 从 lock 恢复 .venv
-- ✓ 无 .venv 时 freeze 报错
-- ✓ 无 lock 时 sync 报错
+## 当前严格验证覆盖面
 
-**虚拟环境测试**: **8 项测试**
+严格验证脚本当前覆盖以下能力：
 
----
+- 顶层 CLI：`--version`、`-V`、`--help`、`help <command>`
+- shell 集成：`vex env zsh/bash/fish/nu`
+- 初始化流程：`vex init --dry-run`、`vex init --shell zsh`、`vex init --shell auto`
+- 上游版本解析：Node.js、Go、Java、Rust、Python
+- fresh install：5 种语言都在隔离 HOME 中重新安装
+- 官方归档比对：将本地安装结果与官方 macOS 归档中的二进制清单做比对
+- symlink 校验：`~/.vex/current/*` 与 `~/.vex/bin/*`
+- 可执行性校验：按工具特征探测 `--version` / `--help` / `-version` 等
+- Python 工作流：`vex python init / freeze / sync`
+- 多版本切换：手动切到备用版本，再切回目标版本
+- 项目与全局切换：`.tool-versions`、`vex global`、shell hook `cd` 自动切换
+- Python 自动激活：进入项目自动激活 `.venv`，离开项目自动退出
+- 健康检查：`vex doctor`
 
-### 3. Go (2 个二进制)
+## 当前发现并验证的二进制数量
 
-| 二进制 | 存在性 | which | version | -h | help |
-|--------|--------|-------|---------|-------|------|
-| go | ✓ | ✓ | ✓ | - | ✓ |
-| gofmt | ✓ | ✓ | - | ✓ | - |
-
-**总计**: 2 个二进制 × 平均 3 项测试 = **6 项测试**
-
----
-
-### 4. Rust (10 个二进制)
-
-| 二进制 | 存在性 | which | --version | -V | --help | -h |
-|--------|--------|-------|-----------|----|---------|----|
-| rustc | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| cargo | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| rustdoc | ✓ | - | ✓ | - | - | - |
-| rustfmt | ✓ | ✓ | ✓ | - | ✓ | - |
-| cargo-fmt | ✓ | - | ✓ | - | - | - |
-| clippy-driver | ✓ | - | ✓ | - | - | - |
-| cargo-clippy | ✓ | ✓ | ✓ | - | ✓ | - |
-| rust-gdb | ✓ | - | - | - | - | - |
-| rust-lldb | ✓ | - | - | - | - | - |
-| rust-analyzer | ✓ | ✓ | ✓ | - | - | - |
-
-**总计**: 10 个二进制 × 平均 3 项测试 = **30 项测试**
-
----
-
-### 5. Java (19 个二进制)
-
-| 二进制 | 存在性 | which | -version | --version | -help | --help |
-|--------|--------|-------|----------|-----------|-------|--------|
-| java | ✓ | ✓ | ✓ | - | ✓ | - |
-| javac | ✓ | ✓ | ✓ | - | ✓ | - |
-| jar | ✓ | ✓ | - | ✓ | - | ✓ |
-| javadoc | ✓ | ✓ | - | ✓ | - | ✓ |
-| javap | ✓ | ✓ | ✓ | - | - | - |
-| jshell | ✓ | ✓ | - | ✓ | - | - |
-| keytool | ✓ | ✓ | - | - | ✓ | - |
-| jarsigner | ✓ | - | - | - | ✓ | - |
-| jdb | ✓ | - | ✓ | - | - | - |
-| jdeps | ✓ | - | - | ✓ | - | - |
-| jfr | ✓ | - | - | ✓ | - | - |
-| jhsdb | ✓ | - | - | - | - | - |
-| jinfo | ✓ | - | - | - | - | - |
-| jmap | ✓ | - | - | - | - | - |
-| jps | ✓ | - | ✓ | - | - | - |
-| jstack | ✓ | - | ✓ | - | - | - |
-| jstat | ✓ | - | ✓ | - | - | - |
-| native2ascii | ✓ | - | - | - | - | - |
-| rmic | ✓ | - | - | - | - | - |
-| serialver | ✓ | - | - | - | - | - |
-| jrunscript | ✓ | - | - | - | - | - |
-
-**注意**: 跳过的二进制（GUI/守护进程）:
-- jconsole (GUI)
-- jstatd (守护进程)
-- rmiregistry (守护进程)
-- rmid (守护进程)
-
-**总计**: 19 个二进制 × 平均 2.5 项测试 = **48 项测试**
-
----
-
-## 集成测试
-
-### 8. 跨语言集成 (10 项测试)
-- ✓ 切换到 node@20.11.0
-- ✓ 切换到 python@3.12
-- ✓ 切换到 go@1.23
-- ✓ 切换到 rust@1.83
-- ✓ 切换到 java@21
-- ✓ current 显示 node
-- ✓ current 显示 python
-- ✓ current 显示 go
-- ✓ current 显示 rust
-- ✓ current 显示 java
-
-### 9. 版本源检测 (2 项测试)
-- ✓ 全局默认显示 "Global default"
-- ✓ 项目 .tool-versions 显示 "Project override"
-
-### 10. List Remote 过滤器 (3 项测试)
-- ✓ --filter latest 返回 1 个版本
-- ✓ --filter lts 返回 LTS 版本
-- ✓ --filter major 降序排序
-
-### 11. 安装选项 (2 项测试)
-- ✓ install 默认切换
-- ✓ install --no-switch 不切换
-
-### 12. 动态二进制检测 (2 项测试)
-- ✓ Java 21 没有 jnativescan
-- ✓ Node 20 有 corepack
-
-### 13. 并发安装保护 (1 项测试)
-- ✓ 锁冲突显示错误消息
-
-### 14. Doctor 健康检查 (7 项测试)
-- ✓ 检查 vex 目录
-- ✓ 检查目录结构
-- ✓ 检查已安装工具
-- ✓ 检查 symlinks 完整性
-- ✓ 检查二进制可执行性
-- ✓ 检查二进制可运行性
-- ✓ 检查网络连接
-
----
-
-## 测试统计
-
-| 类别 | 测试数量 |
-|------|----------|
-| Node.js 二进制 | 16 |
-| Python 二进制 | 36 |
-| Python 虚拟环境 | 8 |
-| Go 二进制 | 6 |
-| Rust 二进制 | 30 |
-| Java 二进制 | 48 |
-| 跨语言集成 | 10 |
-| 版本源检测 | 2 |
-| List Remote | 3 |
-| 安装选项 | 2 |
-| 动态检测 | 2 |
-| 并发保护 | 1 |
-| Doctor 检查 | 7 |
-| **总计** | **176 项测试** |
-
----
-
-## 测试方法
-
-### 存在性测试
-```bash
-if [ -e ~/.vex/bin/$bin ]; then
-    pass "$bin symlink exists"
-fi
-```
-
-### which 路径测试
-```bash
-path=$(which "$bin" 2>/dev/null)
-if echo "$path" | grep -q "\.vex/bin"; then
-    pass "which $bin → ~/.vex/bin/$bin"
-fi
-```
-
-### 版本标志测试
-```bash
-output=$(bash -c "$bin $flag 2>&1 | head -5")
-if echo "$output" | grep -qi "$expect"; then
-    pass "$bin $flag works"
-fi
-```
-
----
-
-## 覆盖的二进制总数
+以下数字来自 2026-03-12 的严格 macOS 验证结果：
 
 | 语言 | 二进制数量 |
 |------|-----------|
 | Node.js | 4 |
-| Python | 12 |
 | Go | 2 |
-| Rust | 10 |
-| Java | 19 |
-| **总计** | **47 个二进制** |
+| Java | 30 |
+| Rust | 11 |
+| Python | 12 |
+| **总计** | **59 个二进制** |
 
----
+## 推荐执行方式
 
-## 特殊测试场景
-
-### Python 虚拟环境（重中之重）
-- 完整的 venv 生命周期测试
-- 错误处理测试
-- freeze/sync 工作流测试
-- 目录结构验证
-
-### 动态二进制检测
-- 版本特定的二进制（jnativescan 仅在 Java 25+）
-- 已移除的二进制（corepack 在 Node 25+ 中移除）
-
-### 并发安全
-- 文件锁机制测试
-- 冲突错误消息验证
-
----
-
-## 测试执行
+### 快速回归
 
 ```bash
-# 运行完整测试
-export PATH=$(pwd)/target/release:$PATH
 bash scripts/test-features.sh
-
-# 预期输出
-╔════════════════════════════════════════════════════════════╗
-║  vex v1.0.1 Comprehensive Feature Test Suite              ║
-║  Testing ALL binaries for 5 languages                     ║
-╚════════════════════════════════════════════════════════════╝
-
-[ 1. Basic Functionality ]
-  ✓ vex --version shows 1.0.1
-  ✓ vex doctor has no fatal errors
-
-[ 2. Node.js v20 - All Binaries ]
-  Installing Node.js 20...
-  ✓ node symlink exists
-  ✓ npm symlink exists
-  ...
-
-╔════════════════════════════════════════════════════════════╗
-║                    Test Summary                            ║
-╠════════════════════════════════════════════════════════════╣
-║  Passed:                                               176 ║
-║  Failed:                                                 0 ║
-╚════════════════════════════════════════════════════════════╝
-
-✅ All tests passed!
 ```
 
----
+### 验证最新发布的 release
 
-## Test Time Estimation
-
-- Node.js installation: ~10s
-- Python installation: ~30s
-- Go installation: ~5s
-- Rust installation: ~10s
-- Java installation: ~15s
-- All test execution: ~30s
-
-**Total**: Approximately **100 seconds** (1.5 minutes)
-
----
-
-## 维护指南
-
-### 添加新语言
-1. 在对应章节添加二进制列表
-2. 添加存在性测试
-3. 添加 which 测试
-4. 添加版本/帮助标志测试
-
-### 添加新二进制
-1. 更新二进制列表
-2. 添加到 `check_bin_exists` 循环
-3. 如果常用，添加到 `check_which` 循环
-4. 添加版本标志测试
-
-### 更新版本
-修改安装命令中的版本号：
 ```bash
-vex install node@20.11.0  # 改为新版本
+python3 scripts/test_vex_release_strict.py
 ```
 
----
+### 验证本地修复后的构建
 
-**Last Updated**: 2026-03-11
-**Test Coverage**: 47 binaries, 176 tests
+```bash
+python3 scripts/test_vex_local_build_strict.py
+```
+
+也可以指定隔离 HOME：
+
+```bash
+VEX_TEST_HOME=/tmp/vex-audit-home python3 scripts/test_vex_local_build_strict.py
+```
+
+## 如何解读 warning
+
+严格验证脚本里的 `Warned` 通常表示：
+
+- 上游 API 一次请求返回不完整内容
+- 或 `urllib` 失败后脚本改用 `curl` 重试
+
+只要最后 `Failed: 0`，这类 warning 一般表示网络抖动被脚本兜住了，而不是 vex 功能错误。
+
+## 何时更新本文档
+
+以下情况应同步更新本文档：
+
+- 新增或移除某种语言支持
+- 某种工具新增或移除可链接二进制
+- 严格验证脚本新增新的测试阶段
+- 快速功能脚本的覆盖目标发生明显变化
+
+**Last Updated**: 2026-03-12
 **Status**: ✅ Comprehensive coverage

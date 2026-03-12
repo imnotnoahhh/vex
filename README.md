@@ -72,7 +72,7 @@ Automatically downloads the correct prebuilt binary for your macOS architecture 
 curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash
 
 # Specific tag
-curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v0.1.0
+curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.1.1
 ```
 
 For auditability, review the script before running:
@@ -120,9 +120,9 @@ vex --version
 ### Setup
 
 ```bash
-vex init
+vex init --shell auto
 
-# Add shell hook to your shell config (auto-switch on cd)
+# Or configure shell hooks manually.
 # For zsh:
 echo 'eval "$(vex env zsh)"' >> ~/.zshrc
 source ~/.zshrc
@@ -214,6 +214,11 @@ vex install
 | Java | java, javac, jar, javadoc + 26 more JDK tools | Eclipse Temurin JDK |
 | Rust | rustc, rustdoc, cargo, rustfmt, clippy, rust-analyzer + 5 more | Official stable binaries |
 | Python | python3, pip3, python, pip, 2to3, idle3, pydoc3, python3-config | python-build-standalone (astral-sh) |
+
+## Documentation
+
+- User guides and troubleshooting: [docs/README.md](docs/README.md)
+- Maintainer and contributor docs: [docs/development/README.md](docs/development/README.md)
 
 ## Fuzzy Version Matching
 

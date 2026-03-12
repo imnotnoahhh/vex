@@ -462,15 +462,15 @@ fn test_checksum_invalid() {
 
 ## Test Coverage
 
-### Current Coverage
+### Current Coverage Model
 
-As of v0.2.4:
-- **Overall**: ~67%
-- **Lines covered**: 850+/1250+
-- **Unit tests**: 170+ tests
-- **CLI integration tests**: 57 tests
-- **E2E tests**: 5 tests (6 ignored)
-- **Total**: 230+ tests
+As of v1.1.1, validation is intentionally split across several layers:
+
+- **Unit tests** in `src/**/*.rs` for parsing, resolution, downloading, switching, locking, and tool adapters
+- **CLI integration tests** in `tests/cli_test.rs` for core command behavior without full external installs
+- **End-to-end tests** in `tests/e2e_test.rs` for real installation workflows
+- **Shell and feature smoke tests** in `scripts/test-features.sh`, `scripts/test-shell-hooks.sh`, `scripts/test-security.sh`, and `scripts/test-performance.sh`
+- **Strict macOS validation** in `scripts/test_vex_release_strict.py` and `scripts/test_vex_local_build_strict.py` for official-archive diffs, multi-version switching, Python venv flows, and project/global auto-switch behavior
 
 ### 100% Coverage Modules
 
@@ -505,6 +505,25 @@ open coverage/index.html
 - **Critical modules**: 90%+ (installer, downloader, switcher)
 - **Core modules**: 80%+ (tools, resolver, cache)
 - **Supporting modules**: 70%+ (shell, lock, error)
+
+### Documentation-Driven Validation
+
+For release readiness on macOS, the most important commands are:
+
+```bash
+bash scripts/test-features.sh
+python3 scripts/test_vex_release_strict.py
+python3 scripts/test_vex_local_build_strict.py
+```
+
+The strict validation scripts cover:
+- top-level CLI help and subcommand help
+- `vex init`, `vex env`, and shell hook generation
+- fresh installs for Node.js, Go, Java, Rust, and Python
+- official archive binary diffing against local installs
+- binary runnability and symlink correctness
+- Python `.venv` init/freeze/sync workflows
+- manual multi-version switching and project/global `cd` auto-switching
 
 ## CI/CD Testing
 
@@ -616,4 +635,4 @@ make test
 - [Rust Testing Documentation](https://doc.rust-lang.org/book/ch11-00-testing.html)
 - [Criterion Benchmarking](https://github.com/bheisler/criterion.rs)
 - [Tarpaulin Coverage](https://github.com/xd009642/tarpaulin)
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
+- [../../CONTRIBUTING.md](../../CONTRIBUTING.md) - Contribution guidelines

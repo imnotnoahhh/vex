@@ -31,7 +31,7 @@ This script will:
 #### Install Specific Version
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v0.1.6
+curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.1.1
 ```
 
 #### Audit the Script First
@@ -110,7 +110,7 @@ After installation, verify vex is working:
 
 ```bash
 vex --version
-# vex 0.1.6
+# vex 1.1.1
 
 which vex
 # /Users/yourname/.local/bin/vex
@@ -217,12 +217,14 @@ Edit `~/.vex/config.toml` to change settings:
 # Cache remote version lists for 1 hour
 cache_ttl_secs = 3600
 
-# Cache for 1 day
-cache_ttl_secs = 86400
+# Cache for 10 minutes
+cache_ttl_secs = 600
 
-# Disable caching (always fetch fresh)
-cache_ttl_secs = 0
+# Minimum supported TTL
+cache_ttl_secs = 60
 ```
+
+Values outside the supported `60..=3600` second range fall back to the default `300` seconds with a warning.
 
 ## Troubleshooting Installation
 

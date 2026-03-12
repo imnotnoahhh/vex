@@ -13,9 +13,10 @@ Welcome to the vex documentation! This directory contains guides and resources t
 
 - [README.md](../README.md) - Project overview and quick start
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - How to contribute to vex
-- [ARCHITECTURE.md](../ARCHITECTURE.md) - System architecture and design decisions
-- [TESTING.md](../TESTING.md) - Testing guidelines and best practices
-- [RELEASING.md](../RELEASING.md) - Release process and versioning
+- [development/README.md](development/README.md) - Maintainer-focused documentation index
+- [development/architecture.md](development/architecture.md) - System architecture and design decisions
+- [development/testing.md](development/testing.md) - Testing guidelines and validation strategy
+- [development/releasing.md](development/releasing.md) - Release process and versioning
 - [SECURITY.md](../SECURITY.md) - Security policy and reporting vulnerabilities
 - [CHANGELOG.md](../CHANGELOG.md) - Version history and release notes
 
@@ -69,8 +70,9 @@ Historical development documents (not tracked in git):
 Found a typo or want to improve the docs? Contributions are welcome!
 
 1. **User guides**: Edit files in `docs/guides/`
-2. **API docs**: Edit doc comments in source files (`src/**/*.rs`)
-3. **Main docs**: Edit files in project root (README.md, CONTRIBUTING.md, etc.)
+2. **Maintainer docs**: Edit files in `docs/development/`
+3. **API docs**: Edit doc comments in source files (`src/**/*.rs`)
+4. **Main docs**: Edit files in project root (README.md, CONTRIBUTING.md, etc.)
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
 

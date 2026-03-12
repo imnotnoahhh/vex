@@ -59,7 +59,7 @@ vex includes the following security protections:
 4. **HTTP Timeout Configuration** (v0.1.6+)
    - Connection timeout: 30 seconds
    - Total timeout: 5 minutes
-   - Automatic retry: 3 attempts with 2-second intervals
+   - Automatic retry: 3 attempts with exponential backoff
    - 4xx client errors (e.g., 404) are not retried
    - Prevents indefinite hangs and resource exhaustion
 
@@ -91,8 +91,9 @@ vex includes the following security protections:
 
 | Version | Supported |
 |---------|-----------|
+| 1.1.x   | Yes       |
 | 1.0.x   | Yes       |
 | 0.2.x   | Yes (until 2026-06-01) |
 | 0.1.x   | No        |
 
-**Note**: Users on v0.2.2 or earlier must manually upgrade to v1.0.0 or later due to bugs in the `self-update` command. See README.md for upgrade instructions.
+**Note**: Users on v0.2.2 or earlier should manually upgrade to a current 1.x release due to bugs in early `self-update` implementations. See [README.md](README.md) for upgrade instructions.
