@@ -764,7 +764,13 @@ fn list_remote(tool_name: &str, filter: FilterType, use_cache: bool) -> Result<(
     // Apply filter
     versions = match filter {
         FilterType::All => versions,
-        FilterType::Lts => versions.into_iter().filter(|v| v.lts.is_some()).collect(),
+        FilterType::Lts => {
+            if tool_name == "python" {
+                Vec::new()
+            } else {
+                versions.into_iter().filter(|v| v.lts.is_some()).collect()
+            }
+        }
         FilterType::Major => {
             let mut major_versions = std::collections::HashMap::new();
             for v in versions {
@@ -820,7 +826,11 @@ fn list_remote(tool_name: &str, filter: FilterType, use_cache: bool) -> Result<(
         // Build visible text (no ANSI) for width calculation
         let mut visible = version_str.to_string();
         if let Some(lts) = &version.lts {
-            visible.push_str(&format!(" (LTS: {})", lts));
+            if tool_name == "python" {
+                visible.push_str(&format!(" (Status: {})", lts));
+            } else {
+                visible.push_str(&format!(" (LTS: {})", lts));
+            }
         }
         if is_current {
             visible.push_str(" ← current");
@@ -840,7 +850,12 @@ fn list_remote(tool_name: &str, filter: FilterType, use_cache: bool) -> Result<(
         };
 
         if let Some(lts) = &version.lts {
-            display.push_str(&format!(" {}", format!("(LTS: {})", lts).cyan()));
+            let label = if tool_name == "python" {
+                format!("(Status: {})", lts)
+            } else {
+                format!("(LTS: {})", lts)
+            };
+            display.push_str(&format!(" {}", label.cyan()));
         }
         if is_current {
             display.push_str(&format!(" {}", "← current".green()));
