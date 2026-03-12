@@ -43,7 +43,10 @@ fn dist_tarball_url(version: &str, arch: Arch) -> String {
 }
 
 fn parse_sha256_sidecar(content: &str) -> Option<String> {
-    content.split_whitespace().next().map(|value| value.to_string())
+    content
+        .split_whitespace()
+        .next()
+        .map(|value| value.to_string())
 }
 
 impl Tool for RustTool {

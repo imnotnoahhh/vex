@@ -1,7 +1,23 @@
+use std::path::PathBuf;
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static TEMP_DIR_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 fn vex_bin() -> Command {
     Command::new(env!("CARGO_BIN_EXE_vex"))
+}
+
+fn fresh_temp_dir(prefix: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!(
+        "{}_{}_{}",
+        prefix,
+        std::process::id(),
+        TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
 }
 
 #[test]
@@ -14,10 +30,13 @@ fn test_help() {
 
 #[test]
 fn test_init() {
-    let output = vex_bin().arg("init").output().unwrap();
+    let home = fresh_temp_dir("vex_test_init");
+    let output = vex_bin().arg("init").env("HOME", &home).output().unwrap();
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("source ~/.zshrc"));
+    assert!(stdout.contains("vex init --shell auto"));
+
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 #[test]
@@ -193,10 +212,14 @@ fn test_use_without_spec_or_auto() {
 
 #[test]
 fn test_init_shows_eval_hint() {
-    let output = vex_bin().arg("init").output().unwrap();
+    let home = fresh_temp_dir("vex_test_init_hint");
+    let output = vex_bin().arg("init").env("HOME", &home).output().unwrap();
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("echo") && stdout.contains("vex env zsh"));
+    assert!(stdout.contains("echo"));
+    assert!(stdout.contains("vex env zsh"));
+
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 // --- install 无参数测试 ---
@@ -449,11 +472,15 @@ fn test_doctor_checks_path() {
 
 #[test]
 fn test_init_idempotent() {
+    let home = fresh_temp_dir("vex_test_init_idempotent");
+
     // Running init twice should succeed both times
-    let output1 = vex_bin().arg("init").output().unwrap();
+    let output1 = vex_bin().arg("init").env("HOME", &home).output().unwrap();
     assert!(output1.status.success());
-    let output2 = vex_bin().arg("init").output().unwrap();
+    let output2 = vex_bin().arg("init").env("HOME", &home).output().unwrap();
     assert!(output2.status.success());
+
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 // --- list-remote with --no-cache ---
@@ -741,20 +768,30 @@ fn test_init_unsupported_shell_powershell() {
 
 #[test]
 fn test_install_no_switch_flag() {
+    let home = fresh_temp_dir("vex_test_install_no_switch");
+    std::fs::create_dir_all(home.join(".vex/toolchains/node/20.11.0")).unwrap();
+
     let output = vex_bin()
         .args(["install", "node@20.11.0", "--no-switch"])
+        .env("HOME", &home)
         .output()
         .unwrap();
+
+    assert!(output.status.success());
 
     // 命令应该成功（即使版本未安装，也会显示提示）
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
-    // 应该包含提示信息，告诉用户如何激活版本
+    // 已安装路径不需要联网，也应该给出可切换的提示
     assert!(
-        stdout.contains("To activate this version") || stderr.contains("already installed"),
-        "Should show activation hint or already installed message"
+        stdout.contains("already installed")
+            || stdout.contains("Use 'vex use node@20.11.0' to switch to it.")
+            || stderr.contains("already installed"),
+        "Should show already-installed or switch guidance"
     );
+
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 #[test]
