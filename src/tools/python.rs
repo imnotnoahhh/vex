@@ -9,38 +9,40 @@ use crate::error::Result;
 use crate::error::VexError;
 use crate::tools::{Arch, Tool, Version};
 use reqwest::blocking::Client;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use tracing::warn;
 
 /// Python tool (python-build-standalone prebuilt CPython)
 pub struct PythonTool;
 
+const PYTHON_STATUS_URL: &str = "https://devguide.python.org/versions/";
+
 /// Python support status based on lifecycle
 /// See: <https://devguide.python.org/versions/>
 #[derive(Debug, Clone, PartialEq)]
 pub enum SupportStatus {
+    Feature,
     Bugfix,
     Security,
     EndOfLife,
-    PreRelease,
 }
 
 impl SupportStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
+            SupportStatus::Feature => "feature",
             SupportStatus::Bugfix => "bugfix",
             SupportStatus::Security => "security",
             SupportStatus::EndOfLife => "end-of-life",
-            SupportStatus::PreRelease => "pre-release",
         }
     }
 
     /// Determine support status from major.minor version string
     pub fn from_version(major_minor: &str) -> Self {
         match major_minor {
-            "3.15" | "3.14" => SupportStatus::PreRelease,
-            "3.13" | "3.12" => SupportStatus::Bugfix,
-            "3.11" | "3.10" => SupportStatus::Security,
+            "3.15" => SupportStatus::Feature,
+            "3.14" | "3.13" => SupportStatus::Bugfix,
+            "3.12" | "3.11" | "3.10" => SupportStatus::Security,
             _ => SupportStatus::EndOfLife,
         }
     }
@@ -136,6 +138,89 @@ fn fetch_sha256sums(tag: &str) -> Result<String> {
     fetch_text_with_retry(&client, &sha256_url)
 }
 
+fn fetch_python_lifecycle_statuses() -> Result<BTreeMap<String, String>> {
+    let client = create_github_client()?;
+    let html = fetch_text_with_retry(&client, PYTHON_STATUS_URL)?;
+    let statuses = parse_python_lifecycle_statuses(&html);
+    if statuses.is_empty() {
+        return Err(VexError::Parse(
+            "Unable to parse Python lifecycle statuses from the official version page".to_string(),
+        ));
+    }
+    Ok(statuses)
+}
+
+fn fallback_python_lifecycle_statuses() -> BTreeMap<String, String> {
+    let mut statuses = BTreeMap::new();
+    for minor in ["3.15", "3.14", "3.13", "3.12", "3.11", "3.10"] {
+        statuses.insert(
+            minor.to_string(),
+            SupportStatus::from_version(minor).as_str().to_string(),
+        );
+    }
+    statuses
+}
+
+fn strip_html_tags(text: &str) -> String {
+    let mut out = String::new();
+    let mut inside_tag = false;
+    for ch in text.chars() {
+        match ch {
+            '<' => inside_tag = true,
+            '>' => inside_tag = false,
+            _ if !inside_tag => out.push(ch),
+            _ => {}
+        }
+    }
+    out.replace("&nbsp;", " ").trim().to_string()
+}
+
+fn parse_table_cells(row_html: &str) -> Vec<String> {
+    let mut cells = Vec::new();
+    let mut remaining = row_html;
+    while let Some(td_start) = remaining.find("<td") {
+        remaining = &remaining[td_start..];
+        let Some(cell_start) = remaining.find('>') else {
+            break;
+        };
+        remaining = &remaining[cell_start + 1..];
+        let Some(cell_end) = remaining.find("</td>") else {
+            break;
+        };
+        cells.push(strip_html_tags(&remaining[..cell_end]));
+        remaining = &remaining[cell_end + "</td>".len()..];
+    }
+    cells
+}
+
+fn parse_python_lifecycle_statuses(html: &str) -> BTreeMap<String, String> {
+    let mut statuses = BTreeMap::new();
+    let mut remaining = html;
+    let mut seen_supported_rows = false;
+
+    while let Some(tr_start) = remaining.find("<tr") {
+        remaining = &remaining[tr_start..];
+        let Some(row_end) = remaining.find("</tr>") else {
+            break;
+        };
+        let row_html = &remaining[..row_end];
+        let cells = parse_table_cells(row_html);
+        if cells.len() >= 3 {
+            let branch = cells[0].trim();
+            let status = cells[2].trim().to_lowercase();
+            if branch.starts_with("3.") {
+                statuses.insert(branch.to_string(), status);
+                seen_supported_rows = true;
+            } else if seen_supported_rows && branch.is_empty() {
+                break;
+            }
+        }
+        remaining = &remaining[row_end + "</tr>".len()..];
+    }
+
+    statuses
+}
+
 fn asset_filename(version: &str, tag: &str, arch: Arch) -> String {
     let arch_str = match arch {
         Arch::Arm64 => "aarch64-apple-darwin",
@@ -184,6 +269,16 @@ impl Tool for PythonTool {
     fn list_remote(&self) -> Result<Vec<Version>> {
         let tag = fetch_latest_release_tag()?;
         let content = fetch_sha256sums(&tag)?;
+        let lifecycle_statuses = match fetch_python_lifecycle_statuses() {
+            Ok(statuses) => statuses,
+            Err(err) => {
+                warn!(
+                    "Falling back to built-in Python lifecycle statuses after official fetch failed: {}",
+                    err
+                );
+                fallback_python_lifecycle_statuses()
+            }
+        };
 
         let mut versions = BTreeSet::new();
         for line in content.lines() {
@@ -214,10 +309,13 @@ impl Tool for PythonTool {
             .into_iter()
             .map(|ver| {
                 let mm = get_major_minor(&ver);
-                let status = SupportStatus::from_version(&mm);
+                let status = lifecycle_statuses
+                    .get(&mm)
+                    .cloned()
+                    .unwrap_or_else(|| SupportStatus::from_version(&mm).as_str().to_string());
                 Version {
                     version: ver,
-                    lts: Some(status.as_str().to_string()),
+                    lts: Some(status),
                 }
             })
             .collect();
@@ -264,18 +362,12 @@ impl Tool for PythonTool {
                 // Return the latest bugfix-phase version
                 Ok(versions
                     .iter()
-                    .find(|v| {
-                        let mm = get_major_minor(&v.version);
-                        SupportStatus::from_version(&mm) == SupportStatus::Bugfix
-                    })
+                    .find(|v| v.lts.as_deref() == Some("bugfix"))
                     .map(|v| v.version.clone()))
             }
             "security" => Ok(versions
                 .iter()
-                .find(|v| {
-                    let mm = get_major_minor(&v.version);
-                    SupportStatus::from_version(&mm) == SupportStatus::Security
-                })
+                .find(|v| v.lts.as_deref() == Some("security"))
                 .map(|v| v.version.clone())),
             _ => Ok(None),
         }
@@ -426,27 +518,21 @@ mod tests {
 
     #[test]
     fn test_support_status_from_version() {
+        assert_eq!(SupportStatus::from_version("3.15"), SupportStatus::Feature);
+        assert_eq!(SupportStatus::from_version("3.14"), SupportStatus::Bugfix);
         assert_eq!(SupportStatus::from_version("3.13"), SupportStatus::Bugfix);
-        assert_eq!(SupportStatus::from_version("3.12"), SupportStatus::Bugfix);
+        assert_eq!(SupportStatus::from_version("3.12"), SupportStatus::Security);
         assert_eq!(SupportStatus::from_version("3.11"), SupportStatus::Security);
         assert_eq!(SupportStatus::from_version("3.10"), SupportStatus::Security);
         assert_eq!(SupportStatus::from_version("3.9"), SupportStatus::EndOfLife);
-        assert_eq!(
-            SupportStatus::from_version("3.14"),
-            SupportStatus::PreRelease
-        );
-        assert_eq!(
-            SupportStatus::from_version("3.15"),
-            SupportStatus::PreRelease
-        );
     }
 
     #[test]
     fn test_support_status_as_str() {
+        assert_eq!(SupportStatus::Feature.as_str(), "feature");
         assert_eq!(SupportStatus::Bugfix.as_str(), "bugfix");
         assert_eq!(SupportStatus::Security.as_str(), "security");
         assert_eq!(SupportStatus::EndOfLife.as_str(), "end-of-life");
-        assert_eq!(SupportStatus::PreRelease.as_str(), "pre-release");
     }
 
     #[test]
@@ -484,10 +570,27 @@ mod tests {
 
     #[test]
     fn test_support_status_as_str_all_variants() {
+        assert_eq!(SupportStatus::Feature.as_str(), "feature");
         assert_eq!(SupportStatus::Bugfix.as_str(), "bugfix");
         assert_eq!(SupportStatus::Security.as_str(), "security");
         assert_eq!(SupportStatus::EndOfLife.as_str(), "end-of-life");
-        assert_eq!(SupportStatus::PreRelease.as_str(), "pre-release");
+    }
+
+    #[test]
+    fn test_parse_python_lifecycle_statuses() {
+        let html = r#"
+<tbody>
+<tr class="row-odd"><td><p>main</p></td><td><p>PEP</p></td><td><p>feature</p></td></tr>
+<tr class="row-even"><td><p>3.14</p></td><td><p>PEP 745</p></td><td><p>bugfix</p></td></tr>
+<tr class="row-odd"><td><p>3.13</p></td><td><p>PEP 719</p></td><td><p>bugfix</p></td></tr>
+<tr class="row-even"><td><p>3.12</p></td><td><p>PEP 693</p></td><td><p>security</p></td></tr>
+</tbody>
+"#;
+        let statuses = parse_python_lifecycle_statuses(html);
+        assert_eq!(statuses.get("3.14").map(String::as_str), Some("bugfix"));
+        assert_eq!(statuses.get("3.13").map(String::as_str), Some("bugfix"));
+        assert_eq!(statuses.get("3.12").map(String::as_str), Some("security"));
+        assert_eq!(statuses.get("main"), None);
     }
 
     #[test]
