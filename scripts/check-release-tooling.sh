@@ -31,17 +31,21 @@ if command -v ruby >/dev/null 2>&1; then
     require "yaml"
     data = YAML.load_file(".github/workflows/release-postflight.yml")
     jobs = data.fetch("jobs").keys.sort
-    expected = ["smoke-release-binary", "update-homebrew-tap", "validate-release-notes"]
+    expected = ["prepare-release", "smoke-release-binary", "update-homebrew-tap", "validate-release-notes"]
     abort("unexpected jobs: #{jobs.inspect}") unless jobs == expected
   '
 else
   grep -q '^name: Release Postflight' .github/workflows/release-postflight.yml
+  grep -q '^  prepare-release:' .github/workflows/release-postflight.yml
   grep -q '^  validate-release-notes:' .github/workflows/release-postflight.yml
   grep -q '^  smoke-release-binary:' .github/workflows/release-postflight.yml
   grep -q '^  update-homebrew-tap:' .github/workflows/release-postflight.yml
 fi
 
+grep -q '^  workflow_call:' .github/workflows/release-postflight.yml
+grep -q '^  workflow_dispatch:' .github/workflows/release-postflight.yml
 grep -q 'HOMEBREW_TAP_TOKEN' .github/workflows/release-postflight.yml
 grep -q 'scripts/render-homebrew-formula.sh' .github/workflows/release-postflight.yml
+grep -q 'uses: ./.github/workflows/release-postflight.yml' .github/workflows/release.yml
 
 echo "✅ Release postflight workflow passed"
