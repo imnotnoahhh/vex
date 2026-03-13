@@ -197,10 +197,7 @@ impl Tool for JavaTool {
 
                 let arch = Arch::detect();
                 for candidate in FALLBACK_LTS_VERSIONS {
-                    if self
-                        .download_url(&candidate.to_string(), arch)
-                        .is_ok()
-                    {
+                    if self.download_url(&candidate.to_string(), arch).is_ok() {
                         return Ok(Some(candidate.to_string()));
                     }
                 }
