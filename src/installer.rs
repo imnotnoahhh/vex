@@ -11,7 +11,7 @@
 //! - **Automatic cleanup**: Failed installations automatically clean up temporary files
 
 use crate::config;
-use crate::downloader::{download_with_retry, verify_checksum};
+use crate::downloader::{download_with_retry_in_current_context, verify_checksum};
 use crate::error::{Result, VexError};
 use crate::lock::InstallLock;
 use crate::resolver;
@@ -169,7 +169,7 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
         &tool.download_url(version, arch)?,
     )?;
     println!("{} from {}...", "Downloading".cyan(), download_url.dimmed());
-    download_with_retry(
+    download_with_retry_in_current_context(
         &download_url,
         &archive_path,
         settings.network.download_retries,

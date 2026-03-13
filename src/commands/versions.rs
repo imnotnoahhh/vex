@@ -308,7 +308,11 @@ fn apply_filter(tool_name: &str, versions: Vec<Version>, filter: RemoteFilter) -
             }
             let mut result: Vec<_> = major_versions
                 .into_values()
-                .filter_map(|mut group| group.pop())
+                .filter_map(|group| {
+                    group
+                        .into_iter()
+                        .max_by_key(|version| version_sort_key(&version.version))
+                })
                 .collect();
             result.sort_by(|a, b| version_sort_key(&b.version).cmp(&version_sort_key(&a.version)));
             result
@@ -343,4 +347,41 @@ fn is_version_outdated(version: &str, latest: &str) -> bool {
     let version_major = extract_major_version(version).parse::<i32>().unwrap_or(0);
     let latest_major = extract_major_version(latest).parse::<i32>().unwrap_or(0);
     version_major > 0 && latest_major > 0 && version_major < latest_major - 2
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_major_filter_keeps_newest_patch_per_major() {
+        let filtered = apply_filter(
+            "node",
+            vec![
+                Version {
+                    version: "20.10.0".to_string(),
+                    lts: None,
+                },
+                Version {
+                    version: "20.9.0".to_string(),
+                    lts: None,
+                },
+                Version {
+                    version: "19.8.1".to_string(),
+                    lts: None,
+                },
+                Version {
+                    version: "19.8.0".to_string(),
+                    lts: None,
+                },
+            ],
+            RemoteFilter::Major,
+        );
+
+        let versions = filtered
+            .into_iter()
+            .map(|version| version.version)
+            .collect::<Vec<_>>();
+        assert_eq!(versions, vec!["20.10.0", "19.8.1"]);
+    }
 }

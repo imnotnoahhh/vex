@@ -3,6 +3,10 @@ use crate::error::{Result, VexError};
 use reqwest::blocking::Client;
 use serde::de::DeserializeOwned;
 
+pub fn client_for_settings(settings: &Settings, user_agent: &str) -> Result<Client> {
+    build_client(settings, user_agent)
+}
+
 pub fn client_for_current_context(user_agent: &str) -> Result<Client> {
     let settings = config::load_effective_settings_for_current_dir()?;
     build_client(&settings, user_agent)

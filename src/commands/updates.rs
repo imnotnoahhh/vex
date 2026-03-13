@@ -60,6 +60,12 @@ struct ManagedTarget {
     source_path: Option<PathBuf>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VersionFileFormat {
+    ToolVersions,
+    SingleValue,
+}
+
 pub fn outdated(tool: Option<&str>, output: OutputMode) -> Result<()> {
     let report = collect_outdated(tool)?;
     match output {
@@ -541,23 +547,36 @@ fn find_project_source(start_dir: &Path, tool_name: &str) -> Option<PathBuf> {
 }
 
 fn write_tool_version(file_path: &Path, tool_name: &str, version: &str) -> Result<()> {
-    let mut entries: Vec<(String, String)> = read_tool_versions(file_path).into_iter().collect();
-    entries.retain(|(tool, _)| tool != tool_name);
-    entries.push((tool_name.to_string(), version.to_string()));
-    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    let content = match version_file_format(file_path) {
+        VersionFileFormat::ToolVersions => {
+            let mut entries: Vec<(String, String)> =
+                read_tool_versions(file_path).into_iter().collect();
+            entries.retain(|(tool, _)| tool != tool_name);
+            entries.push((tool_name.to_string(), version.to_string()));
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
 
-    let content = entries
-        .iter()
-        .map(|(tool, version)| format!("{} {}", tool, version))
-        .collect::<Vec<_>>()
-        .join("\n")
-        + "\n";
+            entries
+                .iter()
+                .map(|(tool, version)| format!("{} {}", tool, version))
+                .collect::<Vec<_>>()
+                .join("\n")
+                + "\n"
+        }
+        VersionFileFormat::SingleValue => format!("{}\n", version),
+    };
 
     if let Some(parent) = file_path.parent() {
         fs::create_dir_all(parent)?;
     }
     fs::write(file_path, content)?;
     Ok(())
+}
+
+fn version_file_format(file_path: &Path) -> VersionFileFormat {
+    match file_path.file_name().and_then(|name| name.to_str()) {
+        Some(".tool-versions" | "tool-versions") => VersionFileFormat::ToolVersions,
+        _ => VersionFileFormat::SingleValue,
+    }
 }
 
 fn normalize_version(version: &str) -> String {
@@ -578,5 +597,46 @@ fn source_label(source: ManagedSource) -> &'static str {
         ManagedSource::Global => "global",
         ManagedSource::Active => "active",
         ManagedSource::Installed => "installed",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_write_tool_version_preserves_tool_versions_format() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".tool-versions");
+        fs::write(&path, "node 20.0.0\npython 3.12.0\n").unwrap();
+
+        write_tool_version(&path, "node", "22.0.0").unwrap();
+
+        let content = fs::read_to_string(&path).unwrap();
+        assert_eq!(content, "node 22.0.0\npython 3.12.0\n");
+    }
+
+    #[test]
+    fn test_write_tool_version_preserves_global_tool_versions_format() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tool-versions");
+        fs::write(&path, "python 3.13.12\n").unwrap();
+
+        write_tool_version(&path, "python", "3.14.3").unwrap();
+
+        let content = fs::read_to_string(&path).unwrap();
+        assert_eq!(content, "python 3.14.3\n");
+    }
+
+    #[test]
+    fn test_write_tool_version_preserves_single_value_file_format() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".nvmrc");
+        fs::write(&path, "20.0.0\n").unwrap();
+
+        write_tool_version(&path, "node", "22.0.0").unwrap();
+
+        let content = fs::read_to_string(&path).unwrap();
+        assert_eq!(content, "22.0.0\n");
     }
 }
