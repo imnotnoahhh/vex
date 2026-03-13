@@ -10,6 +10,7 @@ use serde::Deserialize;
 
 /// Java (Eclipse Temurin JDK) tool
 pub struct JavaTool;
+const FALLBACK_LTS_VERSIONS: &[u32] = &[25, 21, 17, 11, 8];
 
 #[derive(Deserialize, Debug)]
 struct AvailableReleases {
@@ -61,13 +62,14 @@ impl Tool for JavaTool {
         let url = "https://api.adoptium.net/v3/info/available_releases";
         let releases: AvailableReleases =
             http::get_json_in_current_context(url, concat!("vex/", env!("CARGO_PKG_VERSION")))?;
-        let lts_versions = lts_versions(&releases);
+        let lts_versions_list = lts_versions(&releases);
+        let available_versions = available_versions(&releases);
 
         // Get all available versions, mark LTS versions
         let mut versions = Vec::new();
 
-        for version in releases.available_releases {
-            let is_lts = lts_versions.contains(&version);
+        for version in available_versions {
+            let is_lts = lts_versions_list.contains(&version);
             versions.push(Version {
                 version: version.to_string(),
                 lts: if is_lts {
@@ -185,14 +187,35 @@ impl Tool for JavaTool {
             }
             "lts" => {
                 // Return the first LTS version
-                Ok(versions
+                if let Some(version) = versions
                     .iter()
                     .find(|v| v.lts.is_some())
-                    .map(|v| v.version.clone()))
+                    .map(|v| v.version.clone())
+                {
+                    return Ok(Some(version));
+                }
+
+                let arch = Arch::detect();
+                for candidate in FALLBACK_LTS_VERSIONS {
+                    if self.download_url(&candidate.to_string(), arch).is_ok() {
+                        return Ok(Some(candidate.to_string()));
+                    }
+                }
+
+                Ok(None)
             }
             _ => Ok(None),
         }
     }
+}
+
+fn available_versions(releases: &AvailableReleases) -> Vec<u32> {
+    releases
+        .available_releases
+        .iter()
+        .copied()
+        .filter(|version| *version > 0)
+        .collect()
 }
 
 fn lts_versions(releases: &AvailableReleases) -> Vec<u32> {
@@ -274,6 +297,17 @@ mod tests {
         };
 
         assert_eq!(lts_versions(&releases), vec![25, 21]);
+    }
+
+    #[test]
+    fn test_available_versions_ignores_zero_entries() {
+        let releases = AvailableReleases {
+            available_lts_releases: vec![25, 21],
+            available_releases: vec![0, 25, 24, 21],
+            most_recent_lts: Some(25),
+        };
+
+        assert_eq!(available_versions(&releases), vec![25, 24, 21]);
     }
 
     #[test]
