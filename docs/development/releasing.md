@@ -243,10 +243,11 @@ jobs:
 
 #### 3. Release Postflight (`.github/workflows/release-postflight.yml`)
 
-Runs after a GitHub Release is published:
+Runs automatically from the main release workflow after the GitHub Release is created, and can also be re-run manually with `workflow_dispatch` for an existing tag:
 
 ```yaml
 jobs:
+  prepare-release:          # Load release metadata and asset URLs from GitHub
   validate-release-notes:  # Ensure CHANGELOG entry and release body exist
   smoke-release-binary:    # Download published macOS binary and run smoke checks
   update-homebrew-tap:     # Regenerate Formula/vex.rb in homebrew-vex
@@ -295,7 +296,7 @@ vex-aarch64-apple-darwin/
 - [ ] Watch for bug reports related to new release
 - [ ] Respond to installation issues
 - [ ] Prepare hotfix if critical bugs found
-- [ ] Confirm `Release Postflight` passed
+- [ ] Confirm `Release Postflight` passed or manually re-run it from Actions if needed
 - [ ] Confirm the Homebrew tap formula updated successfully
 
 ### 3. Update Documentation

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Run `Release Postflight` automatically from the main release workflow and allow manual re-runs with `workflow_dispatch`.
+
 ## [1.2.0] - 2026-03-13
 
 ### Added
