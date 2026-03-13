@@ -90,6 +90,7 @@ BAD_EXEC_PATTERNS = [
 
 RUST_WRAPPER_BINS = {"rust-gdb", "rust-gdbgui", "rust-lldb"}
 JAVA_STRUCTURAL_BINS = {"jconsole", "jstatd", "rmiregistry"}
+JAVA_FALLBACK_LTS_CANDIDATES = [25, 21, 17, 11, 8]
 
 EXPECTED_TOP_LEVEL_COMMANDS = {
     "init": "Initialize vex directory structure",
@@ -1076,24 +1077,24 @@ def resolve_java(spec: str) -> ToolPlan:
         most_recent_lts_int = int(most_recent_lts)
         if most_recent_lts_int > 0:
             lts = [most_recent_lts_int]
+    arch = "aarch64" if os.uname().machine in {"arm64", "aarch64"} else "x64"
+
     if spec == "latest":
-        resolved = str(available[0])
+        if available:
+            resolved = str(available[0])
+            download_url = resolve_java_download_url(resolved, arch)
+        else:
+            resolved, download_url = resolve_java_fallback_lts(releases, arch)
     elif spec == "lts":
-        if not lts:
-            raise TestFailure(f"Adoptium returned no LTS releases in metadata: {releases}")
-        resolved = str(lts[0])
+        if lts:
+            resolved = str(lts[0])
+            download_url = resolve_java_download_url(resolved, arch)
+        else:
+            resolved, download_url = resolve_java_fallback_lts(releases, arch)
     else:
         resolved = str(int(spec))
+        download_url = resolve_java_download_url(resolved, arch)
 
-    arch = "aarch64" if os.uname().machine in {"arm64", "aarch64"} else "x64"
-    asset_url = (
-        f"https://api.adoptium.net/v3/assets/latest/{resolved}/hotspot"
-        f"?architecture={arch}&image_type=jdk&os=mac&vendor=eclipse"
-    )
-    assets = fetch_json(asset_url)
-    if not isinstance(assets, list) or not assets:
-        raise TestFailure(f"Adoptium returned no macOS JDK asset for Java {resolved}")
-    download_url = assets[0]["binary"]["package"]["link"]
     return ToolPlan(
         name="java",
         display_name="Java",
@@ -1105,6 +1106,30 @@ def resolve_java(spec: str) -> ToolPlan:
         bin_regex=JAVA_BIN_RE,
         meta={"versions": [str(version) for version in available], "lts_versions": [str(version) for version in lts]},
     )
+
+
+def resolve_java_download_url(version: str, arch: str) -> str:
+    asset_url = (
+        f"https://api.adoptium.net/v3/assets/latest/{version}/hotspot"
+        f"?architecture={arch}&image_type=jdk&os=mac&vendor=eclipse"
+    )
+    assets = fetch_json(asset_url)
+    if not isinstance(assets, list) or not assets:
+        raise TestFailure(f"Adoptium returned no macOS JDK asset for Java {version}")
+    return assets[0]["binary"]["package"]["link"]
+
+
+def resolve_java_fallback_lts(releases: Dict[str, object], arch: str) -> Tuple[str, str]:
+    for candidate in JAVA_FALLBACK_LTS_CANDIDATES:
+        try:
+            download_url = resolve_java_download_url(str(candidate), arch)
+            REPORT.warn(
+                "Java metadata was incomplete; falling back to probing known LTS releases"
+            )
+            return str(candidate), download_url
+        except TestFailure:
+            continue
+    raise TestFailure(f"Adoptium returned no LTS releases in metadata: {releases}")
 
 
 def resolve_rust(spec: str) -> ToolPlan:
