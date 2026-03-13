@@ -13,8 +13,6 @@ on:
         description: Release tag to validate (for example, v1.2.0)
         required: true
         type: string
-  release:
-    types: [published]
 
 permissions:
   contents: read
@@ -75,10 +73,11 @@ jobs:
           echo "arm_url=$arm_url" >> "$GITHUB_OUTPUT"
           echo "intel_url=$intel_url" >> "$GITHUB_OUTPUT"
 
+          release_body_delim="EOF_$(date +%s)_$RANDOM"
           {
-            echo "release_body<<EOF"
+            echo "release_body<<$release_body_delim"
             jq -r '.body // ""' "$metadata_path"
-            echo "EOF"
+            echo "$release_body_delim"
           } >> "$GITHUB_OUTPUT"
 
   validate-release-notes:

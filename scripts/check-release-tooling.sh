@@ -29,7 +29,7 @@ echo "🚀 Checking release postflight workflow..."
 if command -v ruby >/dev/null 2>&1; then
   ruby -e '
     require "yaml"
-    data = YAML.load_file(".github/workflows/release-postflight.yml")
+    data = YAML.safe_load(File.read(".github/workflows/release-postflight.yml"), permitted_classes: [], aliases: false)
     jobs = data.fetch("jobs").keys.sort
     expected = ["prepare-release", "smoke-release-binary", "update-homebrew-tap", "validate-release-notes"]
     abort("unexpected jobs: #{jobs.inspect}") unless jobs == expected
@@ -44,6 +44,10 @@ fi
 
 grep -q '^  workflow_call:' .github/workflows/release-postflight.yml
 grep -q '^  workflow_dispatch:' .github/workflows/release-postflight.yml
+if grep -q '^  release:' .github/workflows/release-postflight.yml; then
+  echo "Release postflight workflow should not also listen for release events" >&2
+  exit 1
+fi
 grep -q 'HOMEBREW_TAP_TOKEN' .github/workflows/release-postflight.yml
 grep -q 'scripts/render-homebrew-formula.sh' .github/workflows/release-postflight.yml
 grep -q 'uses: ./.github/workflows/release-postflight.yml' .github/workflows/release.yml
