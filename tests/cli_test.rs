@@ -167,6 +167,45 @@ show = "node"
 }
 
 #[test]
+fn test_run_preserves_activation_path_when_shell_profile_mutates_path() {
+    let home = fresh_temp_dir("vex_test_run_profile_home");
+    let project = fresh_temp_dir("vex_test_run_profile_project");
+    let nested = project.join("nested/deeper");
+    fs::create_dir_all(&nested).unwrap();
+    fs::create_dir_all(project.join(".venv/bin")).unwrap();
+    let toolchain_bin = home.join(".vex/toolchains/node/20.11.0/bin");
+    fs::create_dir_all(&toolchain_bin).unwrap();
+    fs::write(project.join(".tool-versions"), "node 20.11.0\n").unwrap();
+    fs::write(
+        project.join(".vex.toml"),
+        r#"
+[commands]
+show = "node"
+"#,
+    )
+    .unwrap();
+    fs::write(home.join(".bash_profile"), "export PATH=/usr/bin:/bin\n").unwrap();
+    write_executable_script(
+        &toolchain_bin.join("node"),
+        "#!/bin/sh\nprintf 'managed-node'\n",
+    );
+
+    let output = vex_bin()
+        .args(["run", "show"])
+        .env("HOME", &home)
+        .env("SHELL", "/bin/bash")
+        .current_dir(&nested)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("managed-node"), "stdout was: {}", stdout);
+
+    let _ = fs::remove_dir_all(&home);
+    let _ = fs::remove_dir_all(&project);
+}
+
+#[test]
 fn test_run_requires_project_task_definition() {
     let home = fresh_temp_dir("vex_test_run_missing_home");
     let project = fresh_temp_dir("vex_test_run_missing_project");

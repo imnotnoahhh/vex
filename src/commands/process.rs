@@ -33,11 +33,9 @@ pub fn run_task(task: &str, args: &[String]) -> Result<i32> {
         })?;
 
     let shell = resolve_shell(project::load_nearest_project_config(&cwd)?.as_ref())?;
-    let shell_flag = if shell.ends_with("nu") || shell.ends_with("nushell") {
-        "-c"
-    } else {
-        "-lc"
-    };
+    // Use a non-login shell so rc/profile files cannot overwrite the activation
+    // environment we inject for the task process.
+    let shell_flag = "-c";
 
     let mut full_command = command.clone();
     if !args.is_empty() {
