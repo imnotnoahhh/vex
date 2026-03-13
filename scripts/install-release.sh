@@ -15,7 +15,7 @@ Usage:
   install-release.sh [--version <tag>] [--help]
 
 Options:
-  --version <tag>  Install a specific release tag (for example: v1.1.1)
+  --version <tag>  Install a specific release tag (for example: v1.2.0)
   --help           Show this help message
 EOF
 }

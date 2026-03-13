@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-03-13
+
 ### Added
 
 - **Machine-readable command output** — Added `--json` support for `vex current`, `vex list`, `vex list-remote`, and `vex doctor`, backed by shared output/report models for CLI, CI, and editor integrations.
@@ -33,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Doctor coverage expanded** — `vex doctor` now validates PATH priority, duplicate shell hooks, cache integrity, global `tool-versions`, project `.vex.toml`, and the effective configuration surface in addition to existing filesystem and binary checks.
 - **Python lifecycle status is now dynamic** — Python support phases are now derived from the official Python version-status page at runtime, with a built-in fallback when the upstream page is unavailable. This keeps `bugfix`, `security`, and future branch transitions aligned with the official Python release lifecycle.
 - **Python remote version labels now use `Status:` instead of `LTS:`** — `vex list-remote python` now displays lifecycle phases using Python's official terminology (`feature`, `bugfix`, `security`, `end-of-life`) instead of reusing the generic `LTS` label used by Node.js and Java.
+- **Homebrew install guidance is now explicit** — The generated Homebrew formula now prints `caveats` that explain how to preview initialization and enable shell integration after a brew install, while keeping shell configuration changes opt-in.
 
 ## [1.1.1] - 2026-03-12
 

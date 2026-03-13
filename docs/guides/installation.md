@@ -31,7 +31,7 @@ This script will:
 #### Install Specific Version
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.1.1
+curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.2.0
 ```
 
 #### Audit the Script First
@@ -120,7 +120,7 @@ After installation, verify vex is working:
 
 ```bash
 vex --version
-# vex 1.1.1
+# vex 1.2.0
 
 which vex
 # /Users/yourname/.local/bin/vex

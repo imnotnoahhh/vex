@@ -7,15 +7,15 @@ tmp_formula="$(mktemp /tmp/vex-formula.XXXXXX.rb)"
 trap 'rm -f "$tmp_formula"' EXIT
 
 bash scripts/render-homebrew-formula.sh \
-  "1.1.1" \
-  "https://github.com/imnotnoahhh/vex/releases/download/v1.1.1/vex-aarch64-apple-darwin.tar.gz" \
+  "1.2.0" \
+  "https://github.com/imnotnoahhh/vex/releases/download/v1.2.0/vex-aarch64-apple-darwin.tar.gz" \
   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
-  "https://github.com/imnotnoahhh/vex/releases/download/v1.1.1/vex-x86_64-apple-darwin.tar.gz" \
+  "https://github.com/imnotnoahhh/vex/releases/download/v1.2.0/vex-x86_64-apple-darwin.tar.gz" \
   "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" \
   "$tmp_formula"
 
 grep -q 'class Vex < Formula' "$tmp_formula"
-grep -q 'version "1.1.1"' "$tmp_formula"
+grep -q 'version "1.2.0"' "$tmp_formula"
 grep -q 'on_arm do' "$tmp_formula"
 grep -q 'on_intel do' "$tmp_formula"
 grep -q 'def caveats' "$tmp_formula"
