@@ -4,6 +4,7 @@
 //! macOS JDK directory structure is special: `Contents/Home/bin/`.
 
 use crate::error::{Result, VexError};
+use crate::http;
 use crate::tools::{Arch, Tool, Version};
 use serde::Deserialize;
 
@@ -56,8 +57,8 @@ impl Tool for JavaTool {
 
     fn list_remote(&self) -> Result<Vec<Version>> {
         let url = "https://api.adoptium.net/v3/info/available_releases";
-        let response = reqwest::blocking::get(url)?;
-        let releases: AvailableReleases = response.json()?;
+        let releases: AvailableReleases =
+            http::get_json_in_current_context(url, concat!("vex/", env!("CARGO_PKG_VERSION")))?;
 
         // Get all available versions, mark LTS versions
         let mut versions = Vec::new();
@@ -92,8 +93,8 @@ impl Tool for JavaTool {
             version, arch_str
         );
 
-        let response = reqwest::blocking::get(&url)?;
-        let releases: Vec<TemurinRelease> = response.json()?;
+        let releases: Vec<TemurinRelease> =
+            http::get_json_in_current_context(&url, concat!("vex/", env!("CARGO_PKG_VERSION")))?;
 
         if let Some(release) = releases.first() {
             Ok(release.binary.package.link.clone())
@@ -161,8 +162,8 @@ impl Tool for JavaTool {
             version, arch_str
         );
 
-        let response = reqwest::blocking::get(&url)?;
-        let releases: Vec<TemurinRelease> = response.json()?;
+        let releases: Vec<TemurinRelease> =
+            http::get_json_in_current_context(&url, concat!("vex/", env!("CARGO_PKG_VERSION")))?;
 
         if let Some(release) = releases.first() {
             Ok(Some(release.binary.package.checksum.clone()))

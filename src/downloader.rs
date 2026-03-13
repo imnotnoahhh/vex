@@ -12,6 +12,7 @@
 
 use crate::config;
 use crate::error::{Result, VexError};
+use crate::http;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
@@ -23,15 +24,7 @@ use tracing::{debug, error, info, warn};
 
 /// Create HTTP client with timeout configuration
 fn create_http_client() -> Result<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .connect_timeout(config::CONNECT_TIMEOUT)
-        .timeout(config::READ_TIMEOUT)
-        .redirect(reqwest::redirect::Policy::limited(
-            config::MAX_HTTP_REDIRECTS,
-        ))
-        .user_agent(concat!("vex/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(VexError::Network)
+    http::client_for_current_context(concat!("vex/", env!("CARGO_PKG_VERSION")))
 }
 
 /// Download file to specified path with progress bar (atomic write)
@@ -146,6 +139,7 @@ pub fn verify_checksum(file_path: &Path, expected: &str) -> Result<bool> {
 pub fn download_with_retry(url: &str, dest: &Path, retries: u32) -> Result<()> {
     info!("Download with retry: {} (max retries: {})", url, retries);
     let mut attempts = 0;
+    let settings = config::load_effective_settings_for_current_dir()?;
 
     loop {
         match download_file(url, dest) {
@@ -175,7 +169,7 @@ pub fn download_with_retry(url: &str, dest: &Path, retries: u32) -> Result<()> {
                     eprintln!("Download failed: {}", e);
                     eprintln!("Retrying... ({}/{} attempts)", attempts + 1, retries);
                     attempts += 1;
-                    std::thread::sleep(config::RETRY_BASE_DELAY);
+                    std::thread::sleep(settings.network.retry_base_delay);
                 } else {
                     error!("Download failed after {} attempts", retries);
                     return Err(e);
@@ -200,10 +194,11 @@ pub fn download_with_retry(url: &str, dest: &Path, retries: u32) -> Result<()> {
 #[allow(dead_code)]
 pub fn download_parallel(downloads: &[(String, PathBuf)], retries: u32) -> Result<()> {
     let errors = Arc::new(Mutex::new(Vec::new()));
+    let settings = config::load_effective_settings_for_current_dir()?;
 
     // Configure rayon thread pool with max concurrency
     let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(config::MAX_CONCURRENT_DOWNLOADS)
+        .num_threads(settings.network.max_concurrent_downloads)
         .build()
         .map_err(|e| VexError::Parse(format!("Failed to create thread pool: {}", e)))?;
 

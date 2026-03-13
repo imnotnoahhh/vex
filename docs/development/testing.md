@@ -469,7 +469,7 @@ As of v1.1.1, validation is intentionally split across several layers:
 - **Unit tests** in `src/**/*.rs` for parsing, resolution, downloading, switching, locking, and tool adapters
 - **CLI integration tests** in `tests/cli_test.rs` for core command behavior without full external installs
 - **End-to-end tests** in `tests/e2e_test.rs` for real installation workflows
-- **Shell and feature smoke tests** in `scripts/test-features.sh`, `scripts/test-shell-hooks.sh`, `scripts/test-security.sh`, and `scripts/test-performance.sh`
+- **Shell and feature smoke tests** in `scripts/test-features.sh`, `scripts/test-management-features.sh`, `scripts/test-shell-hooks.sh`, `scripts/test-security.sh`, and `scripts/test-performance.sh`
 - **Strict macOS validation** in `scripts/test_vex_release_strict.py` and `scripts/test_vex_local_build_strict.py` for official-archive diffs, multi-version switching, Python venv flows, and project/global auto-switch behavior
 
 ### 100% Coverage Modules
@@ -569,6 +569,10 @@ cargo test --all-features
 
 # Optional: Run ignored tests
 cargo test --all-features -- --ignored
+
+# Check release/homebrew tooling
+bash scripts/check-release-tooling.sh
+bash scripts/test-management-features.sh
 ```
 
 Or use the Makefile:

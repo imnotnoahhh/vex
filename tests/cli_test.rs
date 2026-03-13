@@ -1,6 +1,8 @@
+use serde_json::Value;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{fs, os::unix::fs::PermissionsExt};
 
 static TEMP_DIR_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -18,6 +20,13 @@ fn fresh_temp_dir(prefix: &str) -> PathBuf {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
+}
+
+fn write_executable_script(path: &std::path::Path, body: &str) {
+    fs::write(path, body).unwrap();
+    let mut perms = fs::metadata(path).unwrap().permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(path, perms).unwrap();
 }
 
 #[test]
@@ -46,6 +55,134 @@ fn test_current() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     // 应该显示已激活的版本或提示没有激活
     assert!(stdout.contains("active versions") || stdout.contains("No tools activated"));
+}
+
+#[test]
+fn test_current_json() {
+    let home = fresh_temp_dir("vex_test_current_json");
+    let output = vex_bin()
+        .args(["current", "--json"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: Value = serde_json::from_str(&stdout).unwrap();
+    assert!(parsed.get("cwd").is_some());
+    assert!(parsed.get("tools").unwrap().is_array());
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_exec_uses_project_toolchain_without_switching_global_state() {
+    let home = fresh_temp_dir("vex_test_exec_home");
+    let project = fresh_temp_dir("vex_test_exec_project");
+    let global_bin = home.join(".vex/toolchains/node/18.0.0/bin");
+    let project_bin = home.join(".vex/toolchains/node/20.11.0/bin");
+    fs::create_dir_all(&global_bin).unwrap();
+    fs::create_dir_all(&project_bin).unwrap();
+    fs::create_dir_all(home.join(".vex/current")).unwrap();
+    fs::create_dir_all(home.join(".vex/bin")).unwrap();
+    fs::write(project.join(".tool-versions"), "node 20.11.0\n").unwrap();
+    write_executable_script(
+        &global_bin.join("node"),
+        "#!/bin/sh\nprintf 'node-from-global:%s' \"$PWD\"\n",
+    );
+    write_executable_script(
+        &project_bin.join("node"),
+        "#!/bin/sh\nprintf 'node-from-exec:%s' \"$PWD\"\n",
+    );
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(
+        home.join(".vex/toolchains/node/18.0.0"),
+        home.join(".vex/current/node"),
+    )
+    .unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(
+        home.join(".vex/toolchains/node/18.0.0/bin/node"),
+        home.join(".vex/bin/node"),
+    )
+    .unwrap();
+
+    let output = vex_bin()
+        .args(["exec", "--", "node"])
+        .env("HOME", &home)
+        .current_dir(&project)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("node-from-exec"));
+    assert!(stdout.contains(project.to_string_lossy().as_ref()));
+    let current = fs::read_link(home.join(".vex/current/node")).unwrap();
+    assert_eq!(current, home.join(".vex/toolchains/node/18.0.0"));
+
+    let _ = fs::remove_dir_all(&home);
+    let _ = fs::remove_dir_all(&project);
+}
+
+#[test]
+fn test_run_uses_vex_toml_command_env_and_project_root() {
+    let home = fresh_temp_dir("vex_test_run_home");
+    let project = fresh_temp_dir("vex_test_run_project");
+    let nested = project.join("nested/deeper");
+    fs::create_dir_all(&nested).unwrap();
+    fs::create_dir_all(project.join(".venv/bin")).unwrap();
+    let toolchain_bin = home.join(".vex/toolchains/node/20.11.0/bin");
+    fs::create_dir_all(&toolchain_bin).unwrap();
+    fs::write(project.join(".tool-versions"), "node 20.11.0\n").unwrap();
+    fs::write(
+        project.join(".vex.toml"),
+        r#"
+[env]
+APP_ENV = "dev"
+
+[commands]
+show = "node"
+"#,
+    )
+    .unwrap();
+    write_executable_script(
+        &toolchain_bin.join("node"),
+        "#!/bin/sh\nprintf '%s|%s|%s' \"$APP_ENV\" \"$VIRTUAL_ENV\" \"$PWD\"\n",
+    );
+
+    let output = vex_bin()
+        .args(["run", "show"])
+        .env("HOME", &home)
+        .current_dir(&nested)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("dev"));
+    assert!(stdout.contains(project.join(".venv").to_string_lossy().as_ref()));
+    assert!(stdout.contains(project.to_string_lossy().as_ref()));
+
+    let _ = fs::remove_dir_all(&home);
+    let _ = fs::remove_dir_all(&project);
+}
+
+#[test]
+fn test_run_requires_project_task_definition() {
+    let home = fresh_temp_dir("vex_test_run_missing_home");
+    let project = fresh_temp_dir("vex_test_run_missing_project");
+
+    let output = vex_bin()
+        .args(["run", "show"])
+        .env("HOME", &home)
+        .current_dir(&project)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains(".vex.toml"));
+
+    let _ = fs::remove_dir_all(&home);
+    let _ = fs::remove_dir_all(&project);
 }
 
 // --- 错误场景测试 ---
@@ -90,6 +227,24 @@ fn test_list_installed_nonexistent_tool() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("No versions"));
+}
+
+#[test]
+fn test_list_installed_json() {
+    let home = fresh_temp_dir("vex_test_list_json");
+    let output = vex_bin()
+        .args(["list", "node", "--json"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed.get("tool").unwrap(), "node");
+    assert!(parsed.get("versions").unwrap().is_array());
+
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 #[test]
@@ -318,6 +473,112 @@ fn test_upgrade_valid_tool_format() {
     assert!(!stderr.contains("Invalid spec format"));
 }
 
+#[test]
+fn test_outdated_invalid_tool() {
+    let output = vex_bin().args(["outdated", "ruby"]).output().unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Tool not found"));
+}
+
+#[test]
+fn test_outdated_json_empty_context() {
+    let home = fresh_temp_dir("vex_test_outdated_json");
+    let output = vex_bin()
+        .args(["outdated", "--json"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: Value = serde_json::from_str(&stdout).unwrap();
+    assert!(parsed.get("scope").is_some());
+    assert!(parsed.get("entries").unwrap().is_array());
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_prune_dry_run_empty_home() {
+    let home = fresh_temp_dir("vex_test_prune_dry_run");
+    let output = vex_bin()
+        .args(["prune", "--dry-run"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Nothing to prune") || stdout.contains("candidate"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_gc_alias_dry_run() {
+    let home = fresh_temp_dir("vex_test_gc_alias");
+    let output = vex_bin()
+        .args(["gc", "--dry-run"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_prune_removes_only_unmanaged_items() {
+    let home = fresh_temp_dir("vex_test_prune_real_home");
+    let project = fresh_temp_dir("vex_test_prune_real_project");
+
+    fs::create_dir_all(home.join(".vex/cache")).unwrap();
+    fs::create_dir_all(home.join(".vex/locks")).unwrap();
+    fs::create_dir_all(home.join(".vex/current")).unwrap();
+    fs::create_dir_all(home.join(".vex/bin")).unwrap();
+    fs::create_dir_all(home.join(".vex/toolchains/node/1.0.0/bin")).unwrap();
+    fs::create_dir_all(home.join(".vex/toolchains/node/2.0.0/bin")).unwrap();
+    fs::create_dir_all(home.join(".vex/toolchains/node/3.0.0/bin")).unwrap();
+    fs::write(home.join(".vex/tool-versions"), "node 1.0.0\n").unwrap();
+    fs::write(project.join(".tool-versions"), "node 2.0.0\n").unwrap();
+    fs::write(home.join(".vex/cache/remote-node.json"), "broken-json").unwrap();
+    fs::write(home.join(".vex/locks/stale.lock"), "stale").unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(
+        home.join(".vex/toolchains/node/1.0.0"),
+        home.join(".vex/current/node"),
+    )
+    .unwrap();
+
+    let old_time = filetime::FileTime::from_unix_time(
+        std::time::SystemTime::now()
+            .checked_sub(std::time::Duration::from_secs(60 * 60 * 2))
+            .unwrap()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64,
+        0,
+    );
+    filetime::set_file_mtime(home.join(".vex/locks/stale.lock"), old_time).unwrap();
+
+    let output = vex_bin()
+        .args(["prune"])
+        .env("HOME", &home)
+        .current_dir(&project)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
+
+    assert!(home.join(".vex/toolchains/node/1.0.0").exists());
+    assert!(home.join(".vex/toolchains/node/2.0.0").exists());
+    assert!(!home.join(".vex/toolchains/node/3.0.0").exists());
+    assert!(!home.join(".vex/cache/remote-node.json").exists());
+    assert!(!home.join(".vex/locks/stale.lock").exists());
+
+    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(&project);
+}
+
 // --- alias 命令测试 ---
 
 #[test]
@@ -466,6 +727,187 @@ fn test_doctor_checks_path() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("PATH"));
+}
+
+#[test]
+fn test_doctor_json() {
+    let home = fresh_temp_dir("vex_test_doctor_json");
+    let output = vex_bin()
+        .args(["doctor", "--json"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: Value = serde_json::from_str(&stdout).unwrap();
+    assert!(parsed.get("root").is_some());
+    assert!(parsed.get("checks").unwrap().is_array());
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_doctor_json_reports_invalid_effective_settings_from_project_config() {
+    let home = fresh_temp_dir("vex_test_doctor_effective_settings_home");
+    let project = fresh_temp_dir("vex_test_doctor_effective_settings_project");
+
+    fs::create_dir_all(home.join(".vex/cache")).unwrap();
+    fs::create_dir_all(home.join(".vex/locks")).unwrap();
+    fs::create_dir_all(home.join(".vex/toolchains")).unwrap();
+    fs::create_dir_all(home.join(".vex/current")).unwrap();
+    fs::create_dir_all(home.join(".vex/bin")).unwrap();
+    fs::write(home.join(".vex/config.toml"), "# valid config\n").unwrap();
+    fs::write(
+        project.join(".vex.toml"),
+        r#"
+[network]
+proxy = "http:// bad proxy"
+
+[mirrors]
+node = "not-a-url"
+"#,
+    )
+    .unwrap();
+
+    let output = vex_bin()
+        .args(["doctor", "--json"])
+        .env("HOME", &home)
+        .current_dir(&project)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: Value = serde_json::from_str(&stdout).unwrap();
+    let checks = parsed
+        .get("checks")
+        .and_then(Value::as_array)
+        .unwrap()
+        .iter()
+        .find(|item| item.get("id") == Some(&Value::String("effective_settings".to_string())))
+        .cloned()
+        .unwrap();
+
+    assert_eq!(
+        checks.get("status"),
+        Some(&Value::String("warn".to_string()))
+    );
+    let details = checks
+        .get("details")
+        .and_then(Value::as_array)
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .collect::<Vec<_>>();
+    assert!(details
+        .iter()
+        .any(|detail| detail.contains("Invalid proxy URL")));
+    assert!(details
+        .iter()
+        .any(|detail| detail.contains("Invalid mirror for node")));
+
+    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(&project);
+}
+
+#[test]
+fn test_doctor_json_reports_invalid_global_config_schema() {
+    let home = fresh_temp_dir("vex_test_doctor_invalid_global_config");
+
+    fs::create_dir_all(home.join(".vex/cache")).unwrap();
+    fs::create_dir_all(home.join(".vex/locks")).unwrap();
+    fs::create_dir_all(home.join(".vex/toolchains")).unwrap();
+    fs::create_dir_all(home.join(".vex/current")).unwrap();
+    fs::create_dir_all(home.join(".vex/bin")).unwrap();
+    fs::write(
+        home.join(".vex/config.toml"),
+        r#"
+[network]
+connect_timeout_secs = "oops"
+"#,
+    )
+    .unwrap();
+
+    let output = vex_bin()
+        .args(["doctor", "--json"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: Value = serde_json::from_str(&stdout).unwrap();
+    let checks = parsed.get("checks").and_then(Value::as_array).unwrap();
+
+    let config_check = checks
+        .iter()
+        .find(|item| item.get("id") == Some(&Value::String("config".to_string())))
+        .cloned()
+        .unwrap();
+    assert_eq!(
+        config_check.get("status"),
+        Some(&Value::String("warn".to_string()))
+    );
+    let config_details = config_check
+        .get("details")
+        .and_then(Value::as_array)
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .collect::<Vec<_>>();
+    assert!(config_details
+        .iter()
+        .any(|detail| detail.contains("Failed to parse")));
+
+    let effective_settings_check = checks
+        .iter()
+        .find(|item| item.get("id") == Some(&Value::String("effective_settings".to_string())))
+        .cloned()
+        .unwrap();
+    assert_eq!(
+        effective_settings_check.get("status"),
+        Some(&Value::String("warn".to_string()))
+    );
+    let effective_details = effective_settings_check
+        .get("details")
+        .and_then(Value::as_array)
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .collect::<Vec<_>>();
+    assert!(effective_details
+        .iter()
+        .any(|detail| detail.contains("Failed to parse")));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_current_json_fails_on_invalid_global_config_schema() {
+    let home = fresh_temp_dir("vex_test_current_invalid_global_config");
+
+    fs::create_dir_all(home.join(".vex/current")).unwrap();
+    fs::write(
+        home.join(".vex/config.toml"),
+        r#"
+[network]
+connect_timeout_secs = "oops"
+"#,
+    )
+    .unwrap();
+
+    let output = vex_bin()
+        .args(["current", "--json"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "{:?}", output);
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Failed to parse"), "stderr was: {}", stderr);
+
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 // --- init 重复运行 ---

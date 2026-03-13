@@ -78,7 +78,17 @@ bash install-release.sh
    source ~/.bashrc
    ```
 
-### Method 3: Build from Source
+### Method 3: Homebrew Tap (Optional)
+
+If you already use Homebrew, vex also provides an official tap:
+
+```bash
+brew install imnotnoahhh/homebrew-vex/vex
+```
+
+This is optional. Direct installation remains the recommended path because vex is designed to work cleanly without requiring Homebrew.
+
+### Method 4: Build from Source
 
 If you have Rust installed:
 
@@ -200,31 +210,67 @@ vex current
 
 ## Configuration
 
-vex stores configuration in `~/.vex/config.toml`.
+vex stores machine-wide defaults in `~/.vex/config.toml`, and project-local overrides in `.vex.toml`.
 
-### Default Configuration
-
-```toml
-# Cache TTL for remote version lists (in seconds)
-cache_ttl_secs = 300  # 5 minutes
-```
-
-### Customization
-
-Edit `~/.vex/config.toml` to change settings:
+### Global Configuration
 
 ```toml
-# Cache remote version lists for 1 hour
-cache_ttl_secs = 3600
+cache_ttl_secs = 300
 
-# Cache for 10 minutes
-cache_ttl_secs = 600
+[network]
+connect_timeout_secs = 30
+read_timeout_secs = 300
+download_retries = 3
+proxy = "http://proxy.internal:8080"
 
-# Minimum supported TTL
-cache_ttl_secs = 60
+[behavior]
+auto_switch = true
+auto_activate_venv = true
+default_shell = "zsh"
+non_interactive = false
+
+[mirrors]
+node = "https://mirror.example.com/nodejs"
 ```
 
-Values outside the supported `60..=3600` second range fall back to the default `300` seconds with a warning.
+Notes:
+
+- `cache_ttl_secs = 0` disables the remote-version cache entirely
+- `60..=3600` seconds are accepted normally
+- values above `3600` are clamped to `3600`
+
+### Project Configuration
+
+`.vex.toml` is for project-local behavior, network/mirror overrides, env vars, and named tasks:
+
+```toml
+[behavior]
+auto_activate_venv = true
+
+[network]
+download_retries = 5
+
+[mirrors]
+python = "https://mirror.example.com/python"
+
+[env]
+APP_ENV = "dev"
+
+[commands]
+test = "cargo test --all-features"
+dev = "node server.js"
+```
+
+Environment variables such as `VEX_PROXY` and `VEX_DOWNLOAD_RETRIES` still override both config files, which is useful for CI and enterprise shells.
+
+Run commands with:
+
+```bash
+vex exec -- node -v
+vex run test
+```
+
+For the full configuration reference, see [Configuration Guide](configuration.md).
 
 ## Troubleshooting Installation
 

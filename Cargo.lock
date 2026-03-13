@@ -2295,6 +2295,7 @@ dependencies = [
  "criterion",
  "dialoguer",
  "dirs",
+ "filetime",
  "flate2",
  "fs2",
  "indicatif",

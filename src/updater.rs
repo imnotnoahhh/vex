@@ -4,6 +4,7 @@
 
 use crate::downloader::download_with_retry;
 use crate::error::{Result, VexError};
+use crate::http;
 use owo_colors::OwoColorize;
 use serde::Deserialize;
 use std::fs;
@@ -37,11 +38,7 @@ fn asset_name() -> Option<&'static str> {
 
 /// Fetch the latest release info from GitHub API.
 fn fetch_latest_release() -> Result<GithubRelease> {
-    let client = reqwest::blocking::Client::builder()
-        .user_agent(concat!("vex/", env!("CARGO_PKG_VERSION")))
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(VexError::Network)?;
+    let client = http::client_for_global_settings(concat!("vex/", env!("CARGO_PKG_VERSION")))?;
 
     let release: GithubRelease = client
         .get(GITHUB_API_LATEST)
@@ -175,6 +172,19 @@ fn detect_and_repair_broken_installations(old_version: &str) -> Result<()> {
         "{}",
         "They need to be reinstalled to work correctly.".dimmed()
     );
+    if crate::config::non_interactive()? {
+        println!(
+            "\n{} Non-interactive mode is enabled, so automatic repair is skipped.",
+            "→".cyan()
+        );
+        println!(
+            "{}",
+            "Reinstall the affected versions manually once an interactive shell is available."
+                .dimmed()
+        );
+        return Ok(());
+    }
+
     println!("\nReinstall them? [y/N]: ");
 
     use std::io::{self, Write};
@@ -290,7 +300,11 @@ pub fn self_update() -> Result<()> {
     // Download to a temp file next to the binary
     let tmp_path = current_exe.with_extension("tmp");
     println!("Downloading {}...", asset.name);
-    download_with_retry(&asset.browser_download_url, &tmp_path, 3)?;
+    download_with_retry(
+        &asset.browser_download_url,
+        &tmp_path,
+        crate::config::download_retries()?,
+    )?;
 
     // If it's an archive, extract the binary from it
     let final_tmp = if asset.name.ends_with(".tar.xz") {

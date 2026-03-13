@@ -71,6 +71,7 @@ lto = "thin"
 
 [dev-dependencies]
 criterion = "0.8"
+filetime = "0.2"
 
 [[bench]]
 name = "benchmarks"

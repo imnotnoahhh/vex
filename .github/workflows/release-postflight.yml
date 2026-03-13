@@ -1,0 +1,151 @@
+name: Release Postflight
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-release-notes:
+    name: Validate Release Notes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - name: Ensure CHANGELOG entry exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          if ! grep -nE "^## \[${VERSION//./\\.}\]" CHANGELOG.md >/dev/null; then
+            echo "CHANGELOG.md does not contain a section for ${VERSION}" >&2
+            exit 1
+          fi
+      - name: Ensure release body is not empty
+        shell: bash
+        env:
+          RELEASE_BODY: ${{ github.event.release.body }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${RELEASE_BODY// }" ]]; then
+            echo "Release body is empty" >&2
+            exit 1
+          fi
+
+  smoke-release-binary:
+    name: Smoke Release Binary (macOS 14)
+    runs-on: macos-14
+    needs: validate-release-notes
+    steps:
+      - name: Resolve arm64 release asset
+        id: asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASSET_URL="$(jq -r '.release.assets[] | select(.name == "vex-aarch64-apple-darwin.tar.gz") | .browser_download_url' "$GITHUB_EVENT_PATH")"
+          if [[ -z "$ASSET_URL" || "$ASSET_URL" == "null" ]]; then
+            echo "Could not find vex-aarch64-apple-darwin.tar.gz in release assets" >&2
+            exit 1
+          fi
+          echo "asset_url=$ASSET_URL" >> "$GITHUB_OUTPUT"
+      - name: Download and extract release binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          workdir="$(mktemp -d)"
+          curl -fsSL "${{ steps.asset.outputs.asset_url }}" -o "$workdir/vex.tar.gz"
+          tar -xzf "$workdir/vex.tar.gz" -C "$workdir"
+          find "$workdir" -type f -name vex -print -quit > "$workdir/vex.path"
+          VEX_BIN="$(cat "$workdir/vex.path")"
+          "$VEX_BIN" --version
+          "$VEX_BIN" init --dry-run
+          "$VEX_BIN" doctor --json >/dev/null
+
+  update-homebrew-tap:
+    name: Update Homebrew Tap
+    runs-on: ubuntu-latest
+    needs:
+      - validate-release-notes
+      - smoke-release-binary
+    if: ${{ !github.event.release.prerelease }}
+    env:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - name: Check Homebrew tap token
+        id: tap
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${HOMEBREW_TAP_TOKEN:-}" ]]; then
+            echo "No HOMEBREW_TAP_TOKEN configured; skipping Homebrew tap update."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Resolve release asset URLs
+        if: steps.tap.outputs.enabled == 'true'
+        id: assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARM_URL="$(jq -r '.release.assets[] | select(.name == "vex-aarch64-apple-darwin.tar.gz") | .browser_download_url' "$GITHUB_EVENT_PATH")"
+          INTEL_URL="$(jq -r '.release.assets[] | select(.name == "vex-x86_64-apple-darwin.tar.gz") | .browser_download_url' "$GITHUB_EVENT_PATH")"
+          if [[ -z "$ARM_URL" || "$ARM_URL" == "null" || -z "$INTEL_URL" || "$INTEL_URL" == "null" ]]; then
+            echo "Missing macOS release assets for Homebrew formula generation" >&2
+            exit 1
+          fi
+          echo "arm_url=$ARM_URL" >> "$GITHUB_OUTPUT"
+          echo "intel_url=$INTEL_URL" >> "$GITHUB_OUTPUT"
+      - name: Download artifacts and calculate checksums
+        if: steps.tap.outputs.enabled == 'true'
+        id: checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          workdir="$(mktemp -d)"
+          curl -fsSL "${{ steps.assets.outputs.arm_url }}" -o "$workdir/arm.tar.gz"
+          curl -fsSL "${{ steps.assets.outputs.intel_url }}" -o "$workdir/intel.tar.gz"
+          echo "arm_sha=$(shasum -a 256 "$workdir/arm.tar.gz" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "intel_sha=$(shasum -a 256 "$workdir/intel.tar.gz" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+      - name: Render Formula
+        if: steps.tap.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          bash scripts/render-homebrew-formula.sh \
+            "$VERSION" \
+            "${{ steps.assets.outputs.arm_url }}" \
+            "${{ steps.checksums.outputs.arm_sha }}" \
+            "${{ steps.assets.outputs.intel_url }}" \
+            "${{ steps.checksums.outputs.intel_sha }}" \
+            "$RUNNER_TEMP/vex.rb"
+      - name: Publish Formula to official tap
+        if: steps.tap.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tap_dir="$RUNNER_TEMP/homebrew-vex"
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/imnotnoahhh/homebrew-vex.git" "$tap_dir"
+          mkdir -p "$tap_dir/Formula"
+          cp "$RUNNER_TEMP/vex.rb" "$tap_dir/Formula/vex.rb"
+
+          cd "$tap_dir"
+          if git diff --quiet -- Formula/vex.rb; then
+            echo "Homebrew formula is already up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/vex.rb
+          git commit -m "vex ${{ github.event.release.tag_name }}"
+          git push origin HEAD

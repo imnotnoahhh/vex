@@ -55,6 +55,16 @@ During the 0.x phase:
   cargo clippy --all-targets --all-features -- -D warnings
   ```
 
+- [ ] Release tooling smoke checks pass
+  ```bash
+  bash scripts/check-release-tooling.sh
+  ```
+
+- [ ] Management feature smoke checks pass
+  ```bash
+  bash scripts/test-management-features.sh
+  ```
+
 - [ ] No security vulnerabilities
   ```bash
   cargo audit
@@ -162,6 +172,8 @@ GitHub Actions will automatically:
 1. Build binaries for macOS (arm64 and x86_64)
 2. Create a GitHub Release
 3. Upload binaries as release assets
+4. Trigger postflight release validation
+5. Update the official Homebrew tap when credentials are available
 
 **Manual steps** (if needed):
 
@@ -229,6 +241,29 @@ jobs:
       - Upload to GitHub Release
 ```
 
+#### 3. Release Postflight (`.github/workflows/release-postflight.yml`)
+
+Runs after a GitHub Release is published:
+
+```yaml
+jobs:
+  validate-release-notes:  # Ensure CHANGELOG entry and release body exist
+  smoke-release-binary:    # Download published macOS binary and run smoke checks
+  update-homebrew-tap:     # Regenerate Formula/vex.rb in homebrew-vex
+```
+
+### Homebrew Tap Automation
+
+The optional tap repository is:
+
+- `imnotnoahhh/homebrew-vex`
+
+To enable automatic formula updates, configure this repository secret in `vex`:
+
+- `HOMEBREW_TAP_TOKEN`
+
+The token only needs push access to the tap repository.
+
 ### Release Artifacts
 
 Each release includes:
@@ -260,6 +295,8 @@ vex-aarch64-apple-darwin/
 - [ ] Watch for bug reports related to new release
 - [ ] Respond to installation issues
 - [ ] Prepare hotfix if critical bugs found
+- [ ] Confirm `Release Postflight` passed
+- [ ] Confirm the Homebrew tap formula updated successfully
 
 ### 3. Update Documentation
 

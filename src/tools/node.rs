@@ -4,6 +4,7 @@
 //! Checksums obtained via SHASUMS256.txt file.
 
 use crate::error::Result;
+use crate::http;
 use crate::tools::{Arch, Tool, Version};
 use serde::Deserialize;
 
@@ -27,8 +28,8 @@ impl Tool for NodeTool {
 
     fn list_remote(&self) -> Result<Vec<Version>> {
         let url = "https://nodejs.org/dist/index.json";
-        let response = reqwest::blocking::get(url)?;
-        let releases: Vec<NodeRelease> = response.json()?;
+        let releases: Vec<NodeRelease> =
+            http::get_json_in_current_context(url, concat!("vex/", env!("CARGO_PKG_VERSION")))?;
 
         let versions = releases
             .into_iter()
@@ -90,8 +91,10 @@ impl Tool for NodeTool {
             None => return Ok(None),
         };
 
-        let response = reqwest::blocking::get(&checksum_url)?;
-        let content = response.text()?;
+        let content = http::get_text_in_current_context(
+            &checksum_url,
+            concat!("vex/", env!("CARGO_PKG_VERSION")),
+        )?;
 
         let version = if version.starts_with('v') {
             version.to_string()
