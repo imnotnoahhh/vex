@@ -1245,6 +1245,8 @@ def choose_alt_version(plan: ToolPlan) -> Optional[str]:
         selected = pick_preferred_alt_version(plan.name, plan.resolved_version, normalized)
         if selected is not None:
             return selected
+    if plan.name == "java":
+        return choose_alt_java_version(plan)
     if plan.name == "rust":
         return choose_alt_rust_version(plan)
     return None
@@ -1303,6 +1305,20 @@ def choose_alt_rust_version(plan: ToolPlan) -> Optional[str]:
         url = f"https://static.rust-lang.org/dist/rust-{candidate}-{target}.tar.gz"
         if official_url_exists(url):
             return candidate
+    return None
+
+
+def choose_alt_java_version(plan: ToolPlan) -> Optional[str]:
+    arch = "aarch64" if os.uname().machine in {"arm64", "aarch64"} else "x64"
+    for candidate in JAVA_FALLBACK_LTS_CANDIDATES:
+        version = str(candidate)
+        if version == plan.resolved_version:
+            continue
+        try:
+            resolve_java_download_url(version, arch)
+            return version
+        except TestFailure:
+            continue
     return None
 
 
