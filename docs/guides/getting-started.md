@@ -127,13 +127,14 @@ vex list node
 vex list-remote node
 
 # Show all versions
-vex list-remote node --all
+vex list-remote node --filter all
 ```
 
 ### Show current versions
 
 ```bash
 vex current
+vex current --json
 ```
 
 ### Uninstall a version
@@ -146,9 +147,56 @@ vex uninstall node@20.11.0
 
 ```bash
 vex doctor
+vex doctor --json
 ```
 
 This validates your installation and provides fixes for any issues.
+
+### Script-friendly output
+
+For CI, IDEs, or shell scripts, use JSON output:
+
+```bash
+vex list node --json
+vex list-remote node --json
+vex current --json
+vex doctor --json
+```
+
+### Upgrade and drift checks
+
+Use `vex outdated` to see whether the current managed context is behind latest, then upgrade one tool or the entire managed set:
+
+```bash
+vex outdated
+vex outdated --json
+vex upgrade node
+vex upgrade --all
+vex prune --dry-run
+vex gc --dry-run
+```
+
+### Transient execution and project tasks
+
+Use `vex exec` when you want the right toolchain environment for one command without switching global symlinks:
+
+```bash
+vex exec -- node -v
+vex exec -- python -m pytest
+```
+
+Use `.vex.toml` plus `vex run` for repeatable project tasks:
+
+```toml
+[commands]
+test = "cargo test --all-features"
+lint = "cargo clippy --all-targets --all-features -- -D warnings"
+```
+
+```bash
+vex run test
+vex run lint
+```
 
 ## Python Workflow
 

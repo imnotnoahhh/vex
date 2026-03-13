@@ -12,6 +12,7 @@
 
 use crate::config;
 use crate::error::{Result, VexError};
+use crate::http;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
@@ -21,31 +22,18 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tracing::{debug, error, info, warn};
 
-/// Create HTTP client with timeout configuration
+/// Create HTTP client with timeout configuration for direct current-context download tests.
+#[cfg(test)]
 fn create_http_client() -> Result<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .connect_timeout(config::CONNECT_TIMEOUT)
-        .timeout(config::READ_TIMEOUT)
-        .redirect(reqwest::redirect::Policy::limited(
-            config::MAX_HTTP_REDIRECTS,
-        ))
-        .user_agent(concat!("vex/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(VexError::Network)
+    http::client_for_current_context(concat!("vex/", env!("CARGO_PKG_VERSION")))
 }
 
-/// Download file to specified path with progress bar (atomic write)
-///
-/// # Arguments
-/// - `url` - Download URL
-/// - `dest` - Destination file path
-///
-/// # Errors
-/// - `VexError::Network` - HTTP request failed
-/// - `VexError::Io` - File write failed
-pub fn download_file(url: &str, dest: &Path) -> Result<()> {
+fn download_file_with_client(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    dest: &Path,
+) -> Result<()> {
     info!("Starting download: {} -> {}", url, dest.display());
-    let client = create_http_client()?;
     let mut response = client.get(url).send()?;
 
     if !response.status().is_success() {
@@ -100,6 +88,21 @@ pub fn download_file(url: &str, dest: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Download file to specified path with progress bar (atomic write)
+///
+/// # Arguments
+/// - `url` - Download URL
+/// - `dest` - Destination file path
+///
+/// # Errors
+/// - `VexError::Network` - HTTP request failed
+/// - `VexError::Io` - File write failed
+#[cfg(test)]
+pub fn download_file(url: &str, dest: &Path) -> Result<()> {
+    let client = create_http_client()?;
+    download_file_with_client(&client, url, dest)
+}
+
 /// Verify file's SHA256 checksum
 ///
 /// # Arguments
@@ -144,11 +147,27 @@ pub fn verify_checksum(file_path: &Path, expected: &str) -> Result<bool> {
 /// - `dest` - Destination file path
 /// - `retries` - Maximum retry attempts
 pub fn download_with_retry(url: &str, dest: &Path, retries: u32) -> Result<()> {
+    let settings = config::load_settings()?;
+    download_with_retry_with_settings(url, dest, retries, &settings)
+}
+
+pub fn download_with_retry_in_current_context(url: &str, dest: &Path, retries: u32) -> Result<()> {
+    let settings = config::load_effective_settings_for_current_dir()?;
+    download_with_retry_with_settings(url, dest, retries, &settings)
+}
+
+pub fn download_with_retry_with_settings(
+    url: &str,
+    dest: &Path,
+    retries: u32,
+    settings: &config::Settings,
+) -> Result<()> {
     info!("Download with retry: {} (max retries: {})", url, retries);
     let mut attempts = 0;
+    let client = http::client_for_settings(settings, concat!("vex/", env!("CARGO_PKG_VERSION")))?;
 
     loop {
-        match download_file(url, dest) {
+        match download_file_with_client(&client, url, dest) {
             Ok(_) => {
                 info!("Download successful after {} attempts", attempts + 1);
                 return Ok(());
@@ -175,7 +194,7 @@ pub fn download_with_retry(url: &str, dest: &Path, retries: u32) -> Result<()> {
                     eprintln!("Download failed: {}", e);
                     eprintln!("Retrying... ({}/{} attempts)", attempts + 1, retries);
                     attempts += 1;
-                    std::thread::sleep(config::RETRY_BASE_DELAY);
+                    std::thread::sleep(settings.network.retry_base_delay);
                 } else {
                     error!("Download failed after {} attempts", retries);
                     return Err(e);
@@ -200,16 +219,17 @@ pub fn download_with_retry(url: &str, dest: &Path, retries: u32) -> Result<()> {
 #[allow(dead_code)]
 pub fn download_parallel(downloads: &[(String, PathBuf)], retries: u32) -> Result<()> {
     let errors = Arc::new(Mutex::new(Vec::new()));
+    let settings = config::load_effective_settings_for_current_dir()?;
 
     // Configure rayon thread pool with max concurrency
     let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(config::MAX_CONCURRENT_DOWNLOADS)
+        .num_threads(settings.network.max_concurrent_downloads)
         .build()
         .map_err(|e| VexError::Parse(format!("Failed to create thread pool: {}", e)))?;
 
     pool.install(|| {
         downloads.par_iter().for_each(|(url, dest)| {
-            if let Err(e) = download_with_retry(url, dest, retries) {
+            if let Err(e) = download_with_retry_with_settings(url, dest, retries, &settings) {
                 // Store error message instead of error itself (reqwest::Error is not Clone)
                 errors.lock().unwrap().push(format!("{}", e));
             }
@@ -231,6 +251,9 @@ pub fn download_parallel(downloads: &[(String, PathBuf)], retries: u32) -> Resul
 mod tests {
     use super::*;
     use std::io::Write;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_verify_checksum_correct() {
@@ -381,5 +404,26 @@ mod tests {
     #[test]
     fn test_max_concurrent_downloads_constant() {
         assert_eq!(config::MAX_CONCURRENT_DOWNLOADS, 3);
+    }
+
+    #[test]
+    fn test_download_with_retry_ignores_invalid_project_config_for_global_use() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let cwd = std::env::current_dir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("download.tmp");
+
+        std::fs::write(
+            dir.path().join(".vex.toml"),
+            "[network]\nread_timeout_secs = \"oops\"\n",
+        )
+        .unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+
+        let result = download_with_retry("http://127.0.0.1:9/nope", &dest, 0);
+
+        std::env::set_current_dir(cwd).unwrap();
+
+        assert!(matches!(result, Err(VexError::Network(_))));
     }
 }

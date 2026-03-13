@@ -6,6 +6,7 @@ Welcome to the vex documentation! This directory contains guides and resources t
 
 - [Getting Started Guide](guides/getting-started.md) - New to vex? Start here!
 - [Installation Guide](guides/installation.md) - Detailed installation instructions
+- [Configuration Guide](guides/configuration.md) - Global config, `.vex.toml`, `exec`, and `run`
 - [Shell Integration Guide](guides/shell-integration.md) - Set up auto-switching for your shell
 - [Troubleshooting Guide](guides/troubleshooting.md) - Common issues and solutions
 
@@ -48,6 +49,7 @@ The API documentation includes:
 
 - **getting-started.md** - Quick start guide for new users
 - **installation.md** - Detailed installation instructions for all methods
+- **configuration.md** - Global configuration, project config, and task execution
 - **shell-integration.md** - Shell hook setup for zsh, bash, fish, and nushell
 - **troubleshooting.md** - Common problems and how to fix them
 

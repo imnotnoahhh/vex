@@ -6,6 +6,7 @@
 //! Version-specific checksum verification uses Rust's `.sha256` sidecar files.
 
 use crate::error::{Result, VexError};
+use crate::http;
 use crate::tools::{Arch, Tool, Version};
 use serde::Deserialize;
 
@@ -57,8 +58,8 @@ impl Tool for RustTool {
     fn list_remote(&self) -> Result<Vec<Version>> {
         // Rust only shows stable version
         let url = "https://static.rust-lang.org/dist/channel-rust-stable.toml";
-        let response = reqwest::blocking::get(url)?;
-        let content = response.text()?;
+        let content =
+            http::get_text_in_current_context(url, concat!("vex/", env!("CARGO_PKG_VERSION")))?;
 
         // Parse TOML
         let manifest: RustManifest = toml::from_str(&content)
@@ -128,8 +129,10 @@ impl Tool for RustTool {
             None => return Ok(None),
         };
 
-        let response = reqwest::blocking::get(&checksum_url)?;
-        let content = response.text()?;
+        let content = http::get_text_in_current_context(
+            &checksum_url,
+            concat!("vex/", env!("CARGO_PKG_VERSION")),
+        )?;
         Ok(parse_sha256_sidecar(&content))
     }
 

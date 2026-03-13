@@ -7,16 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-03-13
+
+### Added
+
+- **Machine-readable command output** — Added `--json` support for `vex current`, `vex list`, `vex list-remote`, and `vex doctor`, backed by shared output/report models for CLI, CI, and editor integrations.
+- **Managed upgrade workflows** — Added `vex outdated` to inspect the current managed scope and `vex upgrade --all` to upgrade the full active/project/global context in one command.
+- **Workspace cleanup commands** — Added `vex prune` plus the `vex gc` alias to preview or remove cached downloads, stale locks, and unreferenced toolchains while preserving active and pinned versions.
+- **Project runtime commands** — Added `vex exec -- <command>` for transient execution without switching global symlinks and `vex run <task>` for named commands declared in `.vex.toml`.
+- **Project configuration support** — Added `.vex.toml` parsing for project-local behavior, network overrides, mirrors, environment variables, and named tasks.
+- **Release postflight automation** — Added `.github/workflows/release-postflight.yml` to validate release notes, smoke-test published macOS binaries, and update the official Homebrew tap when credentials are available.
+- **Homebrew tap packaging support** — Added formula rendering automation plus packaging docs for the optional `imnotnoahhh/homebrew-vex` tap.
+- **Management feature smoke coverage** — Added `scripts/test-management-features.sh` plus a dedicated CI job to exercise the real behavior of `--json`, `outdated`, `upgrade --all`, `prune`/`gc`, `.vex.toml`, `vex exec`, and `vex run` in isolated homes instead of relying only on unit tests or format/lint checks.
+
 ### Fixed
 
+- **Configuration schema errors now surface consistently** — Commands that load effective settings, including `vex current --json`, now fail fast when `~/.vex/config.toml` or a project `.vex.toml` contains invalid types instead of silently falling back to defaults. `vex doctor --json` now validates the typed config schema as well, so malformed settings are reported as configuration warnings instead of being marked valid.
 - **Python release metadata fetch reliability** — Reworked `src/tools/python.rs` to resolve python-build-standalone versions via the latest release tag plus `SHA256SUMS` instead of decoding GitHub's large `releases/latest` JSON payload. This fixes transient `error decoding response body` failures seen in strict macOS CI and other network-sensitive environments when installing Python.
 - **Python lifecycle alias correctness** — Fixed Python alias resolution so `python@latest`, `python@stable`, and `python@bugfix` now resolve to the current official bugfix branch, while `python@security` follows the official security-only branch. This corrects stale lifecycle mappings that previously resolved `latest` to `3.13.12` instead of `3.14.3`.
 - **Strict macOS Java probe false negative** — Updated `scripts/test_vex_release_strict.py` so `serialver` is validated against its real help output format on modern JDKs, eliminating a strict CI false failure on Java 25.
+- **Management smoke tests no longer pin a stale Python patch release** — `scripts/test-management-features.sh` now derives both the newest and older stable Python versions from `vex list-remote python --json` instead of hardcoding `3.13.12`, so the feature smoke job stays aligned with upstream python-build-standalone releases.
 
 ### Changed
 
+- **Configuration system overhaul** — Reworked configuration handling into a typed settings model with defaults, `~/.vex/config.toml`, project `.vex.toml`, and environment-variable overrides. Added support for mirrors, proxy settings, request timeouts, retry controls, redirect limits, default shell selection, and non-interactive mode.
+- **Enterprise/network behavior is now consistent** — Node, Go, Java, Rust, Python, the downloader, and release metadata fetches now share configurable HTTP clients so proxy, timeout, retry, and project-level network settings apply consistently across metadata resolution and archive downloads.
+- **Doctor coverage expanded** — `vex doctor` now validates PATH priority, duplicate shell hooks, cache integrity, global `tool-versions`, project `.vex.toml`, and the effective configuration surface in addition to existing filesystem and binary checks.
 - **Python lifecycle status is now dynamic** — Python support phases are now derived from the official Python version-status page at runtime, with a built-in fallback when the upstream page is unavailable. This keeps `bugfix`, `security`, and future branch transitions aligned with the official Python release lifecycle.
 - **Python remote version labels now use `Status:` instead of `LTS:`** — `vex list-remote python` now displays lifecycle phases using Python's official terminology (`feature`, `bugfix`, `security`, `end-of-life`) instead of reusing the generic `LTS` label used by Node.js and Java.
+- **Homebrew install guidance is now explicit** — The generated Homebrew formula now prints `caveats` that explain how to preview initialization and enable shell integration after a brew install, while keeping shell configuration changes opt-in.
 
 ## [1.1.1] - 2026-03-12
 

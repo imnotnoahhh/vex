@@ -11,9 +11,10 @@
 //! - **Automatic cleanup**: Failed installations automatically clean up temporary files
 
 use crate::config;
-use crate::downloader::{download_with_retry, verify_checksum};
+use crate::downloader::{download_with_retry_in_current_context, verify_checksum};
 use crate::error::{Result, VexError};
 use crate::lock::InstallLock;
+use crate::resolver;
 use crate::tools::{Arch, Tool};
 use flate2::read::GzDecoder;
 use owo_colors::OwoColorize;
@@ -116,7 +117,10 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     let vex = vex_dir()?;
 
     // 0. Check if already installed
-    let final_dir = vex.join("toolchains").join(tool.name()).join(version);
+    let final_dir = config::toolchains_dir()
+        .ok_or(VexError::HomeDirectoryNotFound)?
+        .join(tool.name())
+        .join(version);
     if final_dir.exists() {
         info!("Version already installed: {}@{}", tool.name(), version);
         println!(
@@ -145,8 +149,9 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
         version.yellow()
     );
 
-    let cache_dir = vex.join("cache");
+    let cache_dir = config::cache_dir().ok_or(VexError::HomeDirectoryNotFound)?;
     fs::create_dir_all(&cache_dir)?;
+    let settings = config::load_effective_settings(&resolver::current_dir())?;
 
     let archive_name = format!("{}-{}.tar.gz", tool.name(), version);
     let archive_path = cache_dir.join(&archive_name);
@@ -158,9 +163,17 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     guard.add(extract_dir.clone());
 
     // 1. Download
-    let download_url = tool.download_url(version, arch)?;
+    let download_url = config::rewrite_download_url_with_settings(
+        &settings,
+        tool.name(),
+        &tool.download_url(version, arch)?,
+    )?;
     println!("{} from {}...", "Downloading".cyan(), download_url.dimmed());
-    download_with_retry(&download_url, &archive_path, 3)?;
+    download_with_retry_in_current_context(
+        &download_url,
+        &archive_path,
+        settings.network.download_retries,
+    )?;
 
     // 2. Verify checksum
     if let Ok(Some(expected)) = tool.get_checksum(version, arch) {
