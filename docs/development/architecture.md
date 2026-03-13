@@ -116,6 +116,12 @@ main.rs
 | `installer.rs` | Extract archives, disk space check | `install()`, `check_disk_space()` |
 | `switcher.rs` | Atomic symlink updates | `switch_version()` |
 | `resolver.rs` | Version file parsing | `resolve_versions()`, `resolve_version()` |
+| `activation.rs` | Build transient execution environments | `build_activation_plan()` |
+| `project.rs` | Parse project-local `.vex.toml` files | `load_nearest_project_config()` |
+| `config.rs` | Global settings, env overrides, mirror rewriting | `load_settings()`, `rewrite_download_url()` |
+| `http.rs` | Shared HTTP clients for global and project-scoped commands | `client_for_current_context()`, `client_for_global_settings()` |
+| `commands/*.rs` | Higher-level command implementations | `current`, `versions`, `updates`, `prune`, `doctor`, `process` |
+| `output.rs` | Shared text/JSON output helpers | `print_json()` |
 | `shell.rs` | Shell hook generation | `generate_hook()` |
 | `cache.rs` | Remote version list caching | `get_cached_versions()`, `cache_versions()` |
 | `lock.rs` | Installation locking | `InstallLock::acquire()` |

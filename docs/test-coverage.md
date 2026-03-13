@@ -14,7 +14,17 @@
 - 覆盖 Python `.venv` 基础工作流
 - 适合本地开发中的快速 smoke test
 
-### 2. 官方 release 严格验证
+### 2. 管理类功能回归
+
+脚本：`scripts/test-management-features.sh`
+
+用途：
+- 验证 `current / list / list-remote / doctor --json`
+- 验证 `outdated`、`upgrade --all`、`prune` / `gc`
+- 验证 `.vex.toml`、`vex exec`、`vex run` 的真实行为
+- 适合在 CI 中做一条更聚焦的新功能 smoke test
+
+### 3. 官方 release 严格验证
 
 脚本：`scripts/test_vex_release_strict.py`
 
@@ -23,7 +33,7 @@
 - 在隔离 HOME 中做全量 macOS 验证
 - 适合 release 前确认“线上发布物”是否健康
 
-### 3. 本地构建严格验证
+### 4. 本地构建严格验证
 
 脚本：`scripts/test_vex_local_build_strict.py`
 
@@ -69,6 +79,7 @@
 
 ```bash
 bash scripts/test-features.sh
+bash scripts/test-management-features.sh
 ```
 
 ### 验证最新发布的 release
@@ -107,5 +118,5 @@ VEX_TEST_HOME=/tmp/vex-audit-home python3 scripts/test_vex_local_build_strict.py
 - 严格验证脚本新增新的测试阶段
 - 快速功能脚本的覆盖目标发生明显变化
 
-**Last Updated**: 2026-03-12
+**Last Updated**: 2026-03-13
 **Status**: ✅ Comprehensive coverage

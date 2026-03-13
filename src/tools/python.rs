@@ -4,9 +4,9 @@
 //! to provide prebuilt CPython binaries. Supports version aliases based on Python's
 //! support lifecycle (bugfix, security, end-of-life).
 
-use crate::config;
 use crate::error::Result;
 use crate::error::VexError;
+use crate::http;
 use crate::tools::{Arch, Tool, Version};
 use reqwest::blocking::Client;
 use std::collections::{BTreeMap, BTreeSet};
@@ -49,16 +49,13 @@ impl SupportStatus {
 }
 
 fn create_github_client() -> Result<Client> {
-    reqwest::blocking::Client::builder()
-        .user_agent("vex-version-manager")
-        .connect_timeout(config::CONNECT_TIMEOUT)
-        .timeout(config::READ_TIMEOUT)
-        .build()
-        .map_err(VexError::Network)
+    http::client_for_current_context("vex-version-manager")
 }
 
 fn fetch_text_with_retry(client: &Client, url: &str) -> Result<String> {
+    let settings = crate::config::load_effective_settings_for_current_dir()?;
     let mut attempts = 0;
+    let max_attempts = settings.network.download_retries.max(1);
 
     loop {
         match client.get(url).send() {
@@ -66,14 +63,15 @@ fn fetch_text_with_retry(client: &Client, url: &str) -> Result<String> {
                 Ok(ok_response) => match ok_response.text() {
                     Ok(text) => return Ok(text),
                     Err(err) => {
-                        if attempts < 2 {
+                        if attempts + 1 < max_attempts {
                             warn!(
-                                "Python upstream text fetch failed (attempt {}/3): {}",
+                                "Python upstream text fetch failed (attempt {}/{}): {}",
                                 attempts + 1,
+                                max_attempts,
                                 err
                             );
                             attempts += 1;
-                            std::thread::sleep(config::RETRY_BASE_DELAY);
+                            std::thread::sleep(settings.network.retry_base_delay);
                             continue;
                         }
                         return Err(VexError::Network(err));
@@ -83,28 +81,30 @@ fn fetch_text_with_retry(client: &Client, url: &str) -> Result<String> {
                     if err.status().map(|s| s.is_client_error()).unwrap_or(false) {
                         return Err(VexError::Network(err));
                     }
-                    if attempts < 2 {
+                    if attempts + 1 < max_attempts {
                         warn!(
-                            "Python upstream request failed (attempt {}/3): {}",
+                            "Python upstream request failed (attempt {}/{}): {}",
                             attempts + 1,
+                            max_attempts,
                             err
                         );
                         attempts += 1;
-                        std::thread::sleep(config::RETRY_BASE_DELAY);
+                        std::thread::sleep(settings.network.retry_base_delay);
                         continue;
                     }
                     return Err(VexError::Network(err));
                 }
             },
             Err(err) => {
-                if attempts < 2 {
+                if attempts + 1 < max_attempts {
                     warn!(
-                        "Python upstream request failed (attempt {}/3): {}",
+                        "Python upstream request failed (attempt {}/{}): {}",
                         attempts + 1,
+                        max_attempts,
                         err
                     );
                     attempts += 1;
-                    std::thread::sleep(config::RETRY_BASE_DELAY);
+                    std::thread::sleep(settings.network.retry_base_delay);
                     continue;
                 }
                 return Err(VexError::Network(err));

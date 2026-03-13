@@ -10,13 +10,18 @@ use owo_colors::OwoColorize;
 use std::fs;
 use std::path::PathBuf;
 
+mod activation;
 mod cache;
+mod commands;
 mod config;
 mod downloader;
 mod error;
+mod http;
 mod installer;
 mod lock;
 mod logging;
+mod output;
+mod project;
 mod resolver;
 mod shell;
 mod switcher;
@@ -90,6 +95,10 @@ enum Commands {
     List {
         /// Tool name (e.g., node)
         tool: String,
+
+        /// Output machine-readable JSON
+        #[arg(long)]
+        json: bool,
     },
 
     /// List available remote versions
@@ -104,10 +113,18 @@ enum Commands {
         /// Skip cache and fetch fresh data
         #[arg(long)]
         no_cache: bool,
+
+        /// Output machine-readable JSON
+        #[arg(long)]
+        json: bool,
     },
 
     /// Show current active versions
-    Current,
+    Current {
+        /// Output machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
 
     /// Uninstall a version
     Uninstall {
@@ -135,8 +152,30 @@ enum Commands {
 
     /// Upgrade a tool to the latest version
     Upgrade {
-        /// Tool name (e.g., node)
-        tool: String,
+        /// Tool name (e.g., node). Omit with --all.
+        tool: Option<String>,
+
+        /// Upgrade every managed tool in the current context
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// Show which managed tools are behind the latest available version
+    Outdated {
+        /// Tool name (e.g., node). Omit to inspect the current managed context.
+        tool: Option<String>,
+
+        /// Output machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Remove unused cache files, stale locks, and unreferenced toolchains
+    #[command(alias = "gc")]
+    Prune {
+        /// Show what would be removed without deleting anything
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Show available aliases for a tool
@@ -145,8 +184,29 @@ enum Commands {
         tool: String,
     },
 
+    /// Run a command inside the resolved vex-managed environment without switching global state
+    Exec {
+        /// Command to run after '--' (for example: vex exec -- node -v)
+        #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
+        command: Vec<String>,
+    },
+
+    /// Run a named task from .vex.toml inside the resolved vex-managed environment
+    Run {
+        /// Task name from [commands] in .vex.toml
+        task: String,
+
+        /// Extra arguments appended to the task command
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
     /// Check vex installation health
-    Doctor,
+    Doctor {
+        /// Output machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
 
     /// Update vex itself to the latest release
     SelfUpdate,
@@ -237,7 +297,7 @@ fn init_vex(shell_arg: &str, dry_run: bool) -> Result<()> {
 
     // Handle shell configuration
     let shell = if shell_arg == "auto" {
-        shell::detect_shell()
+        config::default_shell()?.or_else(shell::detect_shell)
     } else if shell_arg == "skip" {
         None
     } else {
@@ -368,6 +428,13 @@ fn parse_spec(spec: &str) -> Result<(String, String)> {
 }
 
 fn interactive_install(tool_name: &str, no_switch: bool) -> Result<()> {
+    if config::non_interactive()? {
+        return Err(error::VexError::Dialog(
+            "Interactive installation is disabled in non-interactive mode. Specify an explicit version instead (for example: 'vex install node@24.14.0')."
+                .to_string(),
+        ));
+    }
+
     let tool = tools::get_tool(tool_name)?;
 
     let spinner = ProgressBar::new_spinner();
@@ -442,187 +509,14 @@ fn interactive_install(tool_name: &str, no_switch: bool) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
+#[cfg(test)]
 fn show_current() -> Result<()> {
-    let vex_dir = vex_dir()?;
-    let current_dir = vex_dir.join("current");
+    commands::current::show(output::OutputMode::Text)
+}
 
-    if !current_dir.exists() {
-        println!("{}", "No tools activated yet.".dimmed());
-        println!();
-        println!("{}", "Use 'vex install <tool>' to install a tool.".dimmed());
-        return Ok(());
-    }
-
-    let entries = fs::read_dir(&current_dir)?;
-    let mut tools: Vec<(String, String, String, String)> = Vec::new();
-
-    // Get current directory and resolve versions
-    let pwd = resolver::current_dir();
-    let versions = resolver::resolve_versions(&pwd);
-
-    // Get global versions
-    let global_path = dirs::home_dir()
-        .map(|p| p.join(".vex").join("tool-versions"))
-        .unwrap_or_default();
-    let global_versions = if global_path.is_file() {
-        if let Ok(content) = fs::read_to_string(&global_path) {
-            content
-                .lines()
-                .filter_map(|line| {
-                    let line = line.trim();
-                    if line.is_empty() || line.starts_with('#') {
-                        return None;
-                    }
-                    let mut parts = line.split_whitespace();
-                    let tool = parts.next()?;
-                    let version = parts.next()?;
-                    Some((tool.to_string(), version.to_string()))
-                })
-                .collect::<std::collections::HashMap<_, _>>()
-        } else {
-            std::collections::HashMap::new()
-        }
-    } else {
-        std::collections::HashMap::new()
-    };
-
-    for entry in entries.filter_map(|e| e.ok()) {
-        let tool_name = entry.file_name().to_string_lossy().to_string();
-
-        if let Ok(target) = fs::read_link(entry.path()) {
-            if let Some(version) = target.file_name() {
-                let version_str = version.to_string_lossy().to_string();
-
-                // Determine source
-                let (source, source_path) = if let Some(project_version) = versions.get(&tool_name)
-                {
-                    if project_version == &version_str {
-                        // Find the actual file that defines this version
-                        let mut dir = pwd.clone();
-                        let mut found_source = None;
-                        loop {
-                            let tool_versions = dir.join(".tool-versions");
-                            if tool_versions.is_file() {
-                                if let Ok(content) = fs::read_to_string(&tool_versions) {
-                                    for line in content.lines() {
-                                        let line = line.trim();
-                                        if line.starts_with(&tool_name) {
-                                            found_source = Some((
-                                                "Project override".to_string(),
-                                                tool_versions.display().to_string(),
-                                            ));
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-
-                            if found_source.is_some() {
-                                break;
-                            }
-
-                            // Check tool-specific files
-                            let specific_files = [
-                                (".node-version", "node"),
-                                (".nvmrc", "node"),
-                                (".go-version", "go"),
-                                (".java-version", "java"),
-                                (".rust-toolchain", "rust"),
-                            ];
-                            for (file, tool) in &specific_files {
-                                if tool_name == *tool {
-                                    let path = dir.join(file);
-                                    if path.is_file() {
-                                        found_source = Some((
-                                            "Project override".to_string(),
-                                            path.display().to_string(),
-                                        ));
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if found_source.is_some() {
-                                break;
-                            }
-
-                            if !dir.pop() {
-                                break;
-                            }
-                        }
-                        found_source.unwrap_or_else(|| {
-                            // No local file found — fall back to global check
-                            if let Some(global_ver) = global_versions.get(&tool_name) {
-                                if global_ver == &version_str {
-                                    (
-                                        "Global default".to_string(),
-                                        global_path.display().to_string(),
-                                    )
-                                } else {
-                                    ("Manual activation".to_string(), "N/A".to_string())
-                                }
-                            } else {
-                                ("Manual activation".to_string(), "N/A".to_string())
-                            }
-                        })
-                    } else if let Some(global_ver) = global_versions.get(&tool_name) {
-                        if global_ver == &version_str {
-                            (
-                                "Global default".to_string(),
-                                global_path.display().to_string(),
-                            )
-                        } else {
-                            ("Manual activation".to_string(), "N/A".to_string())
-                        }
-                    } else {
-                        ("Manual activation".to_string(), "N/A".to_string())
-                    }
-                } else if let Some(global_ver) = global_versions.get(&tool_name) {
-                    if global_ver == &version_str {
-                        (
-                            "Global default".to_string(),
-                            global_path.display().to_string(),
-                        )
-                    } else {
-                        ("Manual activation".to_string(), "N/A".to_string())
-                    }
-                } else {
-                    ("Manual activation".to_string(), "N/A".to_string())
-                };
-
-                tools.push((tool_name, version_str, source, source_path));
-            }
-        }
-    }
-
-    if tools.is_empty() {
-        println!("{}", "No tools activated yet.".dimmed());
-        println!();
-        println!("{}", "Use 'vex install <tool>' to install a tool.".dimmed());
-        return Ok(());
-    }
-
-    tools.sort_by(|a, b| a.0.cmp(&b.0));
-
-    println!();
-    println!("{}", "Current active versions:".bold());
-    println!();
-
-    for (tool, version, source, source_path) in tools {
-        println!(
-            "  {} → {} ({})",
-            tool.yellow(),
-            version.cyan(),
-            source.dimmed()
-        );
-        if source_path != "N/A" {
-            println!("    {}: {}", "Source".dimmed(), source_path.dimmed());
-        }
-    }
-
-    println!();
-
-    Ok(())
+fn show_current_with_output(output_mode: output::OutputMode) -> Result<()> {
+    commands::current::show(output_mode)
 }
 
 fn uninstall(tool_name: &str, version: &str) -> Result<()> {
@@ -675,245 +569,45 @@ fn uninstall(tool_name: &str, version: &str) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
+#[cfg(test)]
 fn list_installed(tool_name: &str) -> Result<()> {
-    let vex_dir = vex_dir()?;
-    let toolchains_dir = vex_dir.join("toolchains").join(tool_name);
+    commands::versions::list_installed(tool_name, output::OutputMode::Text)
+}
 
-    if !toolchains_dir.exists() {
-        println!("No versions of {} installed.", tool_name);
-        return Ok(());
-    }
-
-    let entries = fs::read_dir(&toolchains_dir)?;
-    let mut versions: Vec<String> = entries
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().ok().map(|t| t.is_dir()).unwrap_or(false))
-        .map(|e| e.file_name().to_string_lossy().to_string())
-        .collect();
-
-    if versions.is_empty() {
-        println!("No versions of {} installed.", tool_name);
-        return Ok(());
-    }
-
-    versions.sort();
-
-    // Check currently active version
-    let current_link = vex_dir.join("current").join(tool_name);
-    let current_version = if current_link.exists() {
-        fs::read_link(&current_link)
-            .ok()
-            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
-    } else {
-        None
-    };
-
-    println!();
-    println!("Installed versions of {}:", tool_name);
-    println!();
-
-    for version in versions {
-        if Some(&version) == current_version.as_ref() {
-            println!("  {} (current)", version);
-        } else {
-            println!("  {}", version);
-        }
-    }
-
-    println!();
-
-    Ok(())
+fn list_installed_with_output(tool_name: &str, output_mode: output::OutputMode) -> Result<()> {
+    commands::versions::list_installed(tool_name, output_mode)
 }
 
 /// Fetch remote versions with optional cache support.
 /// When use_cache is true, checks the cache first and writes back on miss.
 fn fetch_versions_cached(tool: &dyn tools::Tool, use_cache: bool) -> Result<Vec<tools::Version>> {
-    let vex = vex_dir()?;
-    let remote_cache = cache::RemoteCache::new(&vex);
-    let ttl = cache::read_cache_ttl(&vex);
-
-    if use_cache {
-        if let Some(cached) = remote_cache.get_cached_versions(tool.name(), ttl) {
-            return Ok(cached);
-        }
-    }
-
-    let versions = tool.list_remote()?;
-    remote_cache.set_cached_versions(tool.name(), &versions);
-    Ok(versions)
+    commands::versions::fetch_versions_cached(tool, use_cache)
 }
 
+#[allow(dead_code)]
+#[cfg(test)]
 fn list_remote(tool_name: &str, filter: FilterType, use_cache: bool) -> Result<()> {
-    let tool = tools::get_tool(tool_name)?;
-
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.green} {msg}")
-            .unwrap(),
-    );
-    spinner.set_message(format!("Fetching available versions of {}...", tool_name));
-    spinner.enable_steady_tick(std::time::Duration::from_millis(100));
-
-    let mut versions = fetch_versions_cached(tool.as_ref(), use_cache)?;
-    spinner.finish_and_clear();
-
-    // Get current version for highlighting
-    let current_version = get_current_version_for_tool(tool_name);
-
-    // Apply filter
-    versions = match filter {
-        FilterType::All => versions,
-        FilterType::Lts => {
-            if tool_name == "python" {
-                Vec::new()
-            } else {
-                versions.into_iter().filter(|v| v.lts.is_some()).collect()
-            }
-        }
-        FilterType::Major => {
-            let mut major_versions = std::collections::HashMap::new();
-            for v in versions {
-                let major = extract_major_version(&v.version);
-                major_versions.entry(major).or_insert_with(Vec::new).push(v);
-            }
-            let mut result: Vec<_> = major_versions
-                .into_values()
-                .filter_map(|mut versions| versions.pop())
-                .collect();
-            // Sort by version number descending
-            result.sort_by(|a, b| {
-                let a_parts: Vec<u32> = a
-                    .version
-                    .trim_start_matches('v')
-                    .split('.')
-                    .filter_map(|s| s.parse().ok())
-                    .collect();
-                let b_parts: Vec<u32> = b
-                    .version
-                    .trim_start_matches('v')
-                    .split('.')
-                    .filter_map(|s| s.parse().ok())
-                    .collect();
-                b_parts.cmp(&a_parts)
-            });
-            result
-        }
-        FilterType::Latest => versions.into_iter().take(1).collect(),
-    };
-
-    if versions.is_empty() {
-        println!("{}", "No versions found matching the filter.".yellow());
-        return Ok(());
-    }
-
-    // Display versions in a compact format
-    println!();
-    println!("{} {} versions:", "Available".cyan(), tool_name.yellow());
-    println!();
-
-    let mut count = 0;
-    for version in &versions {
-        let version_str = version
-            .version
-            .strip_prefix('v')
-            .unwrap_or(&version.version);
-        let is_current = current_version
-            .as_ref()
-            .map(|cv| cv == version_str || cv == &version.version)
-            .unwrap_or(false);
-
-        // Build visible text (no ANSI) for width calculation
-        let mut visible = version_str.to_string();
-        if let Some(lts) = &version.lts {
-            if tool_name == "python" {
-                visible.push_str(&format!(" (Status: {})", lts));
-            } else {
-                visible.push_str(&format!(" (LTS: {})", lts));
-            }
-        }
-        if is_current {
-            visible.push_str(" ← current");
-        }
-        let visible_len = visible.len();
-
-        // Build colored display string
-        let mut display = if is_current {
-            format!("{}", version_str.green().bold())
-        } else {
-            let is_outdated = is_version_outdated(&version.version, &versions[0].version);
-            if is_outdated {
-                format!("{}", version_str.dimmed())
-            } else {
-                version_str.to_string()
-            }
-        };
-
-        if let Some(lts) = &version.lts {
-            let label = if tool_name == "python" {
-                format!("(Status: {})", lts)
-            } else {
-                format!("(LTS: {})", lts)
-            };
-            display.push_str(&format!(" {}", label.cyan()));
-        }
-        if is_current {
-            display.push_str(&format!(" {}", "← current".green()));
-        }
-
-        // Pad based on visible length, not ANSI-inflated length
-        let col_width = 28;
-        let padding = if visible_len < col_width {
-            " ".repeat(col_width - visible_len)
-        } else {
-            "  ".to_string()
-        };
-        print!("  {}{}", display, padding);
-        count += 1;
-        if count % 3 == 0 {
-            println!();
-        }
-    }
-    if count % 3 != 0 {
-        println!();
-    }
-
-    println!();
-    println!(
-        "{} {} versions (filter: {})",
-        "Total:".dimmed(),
-        versions.len(),
-        format!("{:?}", filter).to_lowercase().dimmed()
-    );
-
-    Ok(())
+    list_remote_with_output(tool_name, filter, use_cache, output::OutputMode::Text)
 }
 
-/// Get current version for a tool
-fn get_current_version_for_tool(tool_name: &str) -> Option<String> {
-    let vex_dir = vex_dir().ok()?;
-    let current_link = vex_dir.join("current").join(tool_name);
-
-    if let Ok(target) = fs::read_link(&current_link) {
-        if let Some(version) = target.file_name() {
-            return Some(version.to_string_lossy().to_string());
-        }
-    }
-    None
-}
-
-/// Extract major version number from version string
-fn extract_major_version(version: &str) -> String {
-    let v = version.strip_prefix('v').unwrap_or(version);
-    v.split('.').next().unwrap_or("0").to_string()
-}
-
-/// Check if a version is outdated (heuristic: major version < latest major - 2)
-fn is_version_outdated(version: &str, latest: &str) -> bool {
-    let v_major = extract_major_version(version).parse::<i32>().unwrap_or(0);
-    let latest_major = extract_major_version(latest).parse::<i32>().unwrap_or(0);
-
-    v_major > 0 && latest_major > 0 && v_major < latest_major - 2
+fn list_remote_with_output(
+    tool_name: &str,
+    filter: FilterType,
+    use_cache: bool,
+    output_mode: output::OutputMode,
+) -> Result<()> {
+    commands::versions::list_remote(
+        tool_name,
+        match filter {
+            FilterType::All => commands::versions::RemoteFilter::All,
+            FilterType::Lts => commands::versions::RemoteFilter::Lts,
+            FilterType::Major => commands::versions::RemoteFilter::Major,
+            FilterType::Latest => commands::versions::RemoteFilter::Latest,
+        },
+        use_cache,
+        output_mode,
+    )
 }
 
 fn install_from_version_files() -> Result<()> {
@@ -987,42 +681,6 @@ fn write_tool_version(file_path: &std::path::Path, tool_name: &str, version: &st
     Ok(())
 }
 
-fn upgrade_tool(tool_name: &str) -> Result<()> {
-    let tool = tools::get_tool(tool_name)?;
-    let latest = tools::resolve_fuzzy_version(tool.as_ref(), "latest")?;
-
-    let vex_dir = vex_dir()?;
-    let version_dir = vex_dir.join("toolchains").join(tool_name).join(&latest);
-
-    // Check if already on the latest
-    let current_link = vex_dir.join("current").join(tool_name);
-    if current_link.exists() {
-        if let Ok(target) = fs::read_link(&current_link) {
-            if let Some(current_ver) = target.file_name() {
-                if current_ver.to_string_lossy() == latest {
-                    println!("Already on the latest version: {} {}", tool_name, latest);
-                    return Ok(());
-                }
-            }
-        }
-    }
-
-    if version_dir.exists() {
-        // Already installed but not active — just switch
-        println!(
-            "Latest {} {} is already installed, switching...",
-            tool_name, latest
-        );
-        switcher::switch_version(tool.as_ref(), &latest)?;
-    } else {
-        println!("Upgrading {} to {}...", tool_name, latest);
-        installer::install(tool.as_ref(), &latest)?;
-        switcher::switch_version(tool.as_ref(), &latest)?;
-    }
-
-    Ok(())
-}
-
 fn show_aliases(tool_name: &str) -> Result<()> {
     let tool = tools::get_tool(tool_name)?;
 
@@ -1086,6 +744,16 @@ fn print_alias(tool: &dyn tools::Tool, alias: &str) -> Result<()> {
 }
 
 fn auto_switch() -> Result<()> {
+    if !config::auto_switch()? {
+        return Ok(());
+    }
+
+    if let Some(project_config) = project::load_nearest_project_config(&resolver::current_dir())? {
+        if project_config.config.behavior.auto_switch == Some(false) {
+            return Ok(());
+        }
+    }
+
     let cwd = resolver::current_dir();
     let versions = resolver::resolve_versions(&cwd);
 
@@ -1272,358 +940,14 @@ fn find_active_python_bin() -> Result<std::path::PathBuf> {
     Ok(std::path::PathBuf::from("python3"))
 }
 
+#[allow(dead_code)]
+#[cfg(test)]
 fn run_doctor() -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    use std::process::Command;
+    commands::doctor::run(output::OutputMode::Text)
+}
 
-    println!();
-    println!("{}", "vex doctor - Health Check".bold());
-    println!();
-
-    let vex_dir = dirs::home_dir().unwrap().join(".vex");
-    let mut issues = 0;
-    let mut warnings = 0;
-
-    // 1. Check vex directory exists
-    print!("Checking vex directory... ");
-    if vex_dir.exists() {
-        println!("{}", "✓".green());
-    } else {
-        println!("{}", "✗ Not found".red());
-        println!("  Run {} to initialize", "'vex init'".cyan());
-        issues += 1;
-    }
-
-    // 2. Check directory structure
-    print!("Checking directory structure... ");
-    let required_dirs = ["cache", "locks", "toolchains", "current", "bin"];
-    let mut missing_dirs = Vec::new();
-    for dir in &required_dirs {
-        if !vex_dir.join(dir).exists() {
-            missing_dirs.push(*dir);
-        }
-    }
-    if missing_dirs.is_empty() {
-        println!("{}", "✓".green());
-    } else {
-        println!("{}", "✗ Missing directories".red());
-        for dir in missing_dirs {
-            println!("  Missing: {}", dir.yellow());
-        }
-        println!("  Run {} to fix", "'vex init'".cyan());
-        issues += 1;
-    }
-
-    // 3. Check PATH configuration
-    print!("Checking PATH configuration... ");
-    if let Ok(path_var) = std::env::var("PATH") {
-        let vex_bin = vex_dir.join("bin");
-        if path_var.contains(&vex_bin.to_string_lossy().to_string()) {
-            println!("{}", "✓".green());
-        } else {
-            println!("{}", "⚠ vex/bin not in PATH".yellow());
-            println!("  Add this to your shell config:");
-            println!(
-                "  {}",
-                "export PATH=\"$HOME/.vex/bin:$PATH\"".to_string().cyan()
-            );
-            warnings += 1;
-        }
-    } else {
-        println!("{}", "✗ PATH not set".red());
-        issues += 1;
-    }
-
-    // 4. Check shell hook
-    print!("Checking shell hook... ");
-    let shell = std::env::var("SHELL").unwrap_or_default();
-    if shell.contains("zsh") {
-        if let Ok(home) = std::env::var("HOME") {
-            let zshrc = PathBuf::from(home).join(".zshrc");
-            if zshrc.exists() {
-                if let Ok(content) = fs::read_to_string(&zshrc) {
-                    if content.contains("vex env zsh") {
-                        println!("{}", "✓".green());
-                    } else {
-                        println!("{}", "⚠ Shell hook not configured".yellow());
-                        println!("  Add this to ~/.zshrc:");
-                        println!("  {}", "eval \"$(vex env zsh)\"".cyan());
-                        warnings += 1;
-                    }
-                } else {
-                    println!("{}", "⚠ Cannot read .zshrc".yellow());
-                    warnings += 1;
-                }
-            } else {
-                println!("{}", "⚠ .zshrc not found".yellow());
-                warnings += 1;
-            }
-        }
-    } else if shell.contains("bash") {
-        if let Ok(home) = std::env::var("HOME") {
-            let bashrc = PathBuf::from(home).join(".bashrc");
-            if bashrc.exists() {
-                if let Ok(content) = fs::read_to_string(&bashrc) {
-                    if content.contains("vex env bash") {
-                        println!("{}", "✓".green());
-                    } else {
-                        println!("{}", "⚠ Shell hook not configured".yellow());
-                        println!("  Add this to ~/.bashrc:");
-                        println!("  {}", "eval \"$(vex env bash)\"".cyan());
-                        warnings += 1;
-                    }
-                } else {
-                    println!("{}", "⚠ Cannot read .bashrc".yellow());
-                    warnings += 1;
-                }
-            } else {
-                println!("{}", "⚠ .bashrc not found".yellow());
-                warnings += 1;
-            }
-        }
-    } else {
-        println!("{}", "⚠ Unknown shell".yellow());
-        warnings += 1;
-    }
-
-    // 5. Check installed tools
-    print!("Checking installed tools... ");
-    let toolchains_dir = vex_dir.join("toolchains");
-    if toolchains_dir.exists() {
-        let mut tool_count = 0;
-        if let Ok(entries) = fs::read_dir(&toolchains_dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                if entry.file_type().ok().map(|t| t.is_dir()).unwrap_or(false) {
-                    tool_count += 1;
-                }
-            }
-        }
-        if tool_count > 0 {
-            println!("{} ({} tools)", "✓".green(), tool_count);
-        } else {
-            println!("{}", "⚠ No tools installed".yellow());
-            println!("  Run {} to install a tool", "'vex install <tool>'".cyan());
-            warnings += 1;
-        }
-    } else {
-        println!("{}", "✗ toolchains directory missing".red());
-        issues += 1;
-    }
-
-    // 6. Check symlinks integrity
-    print!("Checking symlinks integrity... ");
-    let current_dir = vex_dir.join("current");
-    let bin_dir = vex_dir.join("bin");
-    let mut broken_links = Vec::new();
-    let mut corepack_missing = false;
-
-    if current_dir.exists() {
-        if let Ok(entries) = fs::read_dir(&current_dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                if fs::read_link(entry.path()).is_ok() && entry.path().canonicalize().is_err() {
-                    broken_links.push(format!("current/{}", entry.file_name().to_string_lossy()));
-                }
-            }
-        }
-    }
-
-    if bin_dir.exists() {
-        if let Ok(entries) = fs::read_dir(&bin_dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                let filename = entry.file_name().to_string_lossy().to_string();
-                if entry.path().canonicalize().is_err() && fs::read_link(entry.path()).is_ok() {
-                    // Special handling for corepack - check if it's Node.js 25+
-                    if filename == "corepack" {
-                        corepack_missing = true;
-                    } else {
-                        broken_links.push(format!("bin/{}", filename));
-                    }
-                }
-            }
-        }
-    }
-
-    if broken_links.is_empty() && !corepack_missing {
-        println!("{}", "✓".green());
-    } else if !broken_links.is_empty() {
-        println!("{}", "⚠ Broken symlinks found".yellow());
-        for link in &broken_links {
-            println!("  {}", link.yellow());
-        }
-        warnings += 1;
-    } else {
-        println!("{}", "✓".green());
-    }
-
-    // Show Corepack info separately if detected
-    if corepack_missing {
-        println!();
-        println!(
-            "{} Corepack not bundled with Node.js 25+ (expected)",
-            "ℹ".cyan()
-        );
-        println!("  To enable: {}", "corepack enable pnpm".cyan());
-    }
-
-    // 7. Check binary executability
-    print!("Checking binary executability... ");
-    let mut non_executable = Vec::new();
-    if bin_dir.exists() {
-        if let Ok(entries) = fs::read_dir(&bin_dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                if let Ok(metadata) = entry.metadata() {
-                    let permissions = metadata.permissions();
-                    if !metadata.is_symlink() && (permissions.mode() & 0o111) == 0 {
-                        non_executable.push(entry.file_name().to_string_lossy().to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    if non_executable.is_empty() {
-        println!("{}", "✓".green());
-    } else {
-        println!("{}", "⚠ Non-executable binaries".yellow());
-        for bin in &non_executable {
-            println!("  {}", bin.yellow());
-        }
-        warnings += 1;
-    }
-
-    // 8. Check binary runnability (--version or --help)
-    print!("Checking binary runnability... ");
-    let mut failed_binaries = Vec::new();
-
-    if bin_dir.exists() {
-        if let Ok(entries) = fs::read_dir(&bin_dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                let bin_path = entry.path();
-                let bin_name = entry.file_name().to_string_lossy().to_string();
-
-                // Skip known non-runnable binaries and special tools
-                if bin_name.ends_with(".so")
-                    || bin_name.ends_with(".dylib")
-                    || bin_name.ends_with("-config")
-                    || bin_name.starts_with("idle")
-                    || bin_name == "corepack" // Corepack requires enable first
-                    || bin_name == "rust-gdb" // Requires script argument
-                    || bin_name == "rust-lldb" // Requires script argument
-                    || bin_name == "rmiregistry" // Java RMI registry daemon
-                    || bin_name == "serialver" // Java serialization tool
-                    || bin_name == "jconsole" // Java GUI tool
-                    || bin_name == "jstatd"
-                // Java daemon
-                {
-                    continue;
-                }
-
-                // Try different command patterns based on tool type
-                let test_commands: Vec<Vec<&str>> = if bin_name.starts_with("go") {
-                    vec![vec!["version"], vec!["--version"], vec!["--help"]]
-                } else if bin_name.starts_with("j") && bin_name.len() > 1 {
-                    // Java tools often don't support standard flags
-                    vec![vec!["-version"], vec!["--version"], vec!["--help"]]
-                } else {
-                    vec![vec!["--version"], vec!["--help"], vec!["-V"]]
-                };
-
-                let mut success = false;
-
-                for args in test_commands {
-                    match Command::new(&bin_path)
-                        .args(&args)
-                        .stdout(std::process::Stdio::piped())
-                        .stderr(std::process::Stdio::piped())
-                        .spawn()
-                    {
-                        Ok(mut child) => {
-                            // Wait with 2 second timeout
-                            use std::time::Duration;
-                            let timeout = Duration::from_secs(2);
-                            let start = std::time::Instant::now();
-
-                            loop {
-                                match child.try_wait() {
-                                    Ok(Some(status)) => {
-                                        if status.success() {
-                                            if let Ok(output) = child.wait_with_output() {
-                                                if !output.stdout.is_empty()
-                                                    || !output.stderr.is_empty()
-                                                {
-                                                    success = true;
-                                                }
-                                            }
-                                        }
-                                        break;
-                                    }
-                                    Ok(None) => {
-                                        if start.elapsed() > timeout {
-                                            let _ = child.kill();
-                                            break;
-                                        }
-                                        std::thread::sleep(Duration::from_millis(50));
-                                    }
-                                    Err(_) => break,
-                                }
-                            }
-
-                            if success {
-                                break;
-                            }
-                        }
-                        Err(_) => continue,
-                    }
-                }
-
-                if !success {
-                    failed_binaries.push(bin_name);
-                }
-            }
-        }
-    }
-
-    if failed_binaries.is_empty() {
-        println!("{}", "✓".green());
-    } else {
-        println!("{}", "⚠ Binaries failed to run".yellow());
-        for bin in &failed_binaries {
-            println!("  {}", bin.yellow());
-        }
-        warnings += 1;
-    }
-
-    // 9. Check network connectivity
-    print!("Checking network connectivity... ");
-    match Command::new("ping")
-        .args(["-c", "1", "-W", "2", "nodejs.org"])
-        .output()
-    {
-        Ok(output) if output.status.success() => {
-            println!("{}", "✓".green());
-        }
-        _ => {
-            println!("{}", "⚠ Cannot reach nodejs.org".yellow());
-            println!("  Check your internet connection");
-            warnings += 1;
-        }
-    }
-
-    // Summary
-    println!();
-    if issues == 0 && warnings == 0 {
-        println!("{}", "✓ All checks passed!".green().bold());
-    } else {
-        if issues > 0 {
-            println!("{} {} issue(s) found", "✗".red(), issues);
-        }
-        if warnings > 0 {
-            println!("{} {} warning(s)", "⚠".yellow(), warnings);
-        }
-    }
-    println!();
-
-    Ok(())
+fn run_doctor_with_output(output_mode: output::OutputMode) -> Result<()> {
+    commands::doctor::run(output_mode)
 }
 
 fn run() -> Result<()> {
@@ -1699,18 +1023,24 @@ fn run() -> Result<()> {
                 ));
             }
         }
-        Commands::List { tool } => {
-            list_installed(&tool)?;
+        Commands::List { tool, json } => {
+            list_installed_with_output(&tool, output::OutputMode::from_json_flag(json))?;
         }
         Commands::ListRemote {
             tool,
             filter,
             no_cache,
+            json,
         } => {
-            list_remote(&tool, filter, !no_cache)?;
+            list_remote_with_output(
+                &tool,
+                filter,
+                !no_cache,
+                output::OutputMode::from_json_flag(json),
+            )?;
         }
-        Commands::Current => {
-            show_current()?;
+        Commands::Current { json } => {
+            show_current_with_output(output::OutputMode::from_json_flag(json))?;
         }
         Commands::Uninstall { spec } => {
             let (tool_name, version) = parse_spec(&spec)?;
@@ -1845,14 +1175,32 @@ fn run() -> Result<()> {
                 println!("{}", "To activate it now, run: vex use --auto".dimmed());
             }
         }
-        Commands::Upgrade { tool } => {
-            upgrade_tool(&tool)?;
+        Commands::Upgrade { tool, all } => {
+            commands::updates::upgrade(tool.as_deref(), all)?;
+        }
+        Commands::Outdated { tool, json } => {
+            commands::updates::outdated(tool.as_deref(), output::OutputMode::from_json_flag(json))?;
+        }
+        Commands::Prune { dry_run } => {
+            commands::prune::run(dry_run)?;
         }
         Commands::Alias { tool } => {
             show_aliases(&tool)?;
         }
-        Commands::Doctor => {
-            run_doctor()?;
+        Commands::Exec { command } => {
+            let code = commands::process::exec_command(&command)?;
+            if code != 0 {
+                std::process::exit(code);
+            }
+        }
+        Commands::Run { task, args } => {
+            let code = commands::process::run_task(&task, &args)?;
+            if code != 0 {
+                std::process::exit(code);
+            }
+        }
+        Commands::Doctor { json } => {
+            run_doctor_with_output(output::OutputMode::from_json_flag(json))?;
         }
         Commands::SelfUpdate => {
             updater::self_update()?;

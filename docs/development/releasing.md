@@ -55,6 +55,16 @@ During the 0.x phase:
   cargo clippy --all-targets --all-features -- -D warnings
   ```
 
+- [ ] Release tooling smoke checks pass
+  ```bash
+  bash scripts/check-release-tooling.sh
+  ```
+
+- [ ] Management feature smoke checks pass
+  ```bash
+  bash scripts/test-management-features.sh
+  ```
+
 - [ ] No security vulnerabilities
   ```bash
   cargo audit
@@ -77,7 +87,7 @@ Update version in the following files:
 - [ ] `Cargo.toml`
   ```toml
   [package]
-  version = "1.1.1"
+  version = "1.2.0"
   ```
 
 - [ ] `Cargo.lock` (run `cargo build` to update)
@@ -96,7 +106,7 @@ Update version in the following files:
 ```markdown
 ## [Unreleased]
 
-## [1.1.1] - 2026-03-12
+## [1.2.0] - 2026-03-13
 
 ### Fixed
 - Rust version-specific checksum resolution for historical releases
@@ -126,13 +136,13 @@ Create a release preparation commit:
 
 ```bash
 git add Cargo.toml Cargo.lock CHANGELOG.md README.md
-git commit -m "chore: prepare v1.1.1 release"
+git commit -m "chore: prepare v1.2.0 release"
 ```
 
 ### 6. Create Pull Request
 
 - [ ] Open PR to `main` branch
-- [ ] Title: `chore: prepare v1.1.1 release`
+- [ ] Title: `chore: prepare v1.2.0 release`
 - [ ] Description: Link to CHANGELOG section
 - [ ] Wait for CI to pass
 - [ ] Get approval from maintainer
@@ -150,10 +160,10 @@ git checkout main
 git pull origin main
 
 # Create annotated tag
-git tag -a v1.1.1 -m "Release v1.1.1"
+git tag -a v1.2.0 -m "Release v1.2.0"
 
 # Push tag to GitHub
-git push origin v1.1.1
+git push origin v1.2.0
 ```
 
 ### 2. GitHub Release
@@ -162,13 +172,15 @@ GitHub Actions will automatically:
 1. Build binaries for macOS (arm64 and x86_64)
 2. Create a GitHub Release
 3. Upload binaries as release assets
+4. Trigger postflight release validation
+5. Update the official Homebrew tap when credentials are available
 
 **Manual steps** (if needed):
 
 1. Go to https://github.com/imnotnoahhh/vex/releases
 2. Click "Draft a new release"
-3. Choose tag: `v1.1.1`
-4. Release title: `v1.1.1`
+3. Choose tag: `v1.2.0`
+4. Release title: `v1.2.0`
 5. Description: Copy from CHANGELOG.md
 6. Attach binaries (if not automated):
    - `vex-aarch64-apple-darwin.tar.gz`
@@ -181,7 +193,7 @@ GitHub Actions will automatically:
 - [ ] Download and test binaries
   ```bash
   # Download
-  curl -LO https://github.com/imnotnoahhh/vex/releases/download/v1.1.1/vex-aarch64-apple-darwin.tar.gz
+  curl -LO https://github.com/imnotnoahhh/vex/releases/download/v1.2.0/vex-aarch64-apple-darwin.tar.gz
 
   # Extract
   tar -xzf vex-aarch64-apple-darwin.tar.gz
@@ -192,7 +204,7 @@ GitHub Actions will automatically:
 
 - [ ] Test installation script
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.1.1
+  curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.2.0
   ```
 
 ## CI/CD Pipeline
@@ -229,6 +241,29 @@ jobs:
       - Upload to GitHub Release
 ```
 
+#### 3. Release Postflight (`.github/workflows/release-postflight.yml`)
+
+Runs after a GitHub Release is published:
+
+```yaml
+jobs:
+  validate-release-notes:  # Ensure CHANGELOG entry and release body exist
+  smoke-release-binary:    # Download published macOS binary and run smoke checks
+  update-homebrew-tap:     # Regenerate Formula/vex.rb in homebrew-vex
+```
+
+### Homebrew Tap Automation
+
+The optional tap repository is:
+
+- `imnotnoahhh/homebrew-vex`
+
+To enable automatic formula updates, configure this repository secret in `vex`:
+
+- `HOMEBREW_TAP_TOKEN`
+
+The token only needs push access to the tap repository.
+
 ### Release Artifacts
 
 Each release includes:
@@ -260,6 +295,8 @@ vex-aarch64-apple-darwin/
 - [ ] Watch for bug reports related to new release
 - [ ] Respond to installation issues
 - [ ] Prepare hotfix if critical bugs found
+- [ ] Confirm `Release Postflight` passed
+- [ ] Confirm the Homebrew tap formula updated successfully
 
 ### 3. Update Documentation
 
@@ -279,7 +316,7 @@ For critical bugs in production:
 ### 1. Create Hotfix Branch
 
 ```bash
-git checkout -b hotfix/v1.1.2 v1.1.1
+git checkout -b hotfix/v1.2.1 v1.2.0
 ```
 
 ### 2. Fix Bug
@@ -293,21 +330,22 @@ git commit -m "fix: critical bug description"
 ### 3. Update Version
 
 - Update `Cargo.toml` to `1.1.2` (PATCH bump)
+- Update `Cargo.toml` to `1.2.1` (PATCH bump)
 - Update `CHANGELOG.md`
 
 ### 4. Release
 
 ```bash
 # Commit version bump
-git commit -am "chore: prepare v1.1.2 hotfix"
+git commit -am "chore: prepare v1.2.1 hotfix"
 
 # Merge to main
 git checkout main
-git merge hotfix/v1.1.2
+git merge hotfix/v1.2.1
 
 # Tag and push
-git tag -a v1.1.2 -m "Hotfix v1.1.2"
-git push origin main v1.1.2
+git tag -a v1.2.1 -m "Hotfix v1.2.1"
+git push origin main v1.2.1
 ```
 
 ## Rollback Process
@@ -324,10 +362,10 @@ If a release has critical issues:
 
 ```bash
 # Delete tag locally
-git tag -d v1.1.1
+git tag -d v1.2.0
 
 # Delete tag on GitHub
-git push origin :refs/tags/v1.1.1
+git push origin :refs/tags/v1.2.0
 
 # Delete GitHub Release (manual)
 # Go to Releases page and delete
@@ -342,7 +380,7 @@ git push origin :refs/tags/v1.1.1
 ### 4. Fix and Re-Release
 
 - Fix the issue
-- Bump version (for example, `1.1.1` → `1.1.2`)
+- Bump version (for example, `1.2.0` → `1.2.1`)
 - Follow normal release process
 
 ## Version History

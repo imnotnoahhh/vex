@@ -1,9 +1,8 @@
 //! Remote version list cache module
 //!
 //! Caches tool remote version lists to `~/.vex/cache/remote-<tool>.json`,
-//! default TTL 300 seconds, configurable via `cache_ttl_secs` in `~/.vex/config.toml`.
+//! default TTL 300 seconds, configurable via `~/.vex/config.toml`.
 
-use crate::config;
 use crate::tools::Version;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -105,22 +104,13 @@ impl RemoteCache {
     }
 }
 
-/// Read cache TTL from `~/.vex/config.toml`, returns default value 300 seconds on failure
-pub fn read_cache_ttl(vex_dir: &std::path::Path) -> u64 {
+/// Read cache TTL from `~/.vex/config.toml` for tests.
+#[cfg(test)]
+pub fn read_cache_ttl(vex_dir: &std::path::Path) -> crate::error::Result<u64> {
     let config_path = vex_dir.join("config.toml");
-    let content = match fs::read_to_string(&config_path) {
-        Ok(c) => c,
-        Err(_) => return config::CACHE_TTL.as_secs(),
-    };
-    let table: toml::Table = match content.parse() {
-        Ok(t) => t,
-        Err(_) => return config::CACHE_TTL.as_secs(),
-    };
-    table
-        .get("cache_ttl_secs")
-        .and_then(|v| v.as_integer())
-        .map(|v| v as u64)
-        .unwrap_or(config::CACHE_TTL.as_secs())
+    Ok(crate::config::load_settings_from_file(&config_path)?
+        .cache_ttl
+        .as_secs())
 }
 
 #[cfg(test)]
@@ -195,21 +185,21 @@ mod tests {
     #[test]
     fn test_read_cache_ttl_default() {
         let tmp = TempDir::new().unwrap();
-        assert_eq!(read_cache_ttl(tmp.path()), 300);
+        assert_eq!(read_cache_ttl(tmp.path()).unwrap(), 300);
     }
 
     #[test]
     fn test_read_cache_ttl_custom() {
         let tmp = TempDir::new().unwrap();
         fs::write(tmp.path().join("config.toml"), "cache_ttl_secs = 60\n").unwrap();
-        assert_eq!(read_cache_ttl(tmp.path()), 60);
+        assert_eq!(read_cache_ttl(tmp.path()).unwrap(), 60);
     }
 
     #[test]
     fn test_read_cache_ttl_invalid_toml() {
         let tmp = TempDir::new().unwrap();
         fs::write(tmp.path().join("config.toml"), "{{bad toml").unwrap();
-        assert_eq!(read_cache_ttl(tmp.path()), 300);
+        assert!(read_cache_ttl(tmp.path()).is_err());
     }
 
     #[test]
@@ -274,17 +264,14 @@ mod tests {
     fn test_read_cache_ttl_zero() {
         let tmp = TempDir::new().unwrap();
         fs::write(tmp.path().join("config.toml"), "cache_ttl_secs = 0\n").unwrap();
-        assert_eq!(read_cache_ttl(tmp.path()), 0);
+        assert_eq!(read_cache_ttl(tmp.path()).unwrap(), 0);
     }
 
     #[test]
     fn test_read_cache_ttl_negative() {
         let tmp = TempDir::new().unwrap();
         fs::write(tmp.path().join("config.toml"), "cache_ttl_secs = -1\n").unwrap();
-        // Negative values get cast to large u64, not default
-        // This is expected behavior - just verify it doesn't panic
-        let ttl = read_cache_ttl(tmp.path());
-        assert!(ttl > 0);
+        assert!(read_cache_ttl(tmp.path()).is_err());
     }
 
     #[test]

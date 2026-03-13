@@ -3,6 +3,7 @@
 //! Uses go.dev JSON API to query versions, checksums directly included in API response.
 
 use crate::error::Result;
+use crate::http;
 use crate::tools::{Arch, Tool, Version};
 use serde::Deserialize;
 
@@ -37,8 +38,8 @@ impl Tool for GoTool {
 
     fn list_remote(&self) -> Result<Vec<Version>> {
         let url = "https://go.dev/dl/?mode=json";
-        let response = reqwest::blocking::get(url)?;
-        let releases: Vec<GoRelease> = response.json()?;
+        let releases: Vec<GoRelease> =
+            http::get_json_in_current_context(url, concat!("vex/", env!("CARGO_PKG_VERSION")))?;
 
         let versions = releases
             .into_iter()
@@ -91,8 +92,8 @@ impl Tool for GoTool {
 
     fn get_checksum(&self, version: &str, arch: Arch) -> Result<Option<String>> {
         let url = "https://go.dev/dl/?mode=json";
-        let response = reqwest::blocking::get(url)?;
-        let releases: Vec<GoRelease> = response.json()?;
+        let releases: Vec<GoRelease> =
+            http::get_json_in_current_context(url, concat!("vex/", env!("CARGO_PKG_VERSION")))?;
 
         let go_version = if version.starts_with("go") {
             version.to_string()

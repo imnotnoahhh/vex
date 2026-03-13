@@ -1,6 +1,6 @@
 [package]
 name = "vex"
-version = "1.1.1"
+version = "1.2.0"
 edition = "2021"
 license = "MIT"
 authors = ["Noah Qin"]
@@ -71,6 +71,7 @@ lto = "thin"
 
 [dev-dependencies]
 criterion = "0.8"
+filetime = "0.2"
 
 [[bench]]
 name = "benchmarks"

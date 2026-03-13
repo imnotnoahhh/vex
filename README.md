@@ -43,7 +43,11 @@
 - **Fuzzy version matching** — `node@20` resolves to latest 20.x, `node@lts` to latest LTS
 - **Version aliases** — `latest`, `lts`, `lts-<codename>`, `stable`, minor version matching
 - **One-command upgrade** — `vex upgrade node` installs and switches to the latest version
+- **Managed context upgrades** — `vex outdated` inspects the current project/global/active scope, and `vex upgrade --all` upgrades that whole managed set
+- **Transient execution** — `vex exec -- <command>` runs tools in the resolved vex environment without changing global symlinks
+- **Project task runner** — `.vex.toml` can define project env vars and named commands for `vex run <task>`
 - **`.tool-versions` support** — per-project pinning, auto-switch on `cd`, batch install
+- **Project configuration** — `.vex.toml` adds project-local commands, env vars, behavior overrides, and optional network/mirror overrides
 - **Interactive selection** — `vex install node` lets you pick from a version list
 - **Smart version filtering** — `vex list-remote node --filter lts` shows only LTS versions
 - **Remote version cache** — cached for 5 min by default, configurable via `config.toml`
@@ -55,7 +59,8 @@
 - **Self-update** — `vex self-update` upgrades vex itself to the latest GitHub release
 - **Health check** — `vex doctor` validates installation, PATH, shell hooks, and provides actionable fixes
 - **Disk space check** — prevents installation when less than 500 MB free space available
-- **Homebrew support** — install via `brew install imnotnoahhh/tap/vex` (coming soon)
+- **Machine-readable output** — `--json` for `current`, `list`, `list-remote`, and `doctor`
+- **Homebrew support** — optional official tap for brew users, while direct install remains the recommended path
 - **Multi-shell support** — zsh, bash, fish, and nushell integration for auto-switching
 - **macOS native** — supports both Apple Silicon and Intel macOS environments
 
@@ -72,7 +77,7 @@ Automatically downloads the correct prebuilt binary for your macOS architecture 
 curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash
 
 # Specific tag
-curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.1.1
+curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.2.0
 ```
 
 For auditability, review the script before running:
@@ -102,6 +107,16 @@ chmod +x ~/.local/bin/vex
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
+
+#### Homebrew tap (Optional)
+
+If you already use Homebrew, vex can also be installed from the official tap:
+
+```bash
+brew install imnotnoahhh/homebrew-vex/vex
+```
+
+Direct installation remains the recommended path because it keeps vex completely independent from Homebrew after setup.
 
 #### Build from source
 
@@ -161,9 +176,19 @@ vex install rust@stable      # → latest stable
 
 # Upgrade to latest
 vex upgrade node
+vex upgrade --all
+
+# Show what is behind latest in the current managed context
+vex outdated
 
 # Show available aliases
 vex alias node
+
+# Run a command in the resolved vex-managed environment
+vex exec -- node -v
+
+# Run a named task from .vex.toml
+vex run test
 
 # Switch versions
 vex use node@22
@@ -190,15 +215,26 @@ vex install
 | `vex local <tool@version>` | Pin version in `.tool-versions` | `vex local node@20.11.0` |
 | `vex global <tool@version>` | Pin version in `~/.vex/tool-versions` | `vex global go@1.23` |
 | `vex list <tool>` | List installed versions | `vex list node` |
+| `vex list <tool> --json` | List installed versions as JSON | `vex list node --json` |
 | `vex list-remote <tool>` | List all remote versions | `vex list-remote node` |
+| `vex list-remote <tool> --json` | List remote versions as JSON | `vex list-remote node --json` |
 | `vex list-remote <tool> -f lts` | List only LTS versions | `vex list-remote node -f lts` |
 | `vex list-remote <tool> -f major` | List latest of each major version | `vex list-remote node -f major` |
 | `vex list-remote <tool> --no-cache` | List remote versions (skip cache) | `vex list-remote node --no-cache` |
 | `vex upgrade <tool>` | Upgrade to latest version | `vex upgrade node` |
+| `vex upgrade --all` | Upgrade every managed tool in the current context | `vex upgrade --all` |
+| `vex outdated` | Show managed tools that are behind latest | `vex outdated` |
+| `vex outdated --json` | Show outdated status as JSON | `vex outdated --json` |
+| `vex prune --dry-run` | Preview cache, stale-lock, and unused-toolchain cleanup | `vex prune --dry-run` |
+| `vex gc` | Alias for `vex prune` | `vex gc --dry-run` |
 | `vex alias <tool>` | Show available version aliases | `vex alias node` |
+| `vex exec -- <command>` | Run a command in the resolved vex environment without switching global state | `vex exec -- node -v` |
+| `vex run <task>` | Run a named task from `.vex.toml` | `vex run test` |
 | `vex current` | Show active versions | `vex current` |
+| `vex current --json` | Show active versions as JSON | `vex current --json` |
 | `vex uninstall <tool@version>` | Uninstall a version | `vex uninstall node@20.11.0` |
 | `vex doctor` | Run health check and diagnostics | `vex doctor` |
+| `vex doctor --json` | Run health check and emit JSON | `vex doctor --json` |
 | `vex self-update` | Update vex itself to the latest release | `vex self-update` |
 | `vex env <shell>` | Output shell hook script | `vex env zsh` |
 | `vex python init` | Create `.venv` in current directory | `vex python init` |
@@ -219,6 +255,54 @@ vex install
 
 - User guides and troubleshooting: [docs/README.md](docs/README.md)
 - Maintainer and contributor docs: [docs/development/README.md](docs/development/README.md)
+
+## Configuration
+
+Global settings live in `~/.vex/config.toml`. Project settings in `.vex.toml` can override behavior and network defaults within that repo. Environment variables still take highest precedence for CI and enterprise shells.
+
+```toml
+# ~/.vex/config.toml
+cache_ttl_secs = 300
+
+[network]
+connect_timeout_secs = 30
+read_timeout_secs = 300
+download_retries = 3
+proxy = "http://proxy.internal:8080"
+
+[mirrors]
+node = "https://mirror.example.com/nodejs"
+```
+
+```toml
+# .vex.toml
+[behavior]
+auto_switch = true
+auto_activate_venv = true
+
+[network]
+download_retries = 5
+proxy = "http://team-proxy.internal:8080"
+
+[mirrors]
+rust = "https://mirror.example.com/rust"
+
+[env]
+RUST_LOG = "debug"
+
+[commands]
+test = "cargo test --all-features"
+lint = "cargo clippy --all-targets --all-features -- -D warnings"
+```
+
+Use `vex exec` for one-off commands and `vex run` for project tasks:
+
+```bash
+vex exec -- python -m pytest
+vex run test
+```
+
+For more detail, see [docs/guides/configuration.md](docs/guides/configuration.md).
 
 ## Fuzzy Version Matching
 
