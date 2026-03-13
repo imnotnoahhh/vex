@@ -196,12 +196,19 @@ impl Tool for JavaTool {
 }
 
 fn lts_versions(releases: &AvailableReleases) -> Vec<u32> {
-    if !releases.available_lts_releases.is_empty() {
-        return releases.available_lts_releases.clone();
+    let explicit_lts: Vec<u32> = releases
+        .available_lts_releases
+        .iter()
+        .copied()
+        .filter(|version| *version > 0)
+        .collect();
+    if !explicit_lts.is_empty() {
+        return explicit_lts;
     }
 
     releases
         .most_recent_lts
+        .filter(|version| *version > 0)
         .map(|version| vec![version])
         .unwrap_or_default()
 }
@@ -256,6 +263,17 @@ mod tests {
         };
 
         assert_eq!(lts_versions(&releases), vec![25]);
+    }
+
+    #[test]
+    fn test_lts_versions_ignores_zero_entries() {
+        let releases = AvailableReleases {
+            available_lts_releases: vec![0, 25, 21],
+            available_releases: vec![25, 24, 21],
+            most_recent_lts: Some(0),
+        };
+
+        assert_eq!(lts_versions(&releases), vec![25, 21]);
     }
 
     #[test]
