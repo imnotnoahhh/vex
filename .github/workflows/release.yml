@@ -294,3 +294,15 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+
+  postflight:
+    name: postflight
+    needs:
+      - plan
+      - host
+      - announce
+    if: ${{ always() && needs.plan.outputs.publishing == 'true' && needs.host.result == 'success' && needs.announce.result == 'success' }}
+    uses: ./.github/workflows/release-postflight.yml
+    secrets: inherit
+    with:
+      tag_name: ${{ needs.plan.outputs.tag }}
