@@ -15,6 +15,8 @@ pub struct JavaTool;
 struct AvailableReleases {
     available_lts_releases: Vec<u32>,
     available_releases: Vec<u32>,
+    #[serde(default)]
+    most_recent_lts: Option<u32>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -59,12 +61,13 @@ impl Tool for JavaTool {
         let url = "https://api.adoptium.net/v3/info/available_releases";
         let releases: AvailableReleases =
             http::get_json_in_current_context(url, concat!("vex/", env!("CARGO_PKG_VERSION")))?;
+        let lts_versions = lts_versions(&releases);
 
         // Get all available versions, mark LTS versions
         let mut versions = Vec::new();
 
         for version in releases.available_releases {
-            let is_lts = releases.available_lts_releases.contains(&version);
+            let is_lts = lts_versions.contains(&version);
             versions.push(Version {
                 version: version.to_string(),
                 lts: if is_lts {
@@ -192,6 +195,17 @@ impl Tool for JavaTool {
     }
 }
 
+fn lts_versions(releases: &AvailableReleases) -> Vec<u32> {
+    if !releases.available_lts_releases.is_empty() {
+        return releases.available_lts_releases.clone();
+    }
+
+    releases
+        .most_recent_lts
+        .map(|version| vec![version])
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -231,6 +245,17 @@ mod tests {
     #[test]
     fn test_checksum_url_is_none() {
         assert_eq!(JavaTool.checksum_url("21", Arch::Arm64), None);
+    }
+
+    #[test]
+    fn test_lts_versions_falls_back_to_most_recent_lts() {
+        let releases = AvailableReleases {
+            available_lts_releases: Vec::new(),
+            available_releases: vec![25, 24, 21],
+            most_recent_lts: Some(25),
+        };
+
+        assert_eq!(lts_versions(&releases), vec![25]);
     }
 
     #[test]

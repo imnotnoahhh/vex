@@ -103,7 +103,11 @@ EXPECTED_TOP_LEVEL_COMMANDS = {
     "local": "Pin a tool version in the current directory (.tool-versions)",
     "global": "Pin a tool version globally (~/.vex/tool-versions)",
     "upgrade": "Upgrade a tool to the latest version",
+    "outdated": "Show which managed tools are behind the latest available version",
+    "prune": "Remove unused cache files, stale locks, and unreferenced toolchains",
     "alias": "Show available aliases for a tool",
+    "exec": "Run a command inside the resolved vex-managed environment without switching global state",
+    "run": "Run a named task from .vex.toml inside the resolved vex-managed environment",
     "doctor": "Check vex installation health",
     "self-update": "Update vex itself to the latest release",
     "python": "Python virtual environment management",
@@ -121,8 +125,12 @@ COMMAND_HELP_CHECKS = {
     "env": ["Usage: vex env", "<SHELL>"],
     "local": ["Usage: vex local", "<SPEC>"],
     "global": ["Usage: vex global", "<SPEC>"],
-    "upgrade": ["Usage: vex upgrade", "<TOOL>"],
+    "upgrade": ["Usage: vex upgrade", "[TOOL]", "--all"],
+    "outdated": ["Usage: vex outdated", "[TOOL]"],
+    "prune": ["Usage: vex prune", "--dry-run"],
     "alias": ["Usage: vex alias", "<TOOL>"],
+    "exec": ["Usage: vex exec", "--", "<COMMAND>..."],
+    "run": ["Usage: vex run", "<TASK>"],
     "doctor": ["Usage: vex doctor"],
     "self-update": ["Usage: vex self-update"],
     "python": ["Usage: vex python <SUBCMD>", "init", "freeze", "sync"],
@@ -1056,10 +1064,14 @@ def resolve_java(spec: str) -> ToolPlan:
     REPORT.info("Java: fetching Adoptium release metadata")
     releases = fetch_json("https://api.adoptium.net/v3/info/available_releases")
     available = sorted((int(v) for v in releases["available_releases"]), reverse=True)
-    lts = sorted((int(v) for v in releases["available_lts_releases"]), reverse=True)
+    lts = sorted((int(v) for v in releases.get("available_lts_releases", [])), reverse=True)
+    if not lts and releases.get("most_recent_lts") is not None:
+        lts = [int(releases["most_recent_lts"])]
     if spec == "latest":
         resolved = str(available[0])
     elif spec == "lts":
+        if not lts:
+            raise TestFailure(f"Adoptium returned no LTS releases in metadata: {releases}")
         resolved = str(lts[0])
     else:
         resolved = str(int(spec))
@@ -1070,7 +1082,7 @@ def resolve_java(spec: str) -> ToolPlan:
         f"?architecture={arch}&image_type=jdk&os=mac&vendor=eclipse"
     )
     assets = fetch_json(asset_url)
-    if not assets:
+    if not isinstance(assets, list) or not assets:
         raise TestFailure(f"Adoptium returned no macOS JDK asset for Java {resolved}")
     download_url = assets[0]["binary"]["package"]["link"]
     return ToolPlan(
