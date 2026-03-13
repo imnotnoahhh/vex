@@ -195,9 +195,10 @@ impl Tool for JavaTool {
                     return Ok(Some(version));
                 }
 
+                let arch = Arch::detect();
                 for candidate in FALLBACK_LTS_VERSIONS {
                     if self
-                        .download_url(&candidate.to_string(), Arch::detect())
+                        .download_url(&candidate.to_string(), arch)
                         .is_ok()
                     {
                         return Ok(Some(candidate.to_string()));
