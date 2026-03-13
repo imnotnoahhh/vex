@@ -18,6 +18,8 @@ grep -q 'class Vex < Formula' "$tmp_formula"
 grep -q 'version "1.1.1"' "$tmp_formula"
 grep -q 'on_arm do' "$tmp_formula"
 grep -q 'on_intel do' "$tmp_formula"
+grep -q 'def caveats' "$tmp_formula"
+grep -q 'vex init --shell zsh' "$tmp_formula"
 grep -q 'assert_match "Would create"' "$tmp_formula"
 
 echo "✅ Homebrew formula renderer passed"

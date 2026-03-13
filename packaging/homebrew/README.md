@@ -32,6 +32,7 @@ The generated formula:
 
 - installs the prebuilt `vex` binary into Homebrew's `bin`
 - keeps `vex` self-contained and independent from Homebrew after installation
+- prints `caveats` explaining that shell configuration is still an explicit user step
 - smoke-tests `vex --version` and `vex init --dry-run`
 
 ## Release Automation

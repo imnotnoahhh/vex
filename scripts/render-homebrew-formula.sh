@@ -36,6 +36,21 @@ class Vex < Formula
     bin.install "vex"
   end
 
+  def caveats
+    <<~EOS
+      Homebrew installs the vex binary, but does not modify your shell configuration.
+
+      Preview the initialization steps:
+        vex init --dry-run
+
+      Configure zsh integration:
+        vex init --shell zsh
+
+      Or print shell hooks manually:
+        vex env zsh
+    EOS
+  end
+
   test do
     assert_match "vex #{version}", shell_output("#{bin}/vex --version")
     assert_match "Would create", shell_output("#{bin}/vex init --dry-run")
