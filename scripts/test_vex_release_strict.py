@@ -1063,9 +1063,9 @@ def resolve_go(spec: str) -> ToolPlan:
 def resolve_java(spec: str) -> ToolPlan:
     REPORT.info("Java: fetching Adoptium release metadata")
     releases = fetch_json("https://api.adoptium.net/v3/info/available_releases")
-    available = sorted((int(v) for v in releases["available_releases"]), reverse=True)
-    lts = sorted((int(v) for v in releases.get("available_lts_releases", [])), reverse=True)
-    if not lts and releases.get("most_recent_lts") is not None:
+    available = sorted((int(v) for v in releases["available_releases"] if int(v) > 0), reverse=True)
+    lts = sorted((int(v) for v in releases.get("available_lts_releases", []) if int(v) > 0), reverse=True)
+    if not lts and releases.get("most_recent_lts") is not None and int(releases["most_recent_lts"]) > 0:
         lts = [int(releases["most_recent_lts"])]
     if spec == "latest":
         resolved = str(available[0])
