@@ -1017,35 +1017,14 @@ fn collect_lifecycle_warnings(vex_dir: &Path) -> Result<Vec<LifecycleWarning>> {
 
     let mut warnings = Vec::new();
 
-    // Check Node.js versions for EOL status
-    let node_dir = toolchains_dir.join("node");
-    if node_dir.exists() {
-        for version_entry in fs::read_dir(&node_dir)?.filter_map(|e| e.ok()) {
-            if !version_entry
-                .file_type()
-                .ok()
-                .map(|ft| ft.is_dir())
-                .unwrap_or(false)
-            {
-                continue;
-            }
-
-            let version = version_entry.file_name().to_string_lossy().to_string();
-            if let Some((status, message)) = check_node_lifecycle(&version) {
-                warnings.push(LifecycleWarning {
-                    tool: "node".to_string(),
-                    version,
-                    status,
-                    message,
-                });
-            }
+    // Check all supported tools: Node.js, Java, Python (as per Issue #55)
+    for tool_name in &["node", "java", "python"] {
+        let tool_dir = toolchains_dir.join(tool_name);
+        if !tool_dir.exists() {
+            continue;
         }
-    }
 
-    // Check Go versions
-    let go_dir = toolchains_dir.join("go");
-    if go_dir.exists() {
-        for version_entry in fs::read_dir(&go_dir)?.filter_map(|e| e.ok()) {
+        for version_entry in fs::read_dir(&tool_dir)?.filter_map(|e| e.ok()) {
             if !version_entry
                 .file_type()
                 .ok()
@@ -1056,11 +1035,29 @@ fn collect_lifecycle_warnings(vex_dir: &Path) -> Result<Vec<LifecycleWarning>> {
             }
 
             let version = version_entry.file_name().to_string_lossy().to_string();
-            if let Some((status, message)) = check_go_lifecycle(&version) {
+            let advisory = crate::advisories::get_advisory(tool_name, &version);
+
+            // Only include warnings for problematic versions
+            if advisory.is_warning() {
+                let status = match advisory.status {
+                    crate::advisories::AdvisoryStatus::Eol => "eol",
+                    crate::advisories::AdvisoryStatus::NearEol => "near_eol",
+                    crate::advisories::AdvisoryStatus::LtsAvailable => "lts_available",
+                    crate::advisories::AdvisoryStatus::SecurityUpdateAvailable => {
+                        "security_update_available"
+                    }
+                    _ => continue,
+                };
+
+                let message = advisory
+                    .message
+                    .or(advisory.recommendation)
+                    .unwrap_or_else(|| format!("{} {} has lifecycle concerns", tool_name, version));
+
                 warnings.push(LifecycleWarning {
-                    tool: "go".to_string(),
+                    tool: tool_name.to_string(),
                     version,
-                    status,
+                    status: status.to_string(),
                     message,
                 });
             }
@@ -1069,93 +1066,6 @@ fn collect_lifecycle_warnings(vex_dir: &Path) -> Result<Vec<LifecycleWarning>> {
 
     warnings.sort_by(|a, b| a.tool.cmp(&b.tool).then(a.version.cmp(&b.version)));
     Ok(warnings)
-}
-
-fn check_node_lifecycle(version: &str) -> Option<(String, String)> {
-    let version = version.trim_start_matches('v');
-    let major: u32 = version.split('.').next()?.parse().ok()?;
-
-    // Node.js EOL dates (simplified, based on known LTS schedule)
-    match major {
-        14 => Some((
-            "eol".to_string(),
-            "Node.js 14 reached end-of-life on 2023-04-30".to_string(),
-        )),
-        16 => Some((
-            "eol".to_string(),
-            "Node.js 16 reached end-of-life on 2023-09-11".to_string(),
-        )),
-        17 => Some((
-            "eol".to_string(),
-            "Node.js 17 reached end-of-life on 2022-06-01".to_string(),
-        )),
-        18 => Some((
-            "near_eol".to_string(),
-            "Node.js 18 will reach end-of-life on 2025-04-30".to_string(),
-        )),
-        19 => Some((
-            "eol".to_string(),
-            "Node.js 19 reached end-of-life on 2023-06-01".to_string(),
-        )),
-        20 => Some((
-            "active".to_string(),
-            "Node.js 20 LTS is actively maintained until 2026-04-30".to_string(),
-        )),
-        21 => Some((
-            "eol".to_string(),
-            "Node.js 21 reached end-of-life on 2024-06-01".to_string(),
-        )),
-        22 => Some((
-            "active".to_string(),
-            "Node.js 22 LTS is actively maintained until 2027-04-30".to_string(),
-        )),
-        23 => Some((
-            "current".to_string(),
-            "Node.js 23 is the current release".to_string(),
-        )),
-        _ if major < 14 => Some((
-            "eol".to_string(),
-            format!("Node.js {} is no longer supported", major),
-        )),
-        _ => None,
-    }
-}
-
-fn check_go_lifecycle(version: &str) -> Option<(String, String)> {
-    let version = version.trim_start_matches('v');
-    let parts: Vec<&str> = version.split('.').collect();
-    if parts.len() < 2 {
-        return None;
-    }
-
-    let major: u32 = parts[0].parse().ok()?;
-    let minor: u32 = parts[1].parse().ok()?;
-
-    // Go maintains the last 2 minor versions
-    // As of 2026-03, Go 1.24 is current, 1.23 is maintained
-    if major == 1 {
-        match minor {
-            0..=21 => Some((
-                "eol".to_string(),
-                format!("Go 1.{} is no longer supported", minor),
-            )),
-            22 => Some((
-                "near_eol".to_string(),
-                "Go 1.22 will reach end-of-life soon".to_string(),
-            )),
-            23 => Some((
-                "active".to_string(),
-                "Go 1.23 is actively maintained".to_string(),
-            )),
-            24 => Some((
-                "current".to_string(),
-                "Go 1.24 is the current release".to_string(),
-            )),
-            _ => None,
-        }
-    } else {
-        None
-    }
 }
 
 fn read_current_versions(vex_dir: &Path) -> Result<HashMap<String, String>> {
