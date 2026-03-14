@@ -698,6 +698,17 @@ fn install_multiple_specs(specs: &[String], no_switch: bool, force: bool) -> Res
             Ok(true) => {
                 println!("  {} {}@{}", "✓".green(), tool.yellow(), version.cyan());
                 installed += 1;
+
+                // Show lifecycle advisory if applicable
+                let advisory = advisories::get_advisory(tool, version);
+                if advisory.is_warning() {
+                    if let Some(msg) = &advisory.message {
+                        println!("    {} {}", "⚠".yellow(), msg.dimmed());
+                    }
+                    if let Some(rec) = &advisory.recommendation {
+                        println!("    {} {}", "→".cyan(), rec.dimmed());
+                    }
+                }
             }
             Ok(false) => {
                 println!(
@@ -1287,6 +1298,18 @@ fn run() -> Result<()> {
                 let tool = tools::get_tool(&tool_name)?;
                 let resolved = tools::resolve_fuzzy_version(tool.as_ref(), &version)?;
                 switcher::switch_version(tool.as_ref(), &resolved)?;
+
+                // Show lifecycle advisory if applicable
+                let advisory = advisories::get_advisory(&tool_name, &resolved);
+                if advisory.is_warning() {
+                    println!();
+                    if let Some(msg) = &advisory.message {
+                        println!("{} {}", "warning:".yellow().bold(), msg);
+                    }
+                    if let Some(rec) = &advisory.recommendation {
+                        println!("{} {}", "recommendation:".cyan(), rec);
+                    }
+                }
             } else {
                 return Err(error::VexError::Parse(
                     "Please specify a version (e.g., node@20.11.0) or use --auto".to_string(),
