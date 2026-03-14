@@ -14,7 +14,7 @@
 
 use indicatif::{ProgressBar as IndicatifProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
-use std::io;
+use std::io::{self, IsTerminal};
 use std::time::Duration;
 
 /// UI context for rendering
@@ -28,7 +28,7 @@ impl UiContext {
     /// Create a new UI context
     pub fn new() -> Self {
         Self {
-            interactive: atty::is(atty::Stream::Stdout),
+            interactive: io::stdout().is_terminal(),
         }
     }
 
