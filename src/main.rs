@@ -11,6 +11,7 @@ use std::fs;
 use std::path::PathBuf;
 
 mod activation;
+mod advisories;
 mod cache;
 mod commands;
 mod config;
