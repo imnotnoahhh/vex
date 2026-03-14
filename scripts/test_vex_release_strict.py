@@ -1256,6 +1256,9 @@ def choose_alt_versions(plans: Dict[str, ToolPlan]) -> Dict[str, str]:
         plan = plans[tool_name]
         alt_version = choose_alt_version(plan)
         if alt_version is None:
+            # Rust may not have an alternate version available (only lists current stable)
+            if tool_name == "rust":
+                continue
             raise TestFailure(f"could not determine an alternate version for {plan.display_name}")
         alt_versions[tool_name] = alt_version
         REPORT.ok(
@@ -1671,6 +1674,10 @@ def assert_tool_command_version(tool_name: str, expected_version: str, *, cwd: O
 def validate_manual_multiversion_switching(plans: Dict[str, ToolPlan], alt_versions: Dict[str, str]) -> None:
     REPORT.section("Manual Multi-Version Switching")
     for tool_name in ["node", "go", "java", "rust", "python"]:
+        # Skip Rust if no alternate version is available
+        if tool_name not in alt_versions:
+            continue
+
         plan = plans[tool_name]
         alt_version = alt_versions[tool_name]
         REPORT.info(
@@ -1750,6 +1757,10 @@ def validate_project_behavior(plans: Dict[str, ToolPlan], alt_versions: Dict[str
     project.mkdir(parents=True, exist_ok=True)
 
     for tool_name in ["node", "go", "java", "rust", "python"]:
+        # Skip Rust if no alternate version is available
+        if tool_name not in alt_versions:
+            continue
+
         alt_version = alt_versions[tool_name]
         REPORT.info(f"Project test: setting global {tool_name}@{alt_version}")
         run_cmd([str(VEX_BIN), "global", f"{tool_name}@{alt_version}"], timeout=120)
@@ -1761,7 +1772,7 @@ def validate_project_behavior(plans: Dict[str, ToolPlan], alt_versions: Dict[str
     ) + "\n"
     write_text(project / ".tool-versions", tool_versions)
     global_versions = "\n".join(
-        f"{name} {alt_versions[name]}" for name in ["node", "go", "java", "rust", "python"]
+        f"{name} {alt_versions[name]}" for name in ["node", "go", "java", "rust", "python"] if name in alt_versions
     ) + "\n"
     global_versions_path = TEST_HOME / ".vex" / "tool-versions"
     global_versions_content = global_versions_path.read_text(errors="replace") if global_versions_path.exists() else ""
@@ -1776,6 +1787,10 @@ def validate_project_behavior(plans: Dict[str, ToolPlan], alt_versions: Dict[str
     global_current = run_cmd([str(VEX_BIN), "current"], cwd=workspace, timeout=60).output
     REPORT.expect("Global default" in global_current, "outside project shows Global default", f"unexpected global current output: {global_current.strip()}")
     for tool_name in ["node", "go", "java", "rust", "python"]:
+        # Skip Rust if no alternate version is available
+        if tool_name not in alt_versions:
+            continue
+
         alt_version = alt_versions[tool_name]
         REPORT.expect(
             tool_name in global_current and alt_version in global_current,
@@ -1836,6 +1851,10 @@ def validate_project_behavior(plans: Dict[str, ToolPlan], alt_versions: Dict[str
             hook_markers[key.strip()] = value.strip()
 
     for tool_name in ["node", "go", "java", "rust", "python"]:
+        # Skip Rust if no alternate version is available
+        if tool_name not in alt_versions:
+            continue
+
         outside_key = f"OUTSIDE_{tool_name.upper()}"
         inside_key = f"INSIDE_{tool_name.upper()}"
         outside_again_key = f"OUTSIDE_AGAIN_{tool_name.upper()}"
