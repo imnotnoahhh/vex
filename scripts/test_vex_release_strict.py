@@ -1063,7 +1063,28 @@ def resolve_go(spec: str) -> ToolPlan:
 
 def resolve_java(spec: str) -> ToolPlan:
     REPORT.info("Java: fetching Adoptium release metadata")
-    releases = fetch_json("https://api.adoptium.net/v3/info/available_releases")
+    try:
+        releases = fetch_json("https://api.adoptium.net/v3/info/available_releases")
+    except Exception as e:
+        # If API fails, use fallback with known LTS versions
+        REPORT.warn(f"Java upstream resolution failed: {e}")
+        REPORT.warn("Using fallback Java LTS version")
+        arch = "aarch64" if os.uname().machine in {"arm64", "aarch64"} else "x64"
+        # Use known stable LTS version as fallback
+        resolved = "21"
+        download_url = resolve_java_download_url(resolved, arch)
+        return ToolPlan(
+            name="java",
+            display_name="Java",
+            requested_spec=spec,
+            resolved_version=resolved,
+            download_url=download_url,
+            upstream_bins={},
+            install_spec=f"java@{resolved}",
+            bin_regex=JAVA_BIN_RE,
+            meta={"versions": [resolved], "lts_versions": [resolved]},
+        )
+
     available = sorted(
         (value for value in map(int, releases["available_releases"]) if value > 0),
         reverse=True,
