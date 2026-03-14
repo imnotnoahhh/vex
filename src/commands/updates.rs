@@ -5,6 +5,7 @@ use crate::output::{print_json, OutputMode};
 use crate::resolver;
 use crate::switcher;
 use crate::tools;
+use crate::ui;
 use owo_colors::OwoColorize;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -199,18 +200,15 @@ fn upgrade_target(target: &ManagedTarget) -> Result<UpgradeEntry> {
 
 fn render_outdated_text(report: &OutdatedReport) {
     if report.entries.is_empty() {
-        println!(
-            "{}",
-            "No managed tools found in the current context.".dimmed()
-        );
+        ui::dimmed("No managed tools found in the current context.");
         return;
     }
 
-    println!();
-    println!("{} {}", "Outdated check scope:".bold(), report.scope.cyan());
-    println!();
+    ui::header(&format!("Outdated check scope: {}", report.scope.cyan()));
 
+    let mut table = ui::Table::new();
     let mut outdated_count = 0;
+
     for entry in &report.entries {
         let status = if entry.status == "outdated" {
             outdated_count += 1;
@@ -219,82 +217,84 @@ fn render_outdated_text(report: &OutdatedReport) {
             "up to date".green().to_string()
         };
 
-        println!(
-            "  {}  {} → {}  ({})",
-            entry.tool.yellow(),
-            entry.current_version.dimmed(),
-            entry.latest_version.cyan(),
-            status
-        );
+        table = table.row(vec![
+            entry.tool.yellow().to_string(),
+            entry.current_version.dimmed().to_string(),
+            "→".to_string(),
+            entry.latest_version.cyan().to_string(),
+            format!("({})", status),
+        ]);
+
         if let Some(path) = &entry.source_path {
-            println!(
-                "    {}: {} ({})",
-                "Source".dimmed(),
-                path.dimmed(),
-                source_label(entry.source).dimmed()
-            );
+            table = table.row(vec![
+                "".to_string(),
+                format!(
+                    "{}: {} ({})",
+                    "Source".dimmed(),
+                    path.dimmed(),
+                    source_label(entry.source).dimmed()
+                ),
+            ]);
         } else {
-            println!(
-                "    {}: {}",
-                "Source".dimmed(),
-                source_label(entry.source).dimmed()
-            );
+            table = table.row(vec![
+                "".to_string(),
+                format!(
+                    "{}: {}",
+                    "Source".dimmed(),
+                    source_label(entry.source).dimmed()
+                ),
+            ]);
         }
     }
 
+    table.render();
+
     println!();
     if outdated_count == 0 {
-        println!("{}", "All managed tools are up to date.".green().bold());
+        ui::success("All managed tools are up to date.");
     } else {
-        println!(
-            "{} {} tool(s) are behind the latest available version",
-            "→".cyan(),
+        ui::info(&format!(
+            "{} tool(s) are behind the latest available version",
             outdated_count
-        );
+        ));
     }
 }
 
 fn render_upgrade_text(report: &UpgradeReport) {
     if report.entries.is_empty() {
-        println!("{}", "No managed tools found to upgrade.".dimmed());
+        ui::dimmed("No managed tools found to upgrade.");
         return;
     }
 
-    println!();
-    println!("{} {}", "Upgrade scope:".bold(), report.scope.cyan());
-    println!();
+    ui::header(&format!("Upgrade scope: {}", report.scope.cyan()));
+
+    let mut summary = ui::Summary::new();
 
     for entry in &report.entries {
-        let status = match entry.status.as_str() {
-            "already_latest" => "already latest".green().to_string(),
-            "upgraded" => "upgraded".green().bold().to_string(),
-            _ => entry.status.clone(),
-        };
-
-        println!(
-            "  {}  {} → {}  ({})",
+        let message = format!(
+            "{}  {} → {}",
             entry.tool.yellow(),
             entry.previous_version.dimmed(),
-            entry.target_version.cyan(),
-            status
+            entry.target_version.cyan()
         );
-        if let Some(path) = &entry.source_path {
-            println!(
-                "    {}: {} ({})",
-                "Updated".dimmed(),
-                path.dimmed(),
-                source_label(entry.source).dimmed()
-            );
-        } else {
-            println!(
-                "    {}: {}",
-                "Source".dimmed(),
-                source_label(entry.source).dimmed()
-            );
+
+        match entry.status.as_str() {
+            "already_latest" => summary = summary.info(message),
+            "upgraded" => {
+                summary = summary.success(message);
+                if let Some(path) = &entry.source_path {
+                    summary = summary.info(format!(
+                        "  Updated: {} ({})",
+                        path.dimmed(),
+                        source_label(entry.source).dimmed()
+                    ));
+                }
+            }
+            _ => summary = summary.info(message),
         }
     }
 
-    println!();
+    summary.render();
 }
 
 fn collect_targets(tool_filter: Option<&str>) -> Result<(String, Vec<ManagedTarget>)> {
