@@ -97,7 +97,23 @@ pub fn get_tool(name: &str) -> Result<Box<dyn Tool>> {
 }
 
 /// Fuzzy version resolution: supports aliases (latest/lts/stable), partial version numbers (20→20.x), and exact versions
+///
+/// This function uses cached version lists by default to avoid repeated API calls.
 pub fn resolve_fuzzy_version(tool: &dyn Tool, partial: &str) -> Result<String> {
+    resolve_fuzzy_version_cached(tool, partial, true)
+}
+
+/// Fuzzy version resolution with explicit cache control
+///
+/// # Arguments
+/// - `tool` - Tool implementation
+/// - `partial` - Version string (alias, partial, or full version)
+/// - `use_cache` - Whether to use cached version lists (recommended: true)
+pub fn resolve_fuzzy_version_cached(
+    tool: &dyn Tool,
+    partial: &str,
+    use_cache: bool,
+) -> Result<String> {
     // Check if it already looks like a full version (has 2+ dots like 20.11.0, or is a single number for java)
     let normalized = partial.strip_prefix('v').unwrap_or(partial);
     let dot_count = normalized.chars().filter(|c| *c == '.').count();
@@ -110,7 +126,7 @@ pub fn resolve_fuzzy_version(tool: &dyn Tool, partial: &str) -> Result<String> {
             "{}...",
             format!("Validating {}@{}", tool.name(), partial).cyan()
         );
-        let versions = tool.list_remote()?;
+        let versions = fetch_versions_with_cache(tool, use_cache)?;
         let exists = versions
             .iter()
             .any(|v| normalize_version(&v.version) == normalized);
@@ -138,7 +154,7 @@ pub fn resolve_fuzzy_version(tool: &dyn Tool, partial: &str) -> Result<String> {
         "{}...",
         format!("Resolving {}@{}", tool.name(), partial).cyan()
     );
-    let versions = tool.list_remote()?;
+    let versions = fetch_versions_with_cache(tool, use_cache)?;
     let prefix = format!("{}.", normalized);
 
     versions
@@ -156,6 +172,25 @@ pub fn resolve_fuzzy_version(tool: &dyn Tool, partial: &str) -> Result<String> {
                 suggestions,
             }
         })
+}
+
+/// Fetch versions with optional caching
+fn fetch_versions_with_cache(tool: &dyn Tool, use_cache: bool) -> Result<Vec<Version>> {
+    use crate::{cache, config};
+
+    let vex = config::vex_home().ok_or(crate::error::VexError::HomeDirectoryNotFound)?;
+    let remote_cache = cache::RemoteCache::new(&vex);
+    let ttl = config::cache_ttl()?.as_secs();
+
+    if use_cache {
+        if let Some(cached) = remote_cache.get_cached_versions(tool.name(), ttl) {
+            return Ok(cached);
+        }
+    }
+
+    let versions = tool.list_remote()?;
+    remote_cache.set_cached_versions(tool.name(), &versions);
+    Ok(versions)
 }
 
 /// Remove "v" prefix from version number
