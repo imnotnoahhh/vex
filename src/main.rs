@@ -69,7 +69,7 @@ enum Commands {
         dry_run: bool,
     },
 
-    /// Install one or more tool versions
+    /// Install a tool version (or all from .tool-versions)
     Install {
         /// Tool and version specs (e.g., node@20, go@1.22). Omit to install from .tool-versions.
         specs: Vec<String>,
