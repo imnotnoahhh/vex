@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-03-15
+
+### Added
+
+- **Rich terminal UI foundation** — Added shared rendering primitives (`UiContext`, `Table`, `Progress`, `ProgressBar`, `Summary`) for consistent, interactive output across all commands. Installation now shows spinners, version listings use aligned tables, and upgrade workflows display structured summaries.
+- **Upgrade intelligence** — Added lifecycle-aware upgrade suggestions that recommend stable/LTS versions over bleeding-edge releases, warn about EOL versions, and provide smart upgrade paths based on tool-specific lifecycle policies.
+- **Enhanced doctor command** — Expanded `vex doctor` to include upgrade intelligence, lifecycle warnings, disk usage analysis, and cleanup guidance for outdated toolchains.
+- **Version resolution error improvements** — Added fuzzy matching and suggestions when version resolution fails, helping users quickly identify typos or find the closest available version.
+- **Full version validation** — Added strict validation for version numbers to catch malformed inputs early and provide actionable suggestions.
+
+### Fixed
+
+- **Checksum verification security** — Fixed silent checksum verification skip when checksum fetch fails. Now fails fast with clear error instead of installing potentially tampered binaries when network errors prevent checksum retrieval.
+- **Unmaintained dependency** — Replaced unmaintained `atty` crate with `std::io::IsTerminal` for terminal detection.
+
 ### Changed
+
 - Run `Release Postflight` automatically from the main release workflow and allow manual re-runs with `workflow_dispatch`.
 
 ## [1.2.0] - 2026-03-13
