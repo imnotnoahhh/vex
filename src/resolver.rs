@@ -148,7 +148,7 @@ const TOOL_VERSION_FILES: &[(&str, &str)] = &[
 ];
 
 /// Parse .tool-versions file content
-fn parse_tool_versions(content: &str) -> Vec<(String, String)> {
+pub fn parse_tool_versions(content: &str) -> Vec<(String, String)> {
     content
         .lines()
         .filter_map(|line| {
