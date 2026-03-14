@@ -338,6 +338,7 @@ impl Tool for PythonTool {
         Err(VexError::VersionNotFound {
             tool: "python".to_string(),
             version: version.to_string(),
+            suggestions: String::new(),
         })
     }
 

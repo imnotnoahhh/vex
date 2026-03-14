@@ -107,6 +107,7 @@ impl Tool for JavaTool {
             Err(VexError::VersionNotFound {
                 tool: "java".to_string(),
                 version: version.to_string(),
+                suggestions: String::new(),
             })
         }
     }

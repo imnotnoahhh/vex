@@ -528,6 +528,7 @@ fn uninstall(tool_name: &str, version: &str) -> Result<()> {
         return Err(error::VexError::VersionNotFound {
             tool: tool_name.to_string(),
             version: version.to_string(),
+            suggestions: String::new(),
         });
     }
 

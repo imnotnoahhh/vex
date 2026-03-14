@@ -48,12 +48,14 @@ pub enum VexError {
     },
 
     /// Specified tool version does not exist or is not installed
-    #[error("Version not found: {tool}@{version}\n\nTo find available versions:\n  - Run 'vex list-remote {tool}' to see all versions\n  - Run 'vex alias {tool}' to see version aliases\n  - Check https://github.com/imnotnoahhh/vex for supported tools")]
+    #[error("Version not found: {tool}@{version}{suggestions}\n\nRun 'vex list-remote {tool}' to see all available versions.")]
     VersionNotFound {
         /// Tool name
         tool: String,
         /// Version number
         version: String,
+        /// Suggested versions
+        suggestions: String,
     },
 
     /// Unsupported tool name (currently supports node, go, java, rust, python)
@@ -105,6 +107,19 @@ mod tests {
         let err = VexError::VersionNotFound {
             tool: "node".to_string(),
             version: "99.0.0".to_string(),
+            suggestions: "\n\nDid you mean:\n  - 20.11.0 (latest in 20.x)".to_string(),
+        };
+        assert!(err.to_string().contains("Version not found: node@99.0.0"));
+        assert!(err.to_string().contains("Did you mean"));
+        assert!(err.to_string().contains("vex list-remote"));
+    }
+
+    #[test]
+    fn test_error_display_version_not_found_no_suggestions() {
+        let err = VexError::VersionNotFound {
+            tool: "node".to_string(),
+            version: "99.0.0".to_string(),
+            suggestions: String::new(),
         };
         assert!(err.to_string().contains("Version not found: node@99.0.0"));
         assert!(err.to_string().contains("vex list-remote"));
