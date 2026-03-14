@@ -37,6 +37,7 @@ pub fn build_activation_plan(cwd: &Path) -> Result<ActivationPlan> {
             return Err(VexError::VersionNotFound {
                 tool: tool_name,
                 version,
+                suggestions: String::new(),
             });
         }
 

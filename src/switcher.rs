@@ -42,6 +42,7 @@ fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<
         return Err(VexError::VersionNotFound {
             tool: tool.name().to_string(),
             version: version.to_string(),
+            suggestions: String::new(),
         });
     }
 
@@ -250,7 +251,12 @@ mod tests {
         let base = make_temp_dir("not_found");
         let result = switch_version_in(&NodeTool, "99.99.99", &base);
         assert!(result.is_err());
-        if let Err(VexError::VersionNotFound { tool, version }) = result {
+        if let Err(VexError::VersionNotFound {
+            tool,
+            version,
+            suggestions: _,
+        }) = result
+        {
             assert_eq!(tool, "node");
             assert_eq!(version, "99.99.99");
         } else {
