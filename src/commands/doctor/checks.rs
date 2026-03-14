@@ -1,10 +1,14 @@
-use super::types::{push_check, CheckStatus, DoctorCheck, DoctorReport};
+use super::types::{
+    push_check, CheckStatus, DoctorCheck, DoctorReport, LifecycleWarning, ToolDiskUsage,
+    UnusedVersion,
+};
 use crate::config;
 use crate::error::{Result, VexError};
 use crate::project;
 use crate::resolver;
+use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub(super) fn collect() -> Result<DoctorReport> {
@@ -292,11 +296,51 @@ pub(super) fn collect() -> Result<DoctorReport> {
     };
     checks.push(network_check);
 
+    // Collect disk usage and lifecycle information
+    let cwd = resolver::current_dir();
+    let retained = retained_versions(&vex_dir, &cwd)?;
+    let disk_usage = collect_disk_usage(&vex_dir)?;
+    let unused_versions = collect_unused_versions(&vex_dir, &retained)?;
+    let lifecycle_warnings = collect_lifecycle_warnings(&vex_dir)?;
+
+    let total_disk_bytes = disk_usage.iter().map(|u| u.total_bytes).sum();
+    let reclaimable_bytes = unused_versions.iter().map(|u| u.bytes).sum();
+
+    // Generate suggestions
+    let mut suggestions = Vec::new();
+    if !unused_versions.is_empty() {
+        suggestions.push(format!(
+            "Run 'vex prune --dry-run' to see {} unused version(s) that can be removed",
+            unused_versions.len()
+        ));
+    }
+    if !lifecycle_warnings.is_empty() {
+        let outdated_count = lifecycle_warnings
+            .iter()
+            .filter(|w| w.status == "outdated" || w.status == "near_eol")
+            .count();
+        if outdated_count > 0 {
+            suggestions.push(format!(
+                "Run 'vex outdated' to check for updates to {} tool(s)",
+                outdated_count
+            ));
+        }
+    }
+    if issues > 0 {
+        suggestions.push("Run 'vex init' to fix structural issues".to_string());
+    }
+
     Ok(DoctorReport {
         root: vex_dir.display().to_string(),
         issues,
         warnings,
         checks,
+        disk_usage,
+        unused_versions,
+        lifecycle_warnings,
+        total_disk_bytes,
+        reclaimable_bytes,
+        suggestions,
     })
 }
 
@@ -842,4 +886,380 @@ fn should_skip_binary_probe(bin_name: &str) -> bool {
         || bin_name == "serialver"
         || bin_name == "jconsole"
         || bin_name == "jstatd"
+}
+
+fn retained_versions(vex_dir: &Path, cwd: &Path) -> Result<HashMap<(String, String), String>> {
+    let mut retained = HashMap::new();
+
+    // Active versions
+    for (tool, version) in read_current_versions(vex_dir)? {
+        retained
+            .entry((tool, version))
+            .or_insert_with(|| "active".to_string());
+    }
+
+    // Global defaults
+    let global_path = vex_dir.join("tool-versions");
+    for (tool, version) in read_tool_versions(&global_path) {
+        retained
+            .entry((tool, version))
+            .or_insert_with(|| "global default".to_string());
+    }
+
+    // Project versions
+    for (tool, version) in resolve_project_versions(cwd) {
+        retained
+            .entry((tool, version))
+            .or_insert_with(|| "current project".to_string());
+    }
+
+    Ok(retained)
+}
+
+fn collect_disk_usage(vex_dir: &Path) -> Result<Vec<ToolDiskUsage>> {
+    let toolchains_dir = vex_dir.join("toolchains");
+    if !toolchains_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut usage = Vec::new();
+    for tool_entry in fs::read_dir(&toolchains_dir)?.filter_map(|e| e.ok()) {
+        if !tool_entry
+            .file_type()
+            .ok()
+            .map(|ft| ft.is_dir())
+            .unwrap_or(false)
+        {
+            continue;
+        }
+
+        let tool = tool_entry.file_name().to_string_lossy().to_string();
+        let mut version_count = 0;
+        let mut total_bytes = 0;
+
+        for version_entry in fs::read_dir(tool_entry.path())?.filter_map(|e| e.ok()) {
+            if version_entry
+                .file_type()
+                .ok()
+                .map(|ft| ft.is_dir())
+                .unwrap_or(false)
+            {
+                version_count += 1;
+                total_bytes += path_size(&version_entry.path());
+            }
+        }
+
+        if version_count > 0 {
+            usage.push(ToolDiskUsage {
+                tool,
+                version_count,
+                total_bytes,
+            });
+        }
+    }
+
+    usage.sort_by(|a, b| b.total_bytes.cmp(&a.total_bytes));
+    Ok(usage)
+}
+
+fn collect_unused_versions(
+    vex_dir: &Path,
+    retained: &HashMap<(String, String), String>,
+) -> Result<Vec<UnusedVersion>> {
+    let toolchains_dir = vex_dir.join("toolchains");
+    if !toolchains_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut unused = Vec::new();
+    for tool_entry in fs::read_dir(&toolchains_dir)?.filter_map(|e| e.ok()) {
+        if !tool_entry
+            .file_type()
+            .ok()
+            .map(|ft| ft.is_dir())
+            .unwrap_or(false)
+        {
+            continue;
+        }
+
+        let tool = tool_entry.file_name().to_string_lossy().to_string();
+        for version_entry in fs::read_dir(tool_entry.path())?.filter_map(|e| e.ok()) {
+            if !version_entry
+                .file_type()
+                .ok()
+                .map(|ft| ft.is_dir())
+                .unwrap_or(false)
+            {
+                continue;
+            }
+
+            let version = version_entry.file_name().to_string_lossy().to_string();
+            if !retained.contains_key(&(tool.clone(), version.clone())) {
+                let bytes = path_size(&version_entry.path());
+                unused.push(UnusedVersion {
+                    tool: tool.clone(),
+                    version,
+                    bytes,
+                });
+            }
+        }
+    }
+
+    unused.sort_by(|a, b| b.bytes.cmp(&a.bytes));
+    Ok(unused)
+}
+
+fn collect_lifecycle_warnings(vex_dir: &Path) -> Result<Vec<LifecycleWarning>> {
+    let toolchains_dir = vex_dir.join("toolchains");
+    if !toolchains_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut warnings = Vec::new();
+
+    // Check Node.js versions for EOL status
+    let node_dir = toolchains_dir.join("node");
+    if node_dir.exists() {
+        for version_entry in fs::read_dir(&node_dir)?.filter_map(|e| e.ok()) {
+            if !version_entry
+                .file_type()
+                .ok()
+                .map(|ft| ft.is_dir())
+                .unwrap_or(false)
+            {
+                continue;
+            }
+
+            let version = version_entry.file_name().to_string_lossy().to_string();
+            if let Some((status, message)) = check_node_lifecycle(&version) {
+                warnings.push(LifecycleWarning {
+                    tool: "node".to_string(),
+                    version,
+                    status,
+                    message,
+                });
+            }
+        }
+    }
+
+    // Check Go versions
+    let go_dir = toolchains_dir.join("go");
+    if go_dir.exists() {
+        for version_entry in fs::read_dir(&go_dir)?.filter_map(|e| e.ok()) {
+            if !version_entry
+                .file_type()
+                .ok()
+                .map(|ft| ft.is_dir())
+                .unwrap_or(false)
+            {
+                continue;
+            }
+
+            let version = version_entry.file_name().to_string_lossy().to_string();
+            if let Some((status, message)) = check_go_lifecycle(&version) {
+                warnings.push(LifecycleWarning {
+                    tool: "go".to_string(),
+                    version,
+                    status,
+                    message,
+                });
+            }
+        }
+    }
+
+    warnings.sort_by(|a, b| a.tool.cmp(&b.tool).then(a.version.cmp(&b.version)));
+    Ok(warnings)
+}
+
+fn check_node_lifecycle(version: &str) -> Option<(String, String)> {
+    let version = version.trim_start_matches('v');
+    let major: u32 = version.split('.').next()?.parse().ok()?;
+
+    // Node.js EOL dates (simplified, based on known LTS schedule)
+    match major {
+        14 => Some((
+            "eol".to_string(),
+            "Node.js 14 reached end-of-life on 2023-04-30".to_string(),
+        )),
+        16 => Some((
+            "eol".to_string(),
+            "Node.js 16 reached end-of-life on 2023-09-11".to_string(),
+        )),
+        17 => Some((
+            "eol".to_string(),
+            "Node.js 17 reached end-of-life on 2022-06-01".to_string(),
+        )),
+        18 => Some((
+            "near_eol".to_string(),
+            "Node.js 18 will reach end-of-life on 2025-04-30".to_string(),
+        )),
+        19 => Some((
+            "eol".to_string(),
+            "Node.js 19 reached end-of-life on 2023-06-01".to_string(),
+        )),
+        20 => Some((
+            "active".to_string(),
+            "Node.js 20 LTS is actively maintained until 2026-04-30".to_string(),
+        )),
+        21 => Some((
+            "eol".to_string(),
+            "Node.js 21 reached end-of-life on 2024-06-01".to_string(),
+        )),
+        22 => Some((
+            "active".to_string(),
+            "Node.js 22 LTS is actively maintained until 2027-04-30".to_string(),
+        )),
+        23 => Some((
+            "current".to_string(),
+            "Node.js 23 is the current release".to_string(),
+        )),
+        _ if major < 14 => Some((
+            "eol".to_string(),
+            format!("Node.js {} is no longer supported", major),
+        )),
+        _ => None,
+    }
+}
+
+fn check_go_lifecycle(version: &str) -> Option<(String, String)> {
+    let version = version.trim_start_matches('v');
+    let parts: Vec<&str> = version.split('.').collect();
+    if parts.len() < 2 {
+        return None;
+    }
+
+    let major: u32 = parts[0].parse().ok()?;
+    let minor: u32 = parts[1].parse().ok()?;
+
+    // Go maintains the last 2 minor versions
+    // As of 2026-03, Go 1.24 is current, 1.23 is maintained
+    if major == 1 {
+        match minor {
+            0..=21 => Some((
+                "eol".to_string(),
+                format!("Go 1.{} is no longer supported", minor),
+            )),
+            22 => Some((
+                "near_eol".to_string(),
+                "Go 1.22 will reach end-of-life soon".to_string(),
+            )),
+            23 => Some((
+                "active".to_string(),
+                "Go 1.23 is actively maintained".to_string(),
+            )),
+            24 => Some((
+                "current".to_string(),
+                "Go 1.24 is the current release".to_string(),
+            )),
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
+fn read_current_versions(vex_dir: &Path) -> Result<HashMap<String, String>> {
+    let current_dir = vex_dir.join("current");
+    let mut versions = HashMap::new();
+    if !current_dir.exists() {
+        return Ok(versions);
+    }
+
+    for entry in fs::read_dir(&current_dir)?.filter_map(|e| e.ok()) {
+        let tool = entry.file_name().to_string_lossy().to_string();
+        let target = match fs::read_link(entry.path()) {
+            Ok(target) => target,
+            Err(_) => continue,
+        };
+        if let Some(version) = target.file_name() {
+            versions.insert(tool, version.to_string_lossy().to_string());
+        }
+    }
+
+    Ok(versions)
+}
+
+fn read_tool_versions(path: &Path) -> HashMap<String, String> {
+    let Ok(content) = fs::read_to_string(path) else {
+        return HashMap::new();
+    };
+
+    content
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                return None;
+            }
+            let mut parts = line.split_whitespace();
+            Some((parts.next()?.to_string(), parts.next()?.to_string()))
+        })
+        .collect()
+}
+
+fn resolve_project_versions(start_dir: &Path) -> HashMap<String, String> {
+    let mut versions = HashMap::new();
+    let mut dir = start_dir.to_path_buf();
+    let mut seen = HashSet::new();
+
+    loop {
+        if !seen.insert(dir.clone()) {
+            break;
+        }
+
+        let tool_versions = dir.join(".tool-versions");
+        if tool_versions.is_file() {
+            for (tool, version) in read_tool_versions(&tool_versions) {
+                versions.entry(tool).or_insert(version);
+            }
+        }
+
+        for (file, tool) in [
+            (".node-version", "node"),
+            (".nvmrc", "node"),
+            (".go-version", "go"),
+            (".java-version", "java"),
+            (".rust-toolchain", "rust"),
+            (".python-version", "python"),
+        ] {
+            let path = dir.join(file);
+            if path.is_file() {
+                if let Ok(content) = fs::read_to_string(&path) {
+                    let version = content.trim().to_string();
+                    if !version.is_empty() {
+                        versions.entry(tool.to_string()).or_insert(version);
+                    }
+                }
+            }
+        }
+
+        if !dir.pop() {
+            break;
+        }
+    }
+
+    versions
+}
+
+fn path_size(path: &Path) -> u64 {
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return 0;
+    };
+    let file_type = metadata.file_type();
+
+    if file_type.is_symlink() {
+        return 0;
+    }
+
+    if metadata.is_file() {
+        return metadata.len();
+    }
+
+    fs::read_dir(path)
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| path_size(&entry.path()))
+        .sum()
 }
