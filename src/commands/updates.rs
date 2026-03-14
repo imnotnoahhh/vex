@@ -1,3 +1,4 @@
+use crate::advisories::{self, AdvisoryStatus};
 use crate::config;
 use crate::error::{Result, VexError};
 use crate::installer;
@@ -29,6 +30,12 @@ pub struct OutdatedEntry {
     pub status: String,
     pub source: ManagedSource,
     pub source_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub advisory_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub advisory_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub advisory_recommendation: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -91,6 +98,19 @@ pub fn collect_outdated(tool: Option<&str>) -> Result<OutdatedReport> {
             "outdated"
         };
 
+        // Get advisory information
+        let advisory = advisories::get_advisory(&target.tool, &target.version);
+        let (advisory_status, advisory_message, advisory_recommendation) =
+            if advisory.status != AdvisoryStatus::Unknown {
+                (
+                    Some(format!("{:?}", advisory.status).to_lowercase()),
+                    advisory.message,
+                    advisory.recommendation,
+                )
+            } else {
+                (None, None, None)
+            };
+
         entries.push(OutdatedEntry {
             tool: target.tool,
             current_version: normalize_version(&target.version),
@@ -98,6 +118,9 @@ pub fn collect_outdated(tool: Option<&str>) -> Result<OutdatedReport> {
             status: status.to_string(),
             source: target.source,
             source_path: target.source_path.map(|path| path.display().to_string()),
+            advisory_status,
+            advisory_message,
+            advisory_recommendation,
         });
     }
 
@@ -209,6 +232,7 @@ fn render_outdated_text(report: &OutdatedReport) {
 
     let mut table = ui::Table::new();
     let mut outdated_count = 0;
+    let mut advisory_count = 0;
 
     for entry in &report.entries {
         let status = if entry.status == "outdated" {
@@ -218,13 +242,45 @@ fn render_outdated_text(report: &OutdatedReport) {
             "up to date".green().to_string()
         };
 
+        // Add advisory badge if present
+        let status_with_advisory = if let Some(advisory_status) = &entry.advisory_status {
+            advisory_count += 1;
+            match advisory_status.as_str() {
+                "eol" => format!("{} {}", status, "(eol)".red()),
+                "near_eol" => format!("{} {}", status, "(near eol)".yellow()),
+                "lts_available" => format!("{} {}", status, "(lts available)".cyan()),
+                "security_update_available" => {
+                    format!("{} {}", status, "(security update)".yellow())
+                }
+                _ => status,
+            }
+        } else {
+            status
+        };
+
         table = table.row(vec![
             entry.tool.yellow().to_string(),
             entry.current_version.dimmed().to_string(),
             "→".to_string(),
             entry.latest_version.cyan().to_string(),
-            format!("({})", status),
+            format!("({})", status_with_advisory),
         ]);
+
+        // Show advisory message if present
+        if let Some(message) = &entry.advisory_message {
+            table = table.row(vec![
+                "".to_string(),
+                format!("{}: {}", "Advisory".yellow(), message.dimmed()),
+            ]);
+        }
+
+        // Show recommendation if present
+        if let Some(recommendation) = &entry.advisory_recommendation {
+            table = table.row(vec![
+                "".to_string(),
+                format!("{}: {}", "Recommendation".cyan(), recommendation.dimmed()),
+            ]);
+        }
 
         if let Some(path) = &entry.source_path {
             table = table.row(vec![
@@ -251,13 +307,21 @@ fn render_outdated_text(report: &OutdatedReport) {
     table.render();
 
     println!();
-    if outdated_count == 0 {
+    if outdated_count == 0 && advisory_count == 0 {
         ui::success("All managed tools are up to date.");
     } else {
-        ui::info(&format!(
-            "{} tool(s) are behind the latest available version",
-            outdated_count
-        ));
+        if outdated_count > 0 {
+            ui::info(&format!(
+                "{} tool(s) are behind the latest available version",
+                outdated_count
+            ));
+        }
+        if advisory_count > 0 {
+            ui::warning(&format!(
+                "{} tool(s) have lifecycle advisories",
+                advisory_count
+            ));
+        }
     }
 }
 
