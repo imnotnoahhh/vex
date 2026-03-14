@@ -1,0 +1,21 @@
+feat: build rich terminal UI foundation
+
+Implements Issue #57 with shared rendering primitives for consistent output.
+
+Changes:
+- Add src/ui.rs with UiContext, Table, Progress, ProgressBar, Summary
+- Update installer.rs to use Progress for installation steps
+- Update current.rs to use Table for tool display
+- Update updates.rs to use Table and Summary
+- Update doctor/render.rs to use UI primitives
+- Add atty dependency for terminal detection
+- Add comprehensive tests in tests/ui_test.rs
+
+All commands now have consistent styling with headers, status indicators,
+aligned tables, progress spinners, and summary builders.
+
+Non-interactive mode fully supported. JSON output unchanged.
+
+Closes #57
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>

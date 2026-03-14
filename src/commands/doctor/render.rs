@@ -1,40 +1,50 @@
 use super::types::{CheckStatus, DoctorReport};
+use crate::ui;
 use owo_colors::OwoColorize;
 
 pub(super) fn render_text(report: &DoctorReport) {
-    println!();
-    println!("{}", "vex doctor - Health Check".bold());
-    println!();
+    ui::header("vex doctor - Health Check");
 
     for check in &report.checks {
-        let label = match check.status {
-            CheckStatus::Ok => "✓".green().to_string(),
-            CheckStatus::Warn => "⚠".yellow().to_string(),
-            CheckStatus::Error => "✗".red().to_string(),
-        };
+        let check_name = check_display_name(&check.id);
 
-        print!("Checking {}... ", check_display_name(&check.id));
-        println!("{}", label);
-        if check.status != CheckStatus::Ok {
-            println!("  {}", check.summary.clone().yellow());
-        }
-        for detail in &check.details {
-            println!("  {}", detail);
+        match check.status {
+            CheckStatus::Ok => {
+                ui::success(&format!("Checking {}... passed", check_name));
+            }
+            CheckStatus::Warn => {
+                ui::warning(&format!(
+                    "Checking {}... {}",
+                    check_name,
+                    check.summary.yellow()
+                ));
+                for detail in &check.details {
+                    println!("  {}", detail);
+                }
+            }
+            CheckStatus::Error => {
+                ui::error(&format!("Checking {}... {}", check_name, check.summary));
+                for detail in &check.details {
+                    println!("  {}", detail);
+                }
+            }
         }
     }
 
     println!();
+
+    let mut summary = ui::Summary::new();
     if report.issues == 0 && report.warnings == 0 {
-        println!("{}", "✓ All checks passed!".green().bold());
+        summary = summary.success("All checks passed!".to_string());
     } else {
         if report.issues > 0 {
-            println!("{} {} issue(s) found", "✗".red(), report.issues);
+            summary = summary.error(format!("{} issue(s) found", report.issues));
         }
         if report.warnings > 0 {
-            println!("{} {} warning(s)", "⚠".yellow(), report.warnings);
+            summary = summary.warning(format!("{} warning(s)", report.warnings));
         }
     }
-    println!();
+    summary.render();
 }
 
 fn check_display_name(id: &str) -> &'static str {

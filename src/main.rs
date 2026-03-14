@@ -26,6 +26,7 @@ mod resolver;
 mod shell;
 mod switcher;
 mod tools;
+mod ui;
 mod updater;
 
 use error::Result;
