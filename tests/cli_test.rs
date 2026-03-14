@@ -1441,3 +1441,126 @@ fn test_sync_help() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Install missing versions"));
 }
+
+// Advisory warning tests - verify that lifecycle warnings are shown
+
+#[test]
+#[ignore] // Network-dependent: requires actual tool installation
+fn test_install_shows_eol_warning() {
+    // This test verifies that installing an EOL version shows advisory warning
+    // Example: node@16 is EOL and should show warning
+    let home = fresh_temp_dir("vex_test_install_eol_warning");
+    
+    // Initialize vex
+    let _ = vex_bin()
+        .args(["init", "--shell", "zsh"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    
+    // Install EOL version
+    let output = vex_bin()
+        .args(["install", "node@16"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+    
+    // Should show warning symbol and EOL message
+    assert!(
+        combined.contains("⚠") || combined.contains("warning") || combined.contains("end-of-life"),
+        "Expected EOL warning in output, got: {}",
+        combined
+    );
+    
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+#[ignore] // Network-dependent: requires actual tool installation
+fn test_use_shows_eol_warning() {
+    // This test verifies that using an EOL version shows advisory warning
+    let home = fresh_temp_dir("vex_test_use_eol_warning");
+    
+    // Initialize and install EOL version
+    let _ = vex_bin()
+        .args(["init", "--shell", "zsh"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    
+    let _ = vex_bin()
+        .args(["install", "node@16", "--no-switch"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    
+    // Use the EOL version
+    let output = vex_bin()
+        .args(["use", "node@16"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+    
+    // Should show warning and recommendation
+    assert!(
+        combined.contains("warning:") || combined.contains("end-of-life"),
+        "Expected EOL warning in output, got: {}",
+        combined
+    );
+    assert!(
+        combined.contains("recommendation:") || combined.contains("upgrade"),
+        "Expected recommendation in output, got: {}",
+        combined
+    );
+    
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+#[ignore] // Network-dependent: requires actual tool installation
+fn test_install_from_file_shows_warnings() {
+    // This test verifies that install --from shows advisory warnings
+    let home = fresh_temp_dir("vex_test_install_from_file_warnings");
+    let project_dir = home.join("project");
+    fs::create_dir_all(&project_dir).unwrap();
+    
+    // Create .tool-versions with EOL version
+    fs::write(
+        project_dir.join(".tool-versions"),
+        "node 16.20.2\n"
+    ).unwrap();
+    
+    // Initialize vex
+    let _ = vex_bin()
+        .args(["init", "--shell", "zsh"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    
+    // Install from file
+    let output = vex_bin()
+        .args(["install", "--from", ".tool-versions"])
+        .env("HOME", &home)
+        .current_dir(&project_dir)
+        .output()
+        .unwrap();
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    
+    // Should show warning in summary
+    assert!(
+        stdout.contains("⚠") || stdout.contains("end-of-life"),
+        "Expected EOL warning in install summary, got: {}",
+        stdout
+    );
+    
+    let _ = std::fs::remove_dir_all(&home);
+}

@@ -886,6 +886,17 @@ fn print_install_summary(results: &[(String, String, Result<bool>)]) {
             Ok(true) => {
                 println!("  {} {}@{}", "✓".green(), tool.yellow(), version.cyan());
                 installed += 1;
+
+                // Show lifecycle advisory if applicable
+                let advisory = advisories::get_advisory(tool, version);
+                if advisory.is_warning() {
+                    if let Some(msg) = &advisory.message {
+                        println!("    {} {}", "⚠".yellow(), msg.dimmed());
+                    }
+                    if let Some(rec) = &advisory.recommendation {
+                        println!("    {} {}", "→".cyan(), rec.dimmed());
+                    }
+                }
             }
             Ok(false) => {
                 println!(
