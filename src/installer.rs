@@ -175,9 +175,21 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     )?;
 
     // 2. Verify checksum
-    if let Ok(Some(expected)) = tool.get_checksum(version, arch) {
-        progress.set_message("Verifying checksum");
-        verify_checksum(&archive_path, &expected)?;
+    match tool.get_checksum(version, arch) {
+        Ok(Some(expected)) => {
+            progress.set_message("Verifying checksum");
+            verify_checksum(&archive_path, &expected)?;
+        }
+        Ok(None) => {
+            // Tool doesn't provide checksums — acceptable
+        }
+        Err(e) => {
+            // Checksum fetch failed — refuse to install unverified binary
+            return Err(VexError::Parse(format!(
+                "Failed to fetch checksum for verification: {}. Refusing to install unverified binary.",
+                e
+            )));
+        }
     }
 
     // 3. Extract
