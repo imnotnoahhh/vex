@@ -104,8 +104,28 @@ pub fn resolve_fuzzy_version(tool: &dyn Tool, partial: &str) -> Result<String> {
 
     // For Java, versions are single numbers (8, 11, 17, 21) — always exact
     // For others, 2+ dots means full version (20.11.0, 1.23.5)
+    // But we still need to validate it exists
     if tool.name() == "java" || dot_count >= 2 {
-        return Ok(normalized.to_string());
+        println!(
+            "{}...",
+            format!("Validating {}@{}", tool.name(), partial).cyan()
+        );
+        let versions = tool.list_remote()?;
+        let exists = versions
+            .iter()
+            .any(|v| normalize_version(&v.version) == normalized);
+
+        if exists {
+            return Ok(normalized.to_string());
+        } else {
+            // Version doesn't exist, generate suggestions
+            let suggestions = generate_version_suggestions(normalized, &versions);
+            return Err(crate::error::VexError::VersionNotFound {
+                tool: tool.name().to_string(),
+                version: partial.to_string(),
+                suggestions,
+            });
+        }
     }
 
     // Try alias resolution (latest/lts/stable)
@@ -426,12 +446,18 @@ mod tests {
     #[test]
     fn test_resolve_fuzzy_version_full_version() {
         let tool = MockTool {
-            versions: vec![Version {
-                version: "22.5.0".to_string(),
-                lts: None,
-            }],
+            versions: vec![
+                Version {
+                    version: "20.11.0".to_string(),
+                    lts: None,
+                },
+                Version {
+                    version: "22.5.0".to_string(),
+                    lts: None,
+                },
+            ],
         };
-        // Full version with 2+ dots should pass through directly
+        // Full version with 2+ dots should be validated and pass if it exists
         let result = resolve_fuzzy_version(&tool, "20.11.0").unwrap();
         assert_eq!(result, "20.11.0");
     }
@@ -439,14 +465,52 @@ mod tests {
     #[test]
     fn test_resolve_fuzzy_version_v_prefix() {
         let tool = MockTool {
-            versions: vec![Version {
-                version: "22.5.0".to_string(),
-                lts: None,
-            }],
+            versions: vec![
+                Version {
+                    version: "20.11.0".to_string(),
+                    lts: None,
+                },
+                Version {
+                    version: "22.5.0".to_string(),
+                    lts: None,
+                },
+            ],
         };
-        // v-prefix should be stripped
+        // v-prefix should be stripped and version validated
         let result = resolve_fuzzy_version(&tool, "v20.11.0").unwrap();
         assert_eq!(result, "20.11.0");
+    }
+
+    #[test]
+    fn test_resolve_fuzzy_version_full_version_not_found() {
+        let tool = MockTool {
+            versions: vec![
+                Version {
+                    version: "20.11.0".to_string(),
+                    lts: Some("Iron".to_string()),
+                },
+                Version {
+                    version: "22.5.0".to_string(),
+                    lts: None,
+                },
+            ],
+        };
+        // Non-existent full version should return VersionNotFound with suggestions
+        let result = resolve_fuzzy_version(&tool, "20.99.0");
+        assert!(result.is_err());
+        if let Err(crate::error::VexError::VersionNotFound {
+            tool,
+            version,
+            suggestions,
+        }) = result
+        {
+            assert_eq!(tool, "mock");
+            assert_eq!(version, "20.99.0");
+            assert!(suggestions.contains("Did you mean"));
+            assert!(suggestions.contains("20.11.0"));
+        } else {
+            panic!("Expected VersionNotFound error");
+        }
     }
 
     #[test]

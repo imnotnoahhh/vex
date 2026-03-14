@@ -1290,6 +1290,7 @@ fn test_install_help_shows_no_switch() {
 // --- Multi-spec install tests ---
 
 #[test]
+#[ignore] // Requires network to validate versions
 fn test_install_multiple_specs() {
     let home = fresh_temp_dir("vex_test_multi_install");
 
