@@ -65,7 +65,6 @@ impl Advisory {
     }
 
     /// Check if this advisory should trigger a warning
-    #[allow(dead_code)]
     pub fn is_warning(&self) -> bool {
         matches!(
             self.status,
