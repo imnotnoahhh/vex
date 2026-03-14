@@ -68,10 +68,10 @@ enum Commands {
         dry_run: bool,
     },
 
-    /// Install a tool version (or all from .tool-versions)
+    /// Install one or more tool versions
     Install {
-        /// Tool and version (e.g., node@20, node@20.11.0). Omit to install from .tool-versions.
-        spec: Option<String>,
+        /// Tool and version specs (e.g., node@20, go@1.22). Omit to install from .tool-versions.
+        specs: Vec<String>,
 
         /// Skip automatic version switching after installation
         #[arg(long)]
@@ -80,6 +80,17 @@ enum Commands {
         /// Force reinstall even if already installed
         #[arg(long)]
         force: bool,
+
+        /// Install from a specific version file
+        #[arg(long)]
+        from: Option<PathBuf>,
+    },
+
+    /// Install missing versions from the current managed context
+    Sync {
+        /// Install from a specific version file
+        #[arg(long)]
+        from: Option<PathBuf>,
     },
 
     /// Switch to a different version
@@ -428,6 +439,7 @@ fn parse_spec(spec: &str) -> Result<(String, String)> {
     }
 }
 
+#[allow(dead_code)]
 fn interactive_install(tool_name: &str, no_switch: bool) -> Result<()> {
     if config::non_interactive()? {
         return Err(error::VexError::Dialog(
@@ -583,6 +595,7 @@ fn list_installed_with_output(tool_name: &str, output_mode: output::OutputMode) 
 
 /// Fetch remote versions with optional cache support.
 /// When use_cache is true, checks the cache first and writes back on miss.
+#[allow(dead_code)]
 fn fetch_versions_cached(tool: &dyn tools::Tool, use_cache: bool) -> Result<Vec<tools::Version>> {
     commands::versions::fetch_versions_cached(tool, use_cache)
 }
@@ -610,6 +623,287 @@ fn list_remote_with_output(
         use_cache,
         output_mode,
     )
+}
+
+/// Install multiple tool specs in one command
+fn install_multiple_specs(specs: &[String], no_switch: bool, force: bool) -> Result<()> {
+    let mut results = Vec::new();
+
+    for spec in specs {
+        let (tool_name, version) = parse_spec(spec)?;
+
+        if version.is_empty() {
+            return Err(error::VexError::Parse(format!(
+                "Version required for multi-spec install: {}",
+                spec
+            )));
+        }
+
+        let tool = match tools::get_tool(&tool_name) {
+            Ok(t) => t,
+            Err(e) => {
+                results.push((tool_name.clone(), version.clone(), Err(e)));
+                continue;
+            }
+        };
+
+        let resolved = match tools::resolve_fuzzy_version(tool.as_ref(), &version) {
+            Ok(v) => v,
+            Err(e) => {
+                results.push((tool_name.clone(), version.clone(), Err(e)));
+                continue;
+            }
+        };
+
+        // Check if already installed
+        let vex = vex_dir()?;
+        let install_dir = vex.join("toolchains").join(&tool_name).join(&resolved);
+
+        if install_dir.exists() && !force {
+            results.push((tool_name.clone(), resolved.clone(), Ok(false)));
+            continue;
+        }
+
+        // If --force, remove existing installation
+        if force && install_dir.exists() {
+            fs::remove_dir_all(&install_dir)?;
+        }
+
+        // Install
+        match installer::install(tool.as_ref(), &resolved) {
+            Ok(_) => {
+                // Auto-switch unless --no-switch
+                if !no_switch {
+                    let _ = switcher::switch_version(tool.as_ref(), &resolved);
+                }
+                results.push((tool_name.clone(), resolved.clone(), Ok(true)));
+            }
+            Err(e) => {
+                results.push((tool_name.clone(), resolved.clone(), Err(e)));
+            }
+        }
+    }
+
+    // Print summary
+    println!();
+    println!("{}", "Installation Summary:".cyan().bold());
+
+    let mut installed = 0;
+    let mut skipped = 0;
+    let mut failed = 0;
+
+    for (tool, version, result) in &results {
+        match result {
+            Ok(true) => {
+                println!("  {} {}@{}", "✓".green(), tool.yellow(), version.cyan());
+                installed += 1;
+            }
+            Ok(false) => {
+                println!(
+                    "  {} {}@{} (already installed)",
+                    "→".dimmed(),
+                    tool.yellow(),
+                    version.cyan()
+                );
+                skipped += 1;
+            }
+            Err(e) => {
+                println!(
+                    "  {} {}@{}: {}",
+                    "✗".red(),
+                    tool.yellow(),
+                    version.cyan(),
+                    e
+                );
+                failed += 1;
+            }
+        }
+    }
+
+    println!();
+    println!(
+        "Installed: {}, Skipped: {}, Failed: {}",
+        installed.to_string().green(),
+        skipped.to_string().yellow(),
+        failed.to_string().red()
+    );
+
+    if failed > 0 {
+        return Err(error::VexError::Parse(format!(
+            "{} installation(s) failed",
+            failed
+        )));
+    }
+
+    Ok(())
+}
+
+/// Install from a specific version file
+fn install_from_file(file_path: &std::path::Path) -> Result<()> {
+    if !file_path.exists() {
+        return Err(error::VexError::Parse(format!(
+            "Version file not found: {}",
+            file_path.display()
+        )));
+    }
+
+    let content = fs::read_to_string(file_path)?;
+    let versions = resolver::parse_tool_versions(&content);
+
+    if versions.is_empty() {
+        println!("No versions found in {}", file_path.display());
+        return Ok(());
+    }
+
+    let vex_dir = vex_dir()?;
+    let mut results = Vec::new();
+
+    for (tool_name, version) in &versions {
+        let tool = match tools::get_tool(tool_name) {
+            Ok(t) => t,
+            Err(e) => {
+                results.push((tool_name.clone(), version.clone(), Err(e)));
+                continue;
+            }
+        };
+
+        let version_dir = vex_dir.join("toolchains").join(tool_name).join(version);
+        if version_dir.exists() {
+            results.push((tool_name.clone(), version.clone(), Ok(false)));
+            continue;
+        }
+
+        match installer::install(tool.as_ref(), version) {
+            Ok(_) => {
+                let _ = switcher::switch_version(tool.as_ref(), version);
+                results.push((tool_name.clone(), version.clone(), Ok(true)));
+            }
+            Err(e) => {
+                results.push((tool_name.clone(), version.clone(), Err(e)));
+            }
+        }
+    }
+
+    // Print summary
+    print_install_summary(&results);
+
+    Ok(())
+}
+
+/// Sync missing versions from a specific file
+fn sync_from_file(file_path: &std::path::Path) -> Result<()> {
+    if !file_path.exists() {
+        return Err(error::VexError::Parse(format!(
+            "Version file not found: {}",
+            file_path.display()
+        )));
+    }
+
+    let content = fs::read_to_string(file_path)?;
+    let versions = resolver::parse_tool_versions(&content);
+
+    if versions.is_empty() {
+        println!("No versions found in {}", file_path.display());
+        return Ok(());
+    }
+
+    sync_versions(&versions)
+}
+
+/// Sync missing versions from current context
+fn sync_from_current_context() -> Result<()> {
+    let cwd = resolver::current_dir();
+    let versions = resolver::resolve_versions(&cwd);
+
+    if versions.is_empty() {
+        println!("No version files found (.tool-versions, .node-version, etc.)");
+        return Ok(());
+    }
+
+    let versions_vec: Vec<(String, String)> = versions.into_iter().collect();
+    sync_versions(&versions_vec)
+}
+
+/// Sync versions (install missing ones)
+fn sync_versions(versions: &[(String, String)]) -> Result<()> {
+    let vex_dir = vex_dir()?;
+    let mut results = Vec::new();
+
+    for (tool_name, version) in versions {
+        let tool = match tools::get_tool(tool_name) {
+            Ok(t) => t,
+            Err(e) => {
+                results.push((tool_name.clone(), version.clone(), Err(e)));
+                continue;
+            }
+        };
+
+        let version_dir = vex_dir.join("toolchains").join(tool_name).join(version);
+        if version_dir.exists() {
+            results.push((tool_name.clone(), version.clone(), Ok(false)));
+            continue;
+        }
+
+        match installer::install(tool.as_ref(), version) {
+            Ok(_) => {
+                let _ = switcher::switch_version(tool.as_ref(), version);
+                results.push((tool_name.clone(), version.clone(), Ok(true)));
+            }
+            Err(e) => {
+                results.push((tool_name.clone(), version.clone(), Err(e)));
+            }
+        }
+    }
+
+    print_install_summary(&results);
+
+    Ok(())
+}
+
+/// Print installation summary
+fn print_install_summary(results: &[(String, String, Result<bool>)]) {
+    println!();
+    println!("{}", "Sync Summary:".cyan().bold());
+
+    let mut installed = 0;
+    let mut skipped = 0;
+    let mut failed = 0;
+
+    for (tool, version, result) in results {
+        match result {
+            Ok(true) => {
+                println!("  {} {}@{}", "✓".green(), tool.yellow(), version.cyan());
+                installed += 1;
+            }
+            Ok(false) => {
+                println!(
+                    "  {} {}@{} (already installed)",
+                    "→".dimmed(),
+                    tool.yellow(),
+                    version.cyan()
+                );
+                skipped += 1;
+            }
+            Err(e) => {
+                println!(
+                    "  {} {}@{}: {}",
+                    "✗".red(),
+                    tool.yellow(),
+                    version.cyan(),
+                    e
+                );
+                failed += 1;
+            }
+        }
+    }
+
+    println!();
+    println!(
+        "Installed: {}, Skipped: {}, Failed: {}",
+        installed.to_string().green(),
+        skipped.to_string().yellow(),
+        failed.to_string().red()
+    );
 }
 
 fn install_from_version_files() -> Result<()> {
@@ -961,54 +1255,27 @@ fn run() -> Result<()> {
             init_vex(&shell, dry_run)?;
         }
         Commands::Install {
-            spec,
+            specs,
             no_switch,
             force,
+            from,
         } => {
-            if let Some(spec) = spec {
-                let (tool_name, version) = parse_spec(&spec)?;
-                if version.is_empty() {
-                    interactive_install(&tool_name, no_switch)?;
-                } else {
-                    let tool = tools::get_tool(&tool_name)?;
-                    let resolved = tools::resolve_fuzzy_version(tool.as_ref(), &version)?;
-
-                    // If --force, uninstall first
-                    if force {
-                        let vex = vex_dir()?;
-                        let install_dir = vex.join("toolchains").join(&tool_name).join(&resolved);
-                        if install_dir.exists() {
-                            println!("{} Removing existing installation...", "→".cyan());
-                            fs::remove_dir_all(&install_dir)?;
-                        }
-                    }
-
-                    installer::install(tool.as_ref(), &resolved)?;
-
-                    // Auto-switch unless --no-switch is specified
-                    if !no_switch {
-                        switcher::switch_version(tool.as_ref(), &resolved)?;
-                        println!();
-                        println!(
-                            "{} Switched to {}@{}",
-                            "✓".green(),
-                            tool_name.yellow(),
-                            resolved.cyan()
-                        );
-                    } else {
-                        println!();
-                        println!(
-                            "{}",
-                            format!(
-                                "To activate this version, run: vex use {}@{}",
-                                tool_name, resolved
-                            )
-                            .dimmed()
-                        );
-                    }
-                }
+            if !specs.is_empty() {
+                // Multi-spec install
+                install_multiple_specs(&specs, no_switch, force)?;
+            } else if let Some(from_path) = from {
+                // Install from specific file
+                install_from_file(&from_path)?;
             } else {
+                // Install from current context (.tool-versions)
                 install_from_version_files()?;
+            }
+        }
+        Commands::Sync { from } => {
+            if let Some(from_path) = from {
+                sync_from_file(&from_path)?;
+            } else {
+                sync_from_current_context()?;
             }
         }
         Commands::Use { spec, auto } => {
