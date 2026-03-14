@@ -2,6 +2,7 @@ use crate::config;
 use crate::error::{Result, VexError};
 use crate::output::{print_json, OutputMode};
 use crate::resolver;
+use crate::ui;
 use owo_colors::OwoColorize;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -90,27 +91,33 @@ pub fn collect_current() -> Result<CurrentReport> {
 
 fn render_text(report: &CurrentReport) {
     if report.tools.is_empty() {
-        println!("{}", "No tools activated yet.".dimmed());
+        ui::dimmed("No tools activated yet.");
         println!();
-        println!("{}", "Use 'vex install <tool>' to install a tool.".dimmed());
+        ui::dimmed("Use 'vex install <tool>' to install a tool.");
         return;
     }
 
-    println!();
-    println!("{}", "Current active versions:".bold());
-    println!();
+    ui::header("Current active versions:");
 
+    let mut table = ui::Table::new();
     for tool in &report.tools {
-        println!(
-            "  {} → {} ({})",
-            tool.tool.yellow(),
-            tool.version.cyan(),
-            tool.source.dimmed()
-        );
+        let row = vec![
+            tool.tool.yellow().to_string(),
+            "→".to_string(),
+            tool.version.cyan().to_string(),
+            format!("({})", tool.source.dimmed()),
+        ];
+        table = table.row(row);
+
         if let Some(source_path) = &tool.source_path {
-            println!("    {}: {}", "Source".dimmed(), source_path.dimmed());
+            table = table.row(vec![
+                "".to_string(),
+                "".to_string(),
+                format!("{}: {}", "Source".dimmed(), source_path.dimmed()),
+            ]);
         }
     }
+    table.render();
 
     println!();
 }
