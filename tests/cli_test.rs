@@ -310,7 +310,8 @@ fn test_install_invalid_tool() {
     let output = vex_bin().args(["install", "ruby@3.0"]).output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Tool not found"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stderr.contains("Tool not found") || stdout.contains("Tool not found"));
 }
 
 #[test]
@@ -1284,4 +1285,158 @@ fn test_install_help_shows_no_switch() {
         stdout.contains("--no-switch"),
         "Help should document --no-switch flag"
     );
+}
+
+// --- Multi-spec install tests ---
+
+#[test]
+fn test_install_multiple_specs() {
+    let home = fresh_temp_dir("vex_test_multi_install");
+
+    // Create fake installations to avoid network calls
+    std::fs::create_dir_all(home.join(".vex/toolchains/node/20.11.0")).unwrap();
+    std::fs::create_dir_all(home.join(".vex/toolchains/go/1.23.5")).unwrap();
+
+    let output = vex_bin()
+        .args(["install", "node@20.11.0", "go@1.23.5"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Installation Summary") || stdout.contains("already installed"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_install_multiple_specs_with_invalid() {
+    let home = fresh_temp_dir("vex_test_multi_invalid");
+
+    let output = vex_bin()
+        .args(["install", "node@20.11.0", "ruby@3.0"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stdout.contains("Tool not found") || stderr.contains("Tool not found"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_install_from_flag() {
+    let home = fresh_temp_dir("vex_test_install_from");
+    let project_dir = home.join("project");
+    std::fs::create_dir_all(&project_dir).unwrap();
+
+    // Create a .tool-versions file
+    std::fs::write(
+        project_dir.join(".tool-versions"),
+        "node 20.11.0\ngo 1.23.5\n",
+    )
+    .unwrap();
+
+    // Create fake installations
+    std::fs::create_dir_all(home.join(".vex/toolchains/node/20.11.0")).unwrap();
+    std::fs::create_dir_all(home.join(".vex/toolchains/go/1.23.5")).unwrap();
+
+    let output = vex_bin()
+        .args(["install", "--from", ".tool-versions"])
+        .env("HOME", &home)
+        .current_dir(&project_dir)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Sync Summary") || stdout.contains("already installed"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+// --- Sync command tests ---
+
+#[test]
+fn test_sync_command() {
+    let home = fresh_temp_dir("vex_test_sync");
+    let project_dir = home.join("project");
+    std::fs::create_dir_all(&project_dir).unwrap();
+
+    // Create a .tool-versions file
+    std::fs::write(project_dir.join(".tool-versions"), "node 20.11.0\n").unwrap();
+
+    // Create fake installation
+    std::fs::create_dir_all(home.join(".vex/toolchains/node/20.11.0")).unwrap();
+
+    let output = vex_bin()
+        .args(["sync"])
+        .env("HOME", &home)
+        .current_dir(&project_dir)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Sync Summary") || stdout.contains("already installed"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_sync_no_version_file() {
+    let home = fresh_temp_dir("vex_test_sync_no_file");
+    let project_dir = home.join("project");
+    std::fs::create_dir_all(&project_dir).unwrap();
+
+    let output = vex_bin()
+        .args(["sync"])
+        .env("HOME", &home)
+        .current_dir(&project_dir)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("No version files found"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_sync_from_flag() {
+    let home = fresh_temp_dir("vex_test_sync_from");
+    let project_dir = home.join("project");
+    std::fs::create_dir_all(&project_dir).unwrap();
+
+    // Create a custom version file
+    std::fs::write(project_dir.join("custom-versions.txt"), "node 20.11.0\n").unwrap();
+
+    // Create fake installation
+    std::fs::create_dir_all(home.join(".vex/toolchains/node/20.11.0")).unwrap();
+
+    let output = vex_bin()
+        .args(["sync", "--from", "custom-versions.txt"])
+        .env("HOME", &home)
+        .current_dir(&project_dir)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Sync Summary") || stdout.contains("already installed"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_sync_help() {
+    let output = vex_bin().args(["sync", "--help"]).output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Install missing versions"));
 }
