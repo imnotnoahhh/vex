@@ -128,15 +128,118 @@ pub fn resolve_fuzzy_version(tool: &dyn Tool, partial: &str) -> Result<String> {
             ver == normalized || ver.starts_with(&prefix)
         })
         .map(|v| normalize_version(&v.version))
-        .ok_or_else(|| crate::error::VexError::VersionNotFound {
-            tool: tool.name().to_string(),
-            version: partial.to_string(),
+        .ok_or_else(|| {
+            let suggestions = generate_version_suggestions(normalized, &versions);
+            crate::error::VexError::VersionNotFound {
+                tool: tool.name().to_string(),
+                version: partial.to_string(),
+                suggestions,
+            }
         })
 }
 
 /// Remove "v" prefix from version number
 fn normalize_version(version: &str) -> String {
     version.strip_prefix('v').unwrap_or(version).to_string()
+}
+
+/// Generate version suggestions when a version is not found
+fn generate_version_suggestions(requested: &str, available: &[Version]) -> String {
+    if available.is_empty() {
+        return String::new();
+    }
+
+    let mut suggestions = Vec::new();
+
+    // Parse requested version to extract major/minor
+    let parts: Vec<&str> = requested.split('.').collect();
+    let requested_major = parts.first().and_then(|s| s.parse::<u32>().ok());
+    let requested_minor = if parts.len() > 1 {
+        parts.get(1).and_then(|s| s.parse::<u32>().ok())
+    } else {
+        None
+    };
+
+    // Find latest in same major.minor version (prioritize this first)
+    if let (Some(major), Some(minor)) = (requested_major, requested_minor) {
+        let same_minor = available
+            .iter()
+            .filter(|v| {
+                let ver = normalize_version(&v.version);
+                let v_parts: Vec<&str> = ver.split('.').collect();
+                v_parts.first().and_then(|s| s.parse::<u32>().ok()) == Some(major)
+                    && v_parts.get(1).and_then(|s| s.parse::<u32>().ok()) == Some(minor)
+            })
+            .max_by(|a, b| {
+                let a_ver = normalize_version(&a.version);
+                let b_ver = normalize_version(&b.version);
+                a_ver.cmp(&b_ver)
+            })
+            .map(|v| normalize_version(&v.version));
+
+        if let Some(ver) = same_minor {
+            suggestions.push(format!("  - {} (latest in {}.{}.x)", ver, major, minor));
+        }
+    }
+
+    // Find latest in same major version
+    if let Some(major) = requested_major {
+        let same_major = available
+            .iter()
+            .filter(|v| {
+                let ver = normalize_version(&v.version);
+                ver.split('.').next().and_then(|s| s.parse::<u32>().ok()) == Some(major)
+            })
+            .max_by(|a, b| {
+                let a_ver = normalize_version(&a.version);
+                let b_ver = normalize_version(&b.version);
+                a_ver.cmp(&b_ver)
+            })
+            .map(|v| normalize_version(&v.version));
+
+        if let Some(ver) = same_major {
+            if !suggestions.iter().any(|s| s.contains(&ver)) {
+                suggestions.push(format!("  - {} (latest in {}.x)", ver, major));
+            }
+        }
+    }
+
+    // Find nearby versions (within 2 major versions)
+    if let Some(major) = requested_major {
+        let nearby: Vec<String> = available
+            .iter()
+            .filter_map(|v| {
+                let ver = normalize_version(&v.version);
+                let v_major = ver.split('.').next().and_then(|s| s.parse::<u32>().ok())?;
+                if v_major.abs_diff(major) <= 2 && v_major != major {
+                    Some(ver)
+                } else {
+                    None
+                }
+            })
+            .take(2)
+            .collect();
+
+        for ver in nearby {
+            if !suggestions.iter().any(|s| s.contains(&ver)) {
+                suggestions.push(format!("  - {}", ver));
+            }
+        }
+    }
+
+    // Always include latest overall
+    if let Some(latest) = available.first() {
+        let latest_ver = normalize_version(&latest.version);
+        if !suggestions.iter().any(|s| s.contains(&latest_ver)) {
+            suggestions.push(format!("  - {} (latest)", latest_ver));
+        }
+    }
+
+    if suggestions.is_empty() {
+        String::new()
+    } else {
+        format!("\n\nDid you mean:\n{}", suggestions.join("\n"))
+    }
 }
 
 #[cfg(test)]
@@ -375,5 +478,101 @@ mod tests {
         };
         let result = resolve_fuzzy_version(&tool, "99");
         assert!(result.is_err());
+        if let Err(crate::error::VexError::VersionNotFound {
+            tool,
+            version,
+            suggestions,
+        }) = result
+        {
+            assert_eq!(tool, "mock");
+            assert_eq!(version, "99");
+            assert!(suggestions.contains("Did you mean"));
+        }
+    }
+
+    #[test]
+    fn test_generate_version_suggestions_same_major() {
+        let versions = vec![
+            Version {
+                version: "22.5.0".to_string(),
+                lts: None,
+            },
+            Version {
+                version: "20.11.0".to_string(),
+                lts: Some("Iron".to_string()),
+            },
+            Version {
+                version: "20.10.0".to_string(),
+                lts: None,
+            },
+        ];
+        let suggestions = generate_version_suggestions("20.99.0", &versions);
+        assert!(suggestions.contains("20.11.0"));
+        assert!(suggestions.contains("latest in 20.x"));
+    }
+
+    #[test]
+    fn test_generate_version_suggestions_same_minor() {
+        let versions = vec![
+            Version {
+                version: "20.11.5".to_string(),
+                lts: None,
+            },
+            Version {
+                version: "20.11.0".to_string(),
+                lts: Some("Iron".to_string()),
+            },
+            Version {
+                version: "20.10.0".to_string(),
+                lts: None,
+            },
+        ];
+        let suggestions = generate_version_suggestions("20.11.99", &versions);
+        assert!(suggestions.contains("20.11.5"));
+        assert!(suggestions.contains("latest in 20.11.x"));
+    }
+
+    #[test]
+    fn test_generate_version_suggestions_nearby() {
+        let versions = vec![
+            Version {
+                version: "22.5.0".to_string(),
+                lts: None,
+            },
+            Version {
+                version: "21.0.0".to_string(),
+                lts: None,
+            },
+            Version {
+                version: "20.11.0".to_string(),
+                lts: Some("Iron".to_string()),
+            },
+        ];
+        let suggestions = generate_version_suggestions("19.0.0", &versions);
+        assert!(suggestions.contains("20.11.0") || suggestions.contains("21.0.0"));
+    }
+
+    #[test]
+    fn test_generate_version_suggestions_latest() {
+        let versions = vec![
+            Version {
+                version: "22.5.0".to_string(),
+                lts: None,
+            },
+            Version {
+                version: "20.11.0".to_string(),
+                lts: Some("Iron".to_string()),
+            },
+        ];
+        let suggestions = generate_version_suggestions("99.0.0", &versions);
+        assert!(suggestions.contains("22.5.0"));
+        assert!(suggestions.contains("(latest)"));
+    }
+
+    #[test]
+    fn test_generate_version_suggestions_empty() {
+        let versions = vec![];
+        let suggestions = generate_version_suggestions("20.0.0", &versions);
+        assert!(suggestions.is_empty());
     }
 }

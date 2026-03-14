@@ -146,6 +146,7 @@ fn upgrade_one(tool_name: &str) -> Result<UpgradeReport> {
         .ok_or_else(|| VexError::VersionNotFound {
             tool: tool_name.to_string(),
             version: "managed version".to_string(),
+            suggestions: String::new(),
         })?;
 
     Ok(UpgradeReport {
