@@ -224,6 +224,12 @@ enum Commands {
     /// Update vex itself to the latest release
     SelfUpdate,
 
+    /// Launch interactive TUI dashboard
+    ///
+    /// Shows current versions, health warnings, disk usage, and quick actions.
+    /// Requires an interactive terminal.
+    Tui,
+
     /// Python virtual environment management
     ///
     /// Workflow:
@@ -1508,6 +1514,9 @@ fn run() -> Result<()> {
         }
         Commands::SelfUpdate => {
             updater::self_update()?;
+        }
+        Commands::Tui => {
+            commands::tui::run()?;
         }
         Commands::Python { subcmd } => match subcmd.as_str() {
             "init" => python_init()?,
