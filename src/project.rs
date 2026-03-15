@@ -62,7 +62,7 @@ pub fn load_nearest_project_config(start_dir: &Path) -> Result<Option<LoadedProj
 
     let content = fs::read_to_string(&path)?;
     let config: ProjectConfig = toml::from_str(&content)
-        .map_err(|err| VexError::Parse(format!("Failed to parse {}: {}", path.display(), err)))?;
+        .map_err(|err| VexError::Config(format!("Failed to parse {}: {}", path.display(), err)))?;
 
     Ok(Some(LoadedProjectConfig {
         root: path
