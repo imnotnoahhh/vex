@@ -21,7 +21,7 @@ pub fn run_task(task: &str, args: &[String]) -> Result<i32> {
     let cwd = resolver::current_dir();
     let plan = activation::build_activation_plan(&cwd)?;
     let project = plan.project.as_ref().ok_or_else(|| {
-        VexError::Parse(
+        VexError::Config(
             "No .vex.toml found in the current project tree. Create one before using 'vex run'."
                 .to_string(),
         )
@@ -29,7 +29,7 @@ pub fn run_task(task: &str, args: &[String]) -> Result<i32> {
 
     let command =
         project.config.commands.get(task).ok_or_else(|| {
-            VexError::Parse(format!("Task '{}' was not found in .vex.toml", task))
+            VexError::Config(format!("Task '{}' was not found in .vex.toml", task))
         })?;
 
     let shell = resolve_shell(project::load_nearest_project_config(&cwd)?.as_ref())?;

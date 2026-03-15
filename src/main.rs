@@ -20,6 +20,7 @@ mod error;
 mod http;
 mod installer;
 mod lock;
+mod lockfile;
 mod logging;
 mod output;
 mod project;
@@ -85,6 +86,10 @@ enum Commands {
         /// Install from a specific version file
         #[arg(long)]
         from: Option<PathBuf>,
+
+        /// Frozen mode: strictly enforce lockfile versions, fail if lockfile is missing or versions don't match
+        #[arg(long)]
+        frozen: bool,
     },
 
     /// Install missing versions from the current managed context
@@ -92,6 +97,10 @@ enum Commands {
         /// Install from a specific version file
         #[arg(long)]
         from: Option<PathBuf>,
+
+        /// Frozen mode: strictly enforce lockfile versions, fail if lockfile is missing or versions don't match
+        #[arg(long)]
+        frozen: bool,
     },
 
     /// Switch to a different version
@@ -162,6 +171,9 @@ enum Commands {
         /// Tool and version (e.g., node@20.11.0)
         spec: String,
     },
+
+    /// Generate lockfile from current .tool-versions
+    Lock,
 
     /// Upgrade a tool to the latest version
     Upgrade {
@@ -1249,6 +1261,203 @@ fn python_sync() -> Result<()> {
     Ok(())
 }
 
+/// Generate lockfile from current .tool-versions
+fn generate_lockfile() -> Result<()> {
+    let cwd = resolver::current_dir();
+    let versions = resolver::resolve_versions(&cwd);
+
+    if versions.is_empty() {
+        return Err(error::VexError::Config(
+            "No version files found (.tool-versions, .node-version, etc.)".to_string(),
+        ));
+    }
+
+    let mut lockfile = lockfile::Lockfile::new();
+
+    for (tool_name, version) in &versions {
+        let tool = match tools::get_tool(tool_name) {
+            Ok(t) => t,
+            Err(_) => {
+                eprintln!("vex: skipping unsupported tool '{}'", tool_name);
+                continue;
+            }
+        };
+
+        // Verify version is installed
+        let version_dir = vex_dir()?.join("toolchains").join(tool_name).join(version);
+        if !version_dir.exists() {
+            return Err(error::VexError::Config(format!(
+                "Version {}@{} is not installed. Run 'vex install' first.",
+                tool_name, version
+            )));
+        }
+
+        // Get checksum if available
+        let sha256 = get_installed_checksum(tool.as_ref(), version)?;
+
+        lockfile.add_tool(
+            tool_name.clone(),
+            lockfile::LockEntry {
+                version: version.clone(),
+                sha256,
+                url: None,
+            },
+        );
+    }
+
+    let path = lockfile.save_to_dir(&cwd)?;
+    println!("{} Lockfile generated: {}", "✓".green(), path.display());
+    println!();
+    println!("{}", "Locked versions:".cyan().bold());
+    for (tool, entry) in &lockfile.tools {
+        println!("  {}@{}", tool.yellow(), entry.version.cyan());
+    }
+
+    Ok(())
+}
+
+/// Get checksum for an installed version
+fn get_installed_checksum(tool: &dyn tools::Tool, version: &str) -> Result<Option<String>> {
+    let vex_dir = vex_dir()?;
+    let checksum_file = vex_dir
+        .join("toolchains")
+        .join(tool.name())
+        .join(version)
+        .join(".vex-checksum");
+
+    if checksum_file.exists() {
+        let content = fs::read_to_string(&checksum_file)?;
+        Ok(Some(content.trim().to_string()))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Install from version files with frozen mode support
+fn install_from_version_files_with_frozen(frozen: bool) -> Result<()> {
+    if frozen {
+        install_from_lockfile_frozen()
+    } else {
+        install_from_version_files()
+    }
+}
+
+/// Install from lockfile in frozen mode
+fn install_from_lockfile_frozen() -> Result<()> {
+    let cwd = resolver::current_dir();
+    let lockfile = lockfile::Lockfile::load_from_ancestors(&cwd)?.ok_or_else(|| {
+        error::VexError::Config(
+            "Frozen mode requires a lockfile (.tool-versions.lock). Run 'vex lock' first."
+                .to_string(),
+        )
+    })?;
+
+    let versions = resolver::resolve_versions(&cwd);
+    if versions.is_empty() {
+        return Err(error::VexError::Config(
+            "No version files found (.tool-versions, .node-version, etc.)".to_string(),
+        ));
+    }
+
+    // Verify all versions match lockfile
+    for (tool_name, version) in &versions {
+        if let Some(lock_entry) = lockfile.get_tool(tool_name) {
+            if &lock_entry.version != version {
+                return Err(error::VexError::Config(format!(
+                    "Version mismatch for {}: .tool-versions specifies '{}' but lockfile has '{}'. Update lockfile with 'vex lock' or remove --frozen flag.",
+                    tool_name, version, lock_entry.version
+                )));
+            }
+        } else {
+            return Err(error::VexError::Config(format!(
+                "Tool '{}' found in .tool-versions but not in lockfile. Update lockfile with 'vex lock' or remove --frozen flag.",
+                tool_name
+            )));
+        }
+    }
+
+    // Install versions from lockfile
+    let vex_dir = vex_dir()?;
+    for (tool_name, lock_entry) in &lockfile.tools {
+        let tool = match tools::get_tool(tool_name) {
+            Ok(t) => t,
+            Err(_) => {
+                eprintln!("vex: skipping unsupported tool '{}'", tool_name);
+                continue;
+            }
+        };
+
+        let version_dir = vex_dir
+            .join("toolchains")
+            .join(tool_name)
+            .join(&lock_entry.version);
+        if version_dir.exists() {
+            println!(
+                "{}@{} already installed, skipping.",
+                tool_name, lock_entry.version
+            );
+            continue;
+        }
+
+        installer::install(tool.as_ref(), &lock_entry.version)?;
+        switcher::switch_version(tool.as_ref(), &lock_entry.version)?;
+    }
+
+    Ok(())
+}
+
+/// Sync from current context with frozen mode support
+fn sync_from_current_context_with_frozen(frozen: bool) -> Result<()> {
+    if frozen {
+        sync_from_lockfile_frozen()
+    } else {
+        sync_from_current_context()
+    }
+}
+
+/// Sync from lockfile in frozen mode
+fn sync_from_lockfile_frozen() -> Result<()> {
+    let cwd = resolver::current_dir();
+    let lockfile = lockfile::Lockfile::load_from_ancestors(&cwd)?.ok_or_else(|| {
+        error::VexError::Config(
+            "Frozen mode requires a lockfile (.tool-versions.lock). Run 'vex lock' first."
+                .to_string(),
+        )
+    })?;
+
+    let versions = resolver::resolve_versions(&cwd);
+    if versions.is_empty() {
+        return Err(error::VexError::Config(
+            "No version files found (.tool-versions, .node-version, etc.)".to_string(),
+        ));
+    }
+
+    // Verify all versions match lockfile
+    for (tool_name, version) in &versions {
+        if let Some(lock_entry) = lockfile.get_tool(tool_name) {
+            if &lock_entry.version != version {
+                return Err(error::VexError::Config(format!(
+                    "Version mismatch for {}: .tool-versions specifies '{}' but lockfile has '{}'. Update lockfile with 'vex lock' or remove --frozen flag.",
+                    tool_name, version, lock_entry.version
+                )));
+            }
+        } else {
+            return Err(error::VexError::Config(format!(
+                "Tool '{}' found in .tool-versions but not in lockfile. Update lockfile with 'vex lock' or remove --frozen flag.",
+                tool_name
+            )));
+        }
+    }
+
+    // Sync versions from lockfile
+    let versions_vec: Vec<(String, String)> = lockfile
+        .tools
+        .iter()
+        .map(|(k, v)| (k.clone(), v.version.clone()))
+        .collect();
+    sync_versions(&versions_vec)
+}
+
 /// Find the active python3 binary from vex bin dir, falling back to system python3
 fn find_active_python_bin() -> Result<std::path::PathBuf> {
     let vex_dir = vex_dir()?;
@@ -1282,6 +1491,7 @@ fn run() -> Result<()> {
             no_switch,
             force,
             from,
+            frozen,
         } => {
             if !specs.is_empty() {
                 // Multi-spec install
@@ -1291,14 +1501,14 @@ fn run() -> Result<()> {
                 install_from_file(&from_path)?;
             } else {
                 // Install from current context (.tool-versions)
-                install_from_version_files()?;
+                install_from_version_files_with_frozen(frozen)?;
             }
         }
-        Commands::Sync { from } => {
+        Commands::Sync { from, frozen } => {
             if let Some(from_path) = from {
                 sync_from_file(&from_path)?;
             } else {
-                sync_from_current_context()?;
+                sync_from_current_context_with_frozen(frozen)?;
             }
         }
         Commands::Use { spec, auto } => {
@@ -1478,6 +1688,9 @@ fn run() -> Result<()> {
             if is_installed {
                 println!("{}", "To activate it now, run: vex use --auto".dimmed());
             }
+        }
+        Commands::Lock => {
+            generate_lockfile()?;
         }
         Commands::Upgrade { tool, all } => {
             commands::updates::upgrade(tool.as_deref(), all)?;

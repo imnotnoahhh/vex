@@ -238,13 +238,14 @@ pub fn rewrite_download_url_with_settings(
     };
 
     let original = reqwest::Url::parse(url).map_err(|err| {
-        VexError::Parse(format!(
+        VexError::Config(format!(
             "Invalid upstream download URL for {}: {}",
             tool_name, err
         ))
     })?;
-    let mut mirror = reqwest::Url::parse(mirror_base)
-        .map_err(|err| VexError::Parse(format!("Invalid mirror URL for {}: {}", tool_name, err)))?;
+    let mut mirror = reqwest::Url::parse(mirror_base).map_err(|err| {
+        VexError::Config(format!("Invalid mirror URL for {}: {}", tool_name, err))
+    })?;
 
     let original_path = original.path().trim_start_matches('/');
     let mirror_prefix = mirror.path().trim_end_matches('/');
@@ -284,7 +285,7 @@ fn read_file_config(path: &Path) -> Result<Option<FileConfig>> {
 
     toml::from_str(&content)
         .map(Some)
-        .map_err(|err| VexError::Parse(format!("Failed to parse {}: {}", path.display(), err)))
+        .map_err(|err| VexError::Config(format!("Failed to parse {}: {}", path.display(), err)))
 }
 
 fn apply_file_config(settings: &mut Settings, file_config: FileConfig) {
