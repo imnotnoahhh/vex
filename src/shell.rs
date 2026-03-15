@@ -122,7 +122,7 @@ __vex_use_if_found() {
            [ -f "$dir/.python-version" ]; then
             vex use --auto 2>/dev/null
             found=1
-            return
+            break
         fi
         dir="${dir%/*}"
     done
@@ -130,6 +130,56 @@ __vex_use_if_found() {
     # No project version found, fall back to global
     if [ $found -eq 0 ] && [ -f "$HOME/.vex/tool-versions" ]; then
         vex use --auto 2>/dev/null
+    fi
+
+    # Load environment variables after version switch
+    __vex_load_env
+}
+
+__vex_load_env() {
+    # Set JAVA_HOME if Java is active
+    if [ -L "$HOME/.vex/current/java" ]; then
+        local java_path="$(readlink "$HOME/.vex/current/java")"
+        if [ "$(uname)" = "Darwin" ]; then
+            export JAVA_HOME="$java_path/Contents/Home"
+        else
+            export JAVA_HOME="$java_path"
+        fi
+    else
+        unset JAVA_HOME
+    fi
+
+    # Set GOROOT if Go is active
+    if [ -L "$HOME/.vex/current/go" ]; then
+        export GOROOT="$(readlink "$HOME/.vex/current/go")"
+    else
+        unset GOROOT
+    fi
+
+    # Load project environment variables from .vex.toml
+    if [ -f ".vex.toml" ]; then
+        # Parse [env] section and export variables
+        # This is a simple implementation - only handles basic key="value" format
+        local in_env_section=0
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^\[env\] ]]; then
+                in_env_section=1
+                continue
+            elif [[ "$line" =~ ^\[ ]]; then
+                in_env_section=0
+                continue
+            fi
+
+            if [ $in_env_section -eq 1 ] && [[ "$line" =~ ^[A-Z_][A-Z0-9_]*[[:space:]]*=[[:space:]]*\".*\"$ ]]; then
+                # Extract key and value
+                local key="${line%%=*}"
+                key="${key// /}"  # Remove spaces
+                local value="${line#*=}"
+                value="${value#*\"}"  # Remove leading quote
+                value="${value%\"*}"  # Remove trailing quote
+                export "$key=$value"
+            fi
+        done < ".vex.toml"
     fi
 }
 
@@ -204,7 +254,7 @@ function __vex_use_if_found
            test -f "$dir/.python-version"
             vex use --auto 2>/dev/null
             set found 1
-            return
+            break
         end
         set dir (string replace -r '/[^/]*$' '' "$dir")
     end
@@ -212,6 +262,52 @@ function __vex_use_if_found
     # No project version found, fall back to global
     if test $found -eq 0; and test -f "$HOME/.vex/tool-versions"
         vex use --auto 2>/dev/null
+    end
+
+    # Load environment variables after version switch
+    __vex_load_env
+end
+
+function __vex_load_env
+    # Set JAVA_HOME if Java is active
+    if test -L "$HOME/.vex/current/java"
+        set -l java_path (readlink "$HOME/.vex/current/java")
+        if test (uname) = "Darwin"
+            set -gx JAVA_HOME "$java_path/Contents/Home"
+        else
+            set -gx JAVA_HOME "$java_path"
+        end
+    else
+        set -e JAVA_HOME 2>/dev/null
+    end
+
+    # Set GOROOT if Go is active
+    if test -L "$HOME/.vex/current/go"
+        set -gx GOROOT (readlink "$HOME/.vex/current/go")
+    else
+        set -e GOROOT 2>/dev/null
+    end
+
+    # Load project environment variables from .vex.toml
+    if test -f ".vex.toml"
+        set -l in_env_section 0
+        for line in (cat ".vex.toml")
+            if string match -q -r '^\[env\]' "$line"
+                set in_env_section 1
+                continue
+            else if string match -q -r '^\[' "$line"
+                set in_env_section 0
+                continue
+            end
+
+            if test $in_env_section -eq 1
+                if string match -q -r '^[A-Z_][A-Z0-9_]*\s*=\s*".*"$' "$line"
+                    set -l key (string replace -r '=.*' '' "$line" | string trim)
+                    set -l value (string replace -r '^[^=]*=\s*"' '' "$line" | string replace -r '".*' '')
+                    set -gx $key $value
+                end
+            end
+        end
     end
 end
 
@@ -257,7 +353,7 @@ def --env __vex_use_if_found [] {
         ) {
             vex use --auto | ignore
             $found = true
-            return
+            break
         }
         $dir = ($dir | path dirname)
         if $dir == "/" {
@@ -268,6 +364,43 @@ def --env __vex_use_if_found [] {
     # No project version found, fall back to global
     if (not $found) and (($env.HOME | path join ".vex" "tool-versions") | path exists) {
         vex use --auto | ignore
+    }
+
+    # Load environment variables after version switch
+    __vex_load_env
+}
+
+def --env __vex_load_env [] {
+    # Set JAVA_HOME if Java is active
+    let java_current = ($env.HOME | path join ".vex" "current" "java")
+    if ($java_current | path exists) and ($java_current | path type) == "symlink" {
+        let java_path = (ls -l $java_current | get target.0)
+        if (sys host | get name) == "Darwin" {
+            $env.JAVA_HOME = ($java_path | path join "Contents" "Home")
+        } else {
+            $env.JAVA_HOME = $java_path
+        }
+    } else {
+        hide-env JAVA_HOME
+    }
+
+    # Set GOROOT if Go is active
+    let go_current = ($env.HOME | path join ".vex" "current" "go")
+    if ($go_current | path exists) and ($go_current | path type) == "symlink" {
+        $env.GOROOT = (ls -l $go_current | get target.0)
+    } else {
+        hide-env GOROOT
+    }
+
+    # Load project environment variables from .vex.toml
+    let vex_toml = ".vex.toml"
+    if ($vex_toml | path exists) {
+        let content = (open $vex_toml)
+        if ($content | get -i env | is-not-empty) {
+            for item in ($content.env | transpose key value) {
+                load-env {($item.key): ($item.value)}
+            }
+        }
     }
 }
 
