@@ -623,7 +623,10 @@ fn test_prune_removes_only_unmanaged_items() {
 
 #[test]
 fn test_alias_invalid_tool() {
-    let output = vex_bin().args(["alias", "ruby"]).output().unwrap();
+    let output = vex_bin()
+        .args(["alias", "set", "ruby", "prod", "3.0.0"])
+        .output()
+        .unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Tool not found"));
@@ -631,9 +634,8 @@ fn test_alias_invalid_tool() {
 
 #[test]
 fn test_alias_valid_tool_format() {
-    let output = vex_bin().args(["alias", "node"]).output().unwrap();
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!stderr.contains("Invalid spec format"));
+    let output = vex_bin().args(["alias", "list"]).output().unwrap();
+    assert!(output.status.success());
 }
 
 // --- install from version files ---

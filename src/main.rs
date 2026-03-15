@@ -12,6 +12,7 @@ use std::path::PathBuf;
 
 mod activation;
 mod advisories;
+mod alias;
 mod cache;
 mod commands;
 mod config;
@@ -44,6 +45,44 @@ enum FilterType {
     Major,
     /// Show only the latest version
     Latest,
+}
+
+/// Alias subcommands
+#[derive(Subcommand)]
+enum AliasCommands {
+    /// Set a version alias
+    Set {
+        /// Tool name (e.g., node)
+        tool: String,
+        /// Alias name (e.g., prod)
+        alias: String,
+        /// Version (e.g., 20.11.0)
+        version: String,
+        /// Set as project-level alias (in .vex.toml)
+        #[arg(long)]
+        project: bool,
+    },
+    /// List aliases
+    List {
+        /// Tool name (e.g., node). Omit to list all aliases.
+        tool: Option<String>,
+        /// Show only project-level aliases
+        #[arg(long)]
+        project: bool,
+        /// Show only global aliases
+        #[arg(long)]
+        global: bool,
+    },
+    /// Delete an alias
+    Delete {
+        /// Tool name (e.g., node)
+        tool: String,
+        /// Alias name (e.g., prod)
+        alias: String,
+        /// Delete from project-level aliases
+        #[arg(long)]
+        project: bool,
+    },
 }
 
 /// vex CLI main structure
@@ -191,10 +230,10 @@ enum Commands {
         dry_run: bool,
     },
 
-    /// Show available aliases for a tool
+    /// Manage version aliases
     Alias {
-        /// Tool name (e.g., node)
-        tool: String,
+        #[command(subcommand)]
+        subcmd: AliasCommands,
     },
 
     /// Run a command inside the resolved vex-managed environment without switching global state
@@ -1000,65 +1039,119 @@ fn write_tool_version(file_path: &std::path::Path, tool_name: &str, version: &st
     Ok(())
 }
 
-fn show_aliases(tool_name: &str) -> Result<()> {
-    let tool = tools::get_tool(tool_name)?;
+fn handle_alias_command(subcmd: &AliasCommands) -> Result<()> {
+    let vex_home = vex_dir()?;
+    let manager = alias::AliasManager::new(&vex_home);
 
-    println!("{} aliases:", tool_name);
-    println!();
-
-    match tool_name {
-        "node" => {
-            print_alias(&*tool, "latest")?;
-            print_alias(&*tool, "lts")?;
-            // Show known LTS codenames from remote
-            let versions = tool.list_remote()?;
-            let mut seen = std::collections::HashSet::new();
-            for v in &versions {
-                if let Some(lts) = &v.lts {
-                    let codename = lts.to_lowercase();
-                    if seen.insert(codename.clone()) {
-                        let alias = format!("lts-{}", codename);
-                        let ver = v.version.strip_prefix('v').unwrap_or(&v.version);
-                        println!("  {:<16} -> {}", alias, ver);
-                    }
-                }
+    match subcmd {
+        AliasCommands::Set {
+            tool,
+            alias: alias_name,
+            version,
+            project,
+        } => {
+            tools::get_tool(tool)?;
+            if *project {
+                manager.set_project(tool, alias_name, version)?;
+                println!(
+                    "{} Set project alias: {}@{} -> {}",
+                    "✓".green(),
+                    tool.yellow(),
+                    alias_name.cyan(),
+                    version.cyan()
+                );
+                println!("  Saved to .vex.toml");
+            } else {
+                manager.set_global(tool, alias_name, version)?;
+                println!(
+                    "{} Set global alias: {}@{} -> {}",
+                    "✓".green(),
+                    tool.yellow(),
+                    alias_name.cyan(),
+                    version.cyan()
+                );
+                println!("  Saved to ~/.vex/aliases.toml");
             }
         }
-        "go" => {
-            print_alias(&*tool, "latest")?;
-            println!(
-                "  {:<16}    (minor version matching, e.g., 1.23 -> latest 1.23.x)",
-                "<major>.<minor>"
-            );
+        AliasCommands::List {
+            tool,
+            project,
+            global,
+        } => {
+            let show_project = *project || !*global;
+            let show_global = *global || !*project;
+            let mut has_any = false;
+
+            if show_project {
+                let project_aliases = manager.list_project(tool.as_deref())?;
+                if !project_aliases.is_empty() {
+                    println!("{}", "Project aliases (.vex.toml):".bold());
+                    for (tool_name, aliases) in project_aliases {
+                        println!("  {}:", tool_name.yellow());
+                        for (alias_name, version) in aliases {
+                            println!("    {:<16} -> {}", alias_name.cyan(), version);
+                        }
+                    }
+                    println!();
+                    has_any = true;
+                }
+            }
+
+            if show_global {
+                let global_aliases = manager.list_global(tool.as_deref())?;
+                if !global_aliases.is_empty() {
+                    println!("{}", "Global aliases (~/.vex/aliases.toml):".bold());
+                    for (tool_name, aliases) in global_aliases {
+                        println!("  {}:", tool_name.yellow());
+                        for (alias_name, version) in aliases {
+                            println!("    {:<16} -> {}", alias_name.cyan(), version);
+                        }
+                    }
+                    println!();
+                    has_any = true;
+                }
+            }
+
+            if !has_any {
+                if let Some(tool_name) = tool {
+                    println!("No aliases found for {}", tool_name);
+                } else {
+                    println!("No aliases found");
+                }
+                println!("\nCreate an alias with: vex alias set <tool> <alias> <version>");
+            }
         }
-        "java" => {
-            print_alias(&*tool, "latest")?;
-            print_alias(&*tool, "lts")?;
-        }
-        "rust" => {
-            print_alias(&*tool, "latest")?;
-            print_alias(&*tool, "stable")?;
-        }
-        "python" => {
-            print_alias(&*tool, "latest")?;
-            print_alias(&*tool, "stable")?;
-            print_alias(&*tool, "bugfix")?;
-            print_alias(&*tool, "security")?;
-        }
-        _ => {
-            println!("  (no aliases available)");
+        AliasCommands::Delete {
+            tool,
+            alias: alias_name,
+            project,
+        } => {
+            tools::get_tool(tool)?;
+            let removed = if *project {
+                manager.delete_project(tool, alias_name)?
+            } else {
+                manager.delete_global(tool, alias_name)?
+            };
+
+            if removed {
+                let scope = if *project { "project" } else { "global" };
+                println!(
+                    "{} Deleted {} alias: {}@{}",
+                    "✓".green(),
+                    scope,
+                    tool.yellow(),
+                    alias_name.cyan()
+                );
+            } else {
+                let scope = if *project { "project" } else { "global" };
+                return Err(error::VexError::Parse(format!(
+                    "Alias '{}' not found for {} in {} aliases",
+                    alias_name, tool, scope
+                )));
+            }
         }
     }
 
-    println!();
-    Ok(())
-}
-
-fn print_alias(tool: &dyn tools::Tool, alias: &str) -> Result<()> {
-    match tool.resolve_alias(alias)? {
-        Some(version) => println!("  {:<16} -> {}", alias, version),
-        None => println!("  {:<16} -> (not available)", alias),
-    }
     Ok(())
 }
 
@@ -1488,8 +1581,8 @@ fn run() -> Result<()> {
         Commands::Prune { dry_run } => {
             commands::prune::run(dry_run)?;
         }
-        Commands::Alias { tool } => {
-            show_aliases(&tool)?;
+        Commands::Alias { subcmd } => {
+            handle_alias_command(&subcmd)?;
         }
         Commands::Exec { command } => {
             let code = commands::process::exec_command(&command)?;

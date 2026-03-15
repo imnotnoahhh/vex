@@ -144,7 +144,21 @@ pub fn resolve_fuzzy_version_cached(
         }
     }
 
-    // Try alias resolution (latest/lts/stable)
+    // Try user-defined aliases first (global and project-level)
+    if let Ok(vex_home) =
+        crate::config::vex_home().ok_or(crate::error::VexError::HomeDirectoryNotFound)
+    {
+        let alias_manager = crate::alias::AliasManager::new(&vex_home);
+        if let Ok(Some(resolved)) = alias_manager.resolve(tool.name(), partial) {
+            println!(
+                "{}",
+                format!("Resolved alias '{}' to {}", partial, resolved).cyan()
+            );
+            return resolve_fuzzy_version_cached(tool, &resolved, use_cache);
+        }
+    }
+
+    // Try built-in alias resolution (latest/lts/stable)
     if let Some(resolved) = tool.resolve_alias(partial)? {
         return Ok(resolved);
     }
