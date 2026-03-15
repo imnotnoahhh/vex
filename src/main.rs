@@ -18,6 +18,7 @@ mod cache;
 mod commands;
 mod config;
 mod downloader;
+mod env;
 mod error;
 mod http;
 mod installer;
