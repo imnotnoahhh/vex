@@ -144,7 +144,16 @@ pub fn resolve_fuzzy_version_cached(
         }
     }
 
-    // Try alias resolution (latest/lts/stable)
+    // Try user-defined aliases first (project > global)
+    if let Ok(vex_dir) = crate::vex_dir() {
+        let alias_manager = crate::alias::AliasManager::new(&vex_dir);
+        if let Ok(Some(version)) = alias_manager.resolve(tool.name(), partial) {
+            // Recursively resolve in case the alias points to another alias or partial version
+            return resolve_fuzzy_version_cached(tool, &version, use_cache);
+        }
+    }
+
+    // Try built-in alias resolution (latest/lts/stable)
     if let Some(resolved) = tool.resolve_alias(partial)? {
         return Ok(resolved);
     }
