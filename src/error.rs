@@ -90,6 +90,10 @@ pub enum VexError {
     /// Cannot determine user home directory (HOME not set)
     #[error("Could not determine home directory\n\nPlease ensure:\n  - HOME environment variable is set\n  - You have a valid home directory\n  - Check with: echo $HOME")]
     HomeDirectoryNotFound,
+
+    /// Offline mode error - required data not available in cache
+    #[error("Offline mode error: {0}\n\nIn offline mode, vex can only use cached data.\n\nTo fix this:\n  - Run the command without --offline to fetch fresh data\n  - Ensure you have previously fetched the data while online\n  - Check cache directory: ~/.vex/cache/")]
+    OfflineModeError(String),
 }
 
 /// vex's Result type alias, equivalent to `std::result::Result<T, VexError>`

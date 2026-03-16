@@ -62,9 +62,16 @@ pub fn list_remote(
     tool_name: &str,
     filter: RemoteFilter,
     use_cache: bool,
+    offline: bool,
     output: OutputMode,
 ) -> Result<()> {
-    let report = collect_remote(tool_name, filter, use_cache, output == OutputMode::Text)?;
+    let report = collect_remote(
+        tool_name,
+        filter,
+        use_cache,
+        offline,
+        output == OutputMode::Text,
+    )?;
     match output {
         OutputMode::Json => print_json(&report),
         OutputMode::Text => {
@@ -74,15 +81,26 @@ pub fn list_remote(
     }
 }
 
-pub fn fetch_versions_cached(tool: &dyn Tool, use_cache: bool) -> Result<Vec<Version>> {
+pub fn fetch_versions_cached(
+    tool: &dyn Tool,
+    use_cache: bool,
+    offline: bool,
+) -> Result<Vec<Version>> {
     let vex = config::vex_home().ok_or(VexError::HomeDirectoryNotFound)?;
     let remote_cache = cache::RemoteCache::new(&vex);
     let ttl = config::cache_ttl()?.as_secs();
 
-    if use_cache {
+    if use_cache || offline {
         if let Some(cached) = remote_cache.get_cached_versions(tool.name(), ttl) {
             return Ok(cached);
         }
+    }
+
+    if offline {
+        return Err(VexError::OfflineModeError(format!(
+            "No cached version data available for {} in offline mode",
+            tool.name()
+        )));
     }
 
     let versions = tool.list_remote()?;
@@ -138,6 +156,7 @@ pub fn collect_remote(
     tool_name: &str,
     filter: RemoteFilter,
     use_cache: bool,
+    offline: bool,
     show_spinner: bool,
 ) -> Result<RemoteVersionsReport> {
     let tool = tools::get_tool(tool_name)?;
@@ -151,11 +170,11 @@ pub fn collect_remote(
         );
         spinner.set_message(format!("Fetching available versions of {}...", tool_name));
         spinner.enable_steady_tick(std::time::Duration::from_millis(100));
-        let versions = fetch_versions_cached(tool.as_ref(), use_cache)?;
+        let versions = fetch_versions_cached(tool.as_ref(), use_cache, offline)?;
         spinner.finish_and_clear();
         versions
     } else {
-        fetch_versions_cached(tool.as_ref(), use_cache)?
+        fetch_versions_cached(tool.as_ref(), use_cache, offline)?
     };
 
     let current_version = get_current_version_for_tool(tool_name);

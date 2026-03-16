@@ -13,6 +13,7 @@ use std::path::PathBuf;
 mod activation;
 mod advisories;
 mod alias;
+mod archive_cache;
 mod cache;
 mod commands;
 mod config;
@@ -133,6 +134,10 @@ enum Commands {
         /// Install from a specific version file
         #[arg(long)]
         from: Option<PathBuf>,
+
+        /// Use offline mode (only use cached data, fail if unavailable)
+        #[arg(long)]
+        offline: bool,
     },
 
     /// Install missing versions from the current managed context
@@ -140,6 +145,10 @@ enum Commands {
         /// Install from a specific version file
         #[arg(long)]
         from: Option<PathBuf>,
+
+        /// Use offline mode (only use cached data, fail if unavailable)
+        #[arg(long)]
+        offline: bool,
     },
 
     /// Switch to a different version
@@ -174,6 +183,10 @@ enum Commands {
         /// Skip cache and fetch fresh data
         #[arg(long)]
         no_cache: bool,
+
+        /// Use offline mode (only use cached data, fail if unavailable)
+        #[arg(long)]
+        offline: bool,
 
         /// Output machine-readable JSON
         #[arg(long)]
@@ -650,19 +663,26 @@ fn list_installed_with_output(tool_name: &str, output_mode: output::OutputMode) 
 /// When use_cache is true, checks the cache first and writes back on miss.
 #[allow(dead_code)]
 fn fetch_versions_cached(tool: &dyn tools::Tool, use_cache: bool) -> Result<Vec<tools::Version>> {
-    commands::versions::fetch_versions_cached(tool, use_cache)
+    commands::versions::fetch_versions_cached(tool, use_cache, false)
 }
 
 #[allow(dead_code)]
 #[cfg(test)]
 fn list_remote(tool_name: &str, filter: FilterType, use_cache: bool) -> Result<()> {
-    list_remote_with_output(tool_name, filter, use_cache, output::OutputMode::Text)
+    list_remote_with_output(
+        tool_name,
+        filter,
+        use_cache,
+        false,
+        output::OutputMode::Text,
+    )
 }
 
 fn list_remote_with_output(
     tool_name: &str,
     filter: FilterType,
     use_cache: bool,
+    offline: bool,
     output_mode: output::OutputMode,
 ) -> Result<()> {
     commands::versions::list_remote(
@@ -674,12 +694,18 @@ fn list_remote_with_output(
             FilterType::Latest => commands::versions::RemoteFilter::Latest,
         },
         use_cache,
+        offline,
         output_mode,
     )
 }
 
 /// Install multiple tool specs in one command
-fn install_multiple_specs(specs: &[String], no_switch: bool, force: bool) -> Result<()> {
+fn install_multiple_specs(
+    specs: &[String],
+    no_switch: bool,
+    force: bool,
+    offline: bool,
+) -> Result<()> {
     let mut results = Vec::new();
 
     for spec in specs {
@@ -723,7 +749,7 @@ fn install_multiple_specs(specs: &[String], no_switch: bool, force: bool) -> Res
         }
 
         // Install
-        match installer::install(tool.as_ref(), &resolved) {
+        match installer::install_with_mode(tool.as_ref(), &resolved, offline) {
             Ok(_) => {
                 // Auto-switch unless --no-switch
                 if !no_switch {
@@ -793,7 +819,7 @@ fn install_multiple_specs(specs: &[String], no_switch: bool, force: bool) -> Res
     );
 
     if failed > 0 {
-        return Err(error::VexError::Parse(format!(
+        return Err(error::VexError::Config(format!(
             "{} installation(s) failed",
             failed
         )));
@@ -803,9 +829,9 @@ fn install_multiple_specs(specs: &[String], no_switch: bool, force: bool) -> Res
 }
 
 /// Install from a specific version file
-fn install_from_file(file_path: &std::path::Path) -> Result<()> {
+fn install_from_file(file_path: &std::path::Path, offline: bool) -> Result<()> {
     if !file_path.exists() {
-        return Err(error::VexError::Parse(format!(
+        return Err(error::VexError::Config(format!(
             "Version file not found: {}",
             file_path.display()
         )));
@@ -837,7 +863,7 @@ fn install_from_file(file_path: &std::path::Path) -> Result<()> {
             continue;
         }
 
-        match installer::install(tool.as_ref(), version) {
+        match installer::install_with_mode(tool.as_ref(), version, offline) {
             Ok(_) => {
                 let _ = switcher::switch_version(tool.as_ref(), version);
                 results.push((tool_name.clone(), version.clone(), Ok(true)));
@@ -855,9 +881,9 @@ fn install_from_file(file_path: &std::path::Path) -> Result<()> {
 }
 
 /// Sync missing versions from a specific file
-fn sync_from_file(file_path: &std::path::Path) -> Result<()> {
+fn sync_from_file(file_path: &std::path::Path, offline: bool) -> Result<()> {
     if !file_path.exists() {
-        return Err(error::VexError::Parse(format!(
+        return Err(error::VexError::Config(format!(
             "Version file not found: {}",
             file_path.display()
         )));
@@ -871,11 +897,11 @@ fn sync_from_file(file_path: &std::path::Path) -> Result<()> {
         return Ok(());
     }
 
-    sync_versions(&versions)
+    sync_versions(&versions, offline)
 }
 
 /// Sync missing versions from current context
-fn sync_from_current_context() -> Result<()> {
+fn sync_from_current_context(offline: bool) -> Result<()> {
     let cwd = resolver::current_dir();
     let versions = resolver::resolve_versions(&cwd);
 
@@ -885,11 +911,11 @@ fn sync_from_current_context() -> Result<()> {
     }
 
     let versions_vec: Vec<(String, String)> = versions.into_iter().collect();
-    sync_versions(&versions_vec)
+    sync_versions(&versions_vec, offline)
 }
 
 /// Sync versions (install missing ones)
-fn sync_versions(versions: &[(String, String)]) -> Result<()> {
+fn sync_versions(versions: &[(String, String)], offline: bool) -> Result<()> {
     let vex_dir = vex_dir()?;
     let mut results = Vec::new();
 
@@ -908,7 +934,7 @@ fn sync_versions(versions: &[(String, String)]) -> Result<()> {
             continue;
         }
 
-        match installer::install(tool.as_ref(), version) {
+        match installer::install_with_mode(tool.as_ref(), version, offline) {
             Ok(_) => {
                 let _ = switcher::switch_version(tool.as_ref(), version);
                 results.push((tool_name.clone(), version.clone(), Ok(true)));
@@ -981,7 +1007,7 @@ fn print_install_summary(results: &[(String, String, Result<bool>)]) {
     );
 }
 
-fn install_from_version_files() -> Result<()> {
+fn install_from_version_files(offline: bool) -> Result<()> {
     let cwd = resolver::current_dir();
     let versions = resolver::resolve_versions(&cwd);
 
@@ -1007,7 +1033,7 @@ fn install_from_version_files() -> Result<()> {
             continue;
         }
 
-        installer::install(tool.as_ref(), version)?;
+        installer::install_with_mode(tool.as_ref(), version, offline)?;
         switcher::switch_version(tool.as_ref(), version)?;
     }
 
@@ -1390,23 +1416,24 @@ fn run() -> Result<()> {
             no_switch,
             force,
             from,
+            offline,
         } => {
             if !specs.is_empty() {
                 // Multi-spec install
-                install_multiple_specs(&specs, no_switch, force)?;
+                install_multiple_specs(&specs, no_switch, force, offline)?;
             } else if let Some(from_path) = from {
                 // Install from specific file
-                install_from_file(&from_path)?;
+                install_from_file(&from_path, offline)?;
             } else {
                 // Install from current context (.tool-versions)
-                install_from_version_files()?;
+                install_from_version_files(offline)?;
             }
         }
-        Commands::Sync { from } => {
+        Commands::Sync { from, offline } => {
             if let Some(from_path) = from {
-                sync_from_file(&from_path)?;
+                sync_from_file(&from_path, offline)?;
             } else {
-                sync_from_current_context()?;
+                sync_from_current_context(offline)?;
             }
         }
         Commands::Use { spec, auto } => {
@@ -1442,12 +1469,14 @@ fn run() -> Result<()> {
             tool,
             filter,
             no_cache,
+            offline,
             json,
         } => {
             list_remote_with_output(
                 &tool,
                 filter,
                 !no_cache,
+                offline,
                 output::OutputMode::from_json_flag(json),
             )?;
         }
