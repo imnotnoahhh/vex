@@ -1565,3 +1565,124 @@ fn test_install_from_file_shows_warnings() {
 
     let _ = std::fs::remove_dir_all(&home);
 }
+
+#[test]
+fn test_lock_command_without_version_file() {
+    let home = fresh_temp_dir("vex_test_lock_no_version");
+    let project_dir = home.join("project");
+    fs::create_dir_all(&project_dir).unwrap();
+
+    // Initialize vex
+    let _ = vex_bin()
+        .args(["init"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+
+    // Try to generate lockfile without .tool-versions
+    let output = vex_bin()
+        .arg("lock")
+        .env("HOME", &home)
+        .current_dir(&project_dir)
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("No version files found"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_lock_command_with_uninstalled_version() {
+    let home = fresh_temp_dir("vex_test_lock_uninstalled");
+    let project_dir = home.join("project");
+    fs::create_dir_all(&project_dir).unwrap();
+
+    // Initialize vex
+    let _ = vex_bin()
+        .args(["init"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+
+    // Create .tool-versions with uninstalled version
+    fs::write(project_dir.join(".tool-versions"), "node 20.11.0\n").unwrap();
+
+    // Try to generate lockfile
+    let output = vex_bin()
+        .arg("lock")
+        .env("HOME", &home)
+        .current_dir(&project_dir)
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("not installed"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_install_frozen_without_lockfile() {
+    let home = fresh_temp_dir("vex_test_frozen_no_lock");
+    let project_dir = home.join("project");
+    fs::create_dir_all(&project_dir).unwrap();
+
+    // Initialize vex
+    let _ = vex_bin()
+        .args(["init"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+
+    // Create .tool-versions
+    fs::write(project_dir.join(".tool-versions"), "node 20.11.0\n").unwrap();
+
+    // Try frozen install without lockfile
+    let output = vex_bin()
+        .args(["install", "--frozen"])
+        .env("HOME", &home)
+        .current_dir(&project_dir)
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Frozen mode requires a lockfile"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_sync_frozen_without_lockfile() {
+    let home = fresh_temp_dir("vex_test_sync_frozen_no_lock");
+    let project_dir = home.join("project");
+    fs::create_dir_all(&project_dir).unwrap();
+
+    // Initialize vex
+    let _ = vex_bin()
+        .args(["init"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+
+    // Create .tool-versions
+    fs::write(project_dir.join(".tool-versions"), "node 20.11.0\n").unwrap();
+
+    // Try frozen sync without lockfile
+    let output = vex_bin()
+        .args(["sync", "--frozen"])
+        .env("HOME", &home)
+        .current_dir(&project_dir)
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Frozen mode requires a lockfile"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}

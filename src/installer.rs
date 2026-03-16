@@ -292,13 +292,15 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     )?;
 
     // 2. Verify checksum
-    match tool.get_checksum(version, arch) {
+    let verified_checksum = match tool.get_checksum(version, arch) {
         Ok(Some(expected)) => {
             progress.set_message("Verifying checksum");
             verify_checksum(&archive_path, &expected)?;
+            Some(expected)
         }
         Ok(None) => {
             // Tool doesn't provide checksums — acceptable
+            None
         }
         Err(e) => {
             // Checksum fetch failed — refuse to install unverified binary
@@ -307,7 +309,7 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
                 e
             )));
         }
-    }
+    };
 
     // 2.5. Store archive in cache for future offline use
     let archive_cache = ArchiveCache::new(&vex);
@@ -508,6 +510,12 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
 
     // 5.5. Run post-install hook
     tool.post_install(&final_dir, arch)?;
+
+    // 5.6. Save checksum for lockfile support
+    if let Some(ref checksum) = verified_checksum {
+        let checksum_file = final_dir.join(".vex-checksum");
+        let _ = fs::write(&checksum_file, checksum);
+    }
 
     // 6. Installation successful, disarm cleanup guard and manually clean up temporary files
     guard.disarm();

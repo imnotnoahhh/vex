@@ -50,7 +50,7 @@ fn build_client(settings: &Settings, user_agent: &str) -> Result<Client> {
 
     if let Some(proxy) = &settings.network.proxy {
         let proxy = reqwest::Proxy::all(proxy)
-            .map_err(|err| VexError::Parse(format!("Invalid proxy configuration: {}", err)))?;
+            .map_err(|err| VexError::Config(format!("Invalid proxy configuration: {}", err)))?;
         builder = builder.proxy(proxy);
     }
 
