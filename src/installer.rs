@@ -10,6 +10,7 @@
 //! - **Atomic operations**: Installation uses temporary directories and atomic moves
 //! - **Automatic cleanup**: Failed installations automatically clean up temporary files
 
+use crate::archive_cache::ArchiveCache;
 use crate::config;
 use crate::downloader::{download_with_retry_in_current_context, verify_checksum};
 use crate::error::{Result, VexError};
@@ -96,6 +97,122 @@ impl Drop for CleanupGuard {
             }
         }
     }
+}
+
+/// Install specified tool version with offline mode support
+///
+/// # Arguments
+/// - `tool` - Tool implementation
+/// - `version` - Version number
+/// - `offline` - If true, only use cached archives and fail if unavailable
+pub fn install_with_mode(tool: &dyn Tool, version: &str, offline: bool) -> Result<()> {
+    if offline {
+        install_offline(tool, version)
+    } else {
+        install(tool, version)
+    }
+}
+
+/// Install from cached archive in offline mode
+fn install_offline(tool: &dyn Tool, version: &str) -> Result<()> {
+    info!("Starting offline installation: {}@{}", tool.name(), version);
+    let arch = Arch::detect();
+    let vex = vex_dir()?;
+
+    // Check if already installed
+    let final_dir = config::toolchains_dir()
+        .ok_or(VexError::HomeDirectoryNotFound)?
+        .join(tool.name())
+        .join(version);
+    if final_dir.exists() {
+        info!("Version already installed: {}@{}", tool.name(), version);
+        ui::success(&format!(
+            "{} is already installed.",
+            format!("{}@{}", tool.name(), version).yellow()
+        ));
+        return Ok(());
+    }
+
+    // Acquire install lock
+    let _lock = InstallLock::acquire(&vex, tool.name(), version)?;
+
+    // Check archive cache
+    let archive_cache = ArchiveCache::new(&vex);
+    let archive_name = format!("{}-{}.tar.gz", tool.name(), version);
+
+    let cached_archive = archive_cache
+        .get_archive(tool.name(), version, &archive_name)
+        .ok_or_else(|| {
+            VexError::OfflineModeError(format!(
+                "No cached archive found for {}@{}. Run 'vex install {}@{}' while online first.",
+                tool.name(),
+                version,
+                tool.name(),
+                version
+            ))
+        })?;
+
+    let ctx = ui::UiContext::new();
+    let progress = ui::Progress::new(
+        &ctx,
+        &format!(
+            "Installing {} {} (offline)",
+            tool.name().yellow(),
+            version.yellow()
+        ),
+    );
+
+    // Verify checksum if available (skip if can't fetch in offline mode)
+    match tool.get_checksum(version, arch) {
+        Ok(Some(expected)) => {
+            progress.set_message("Verifying cached archive checksum");
+            archive_cache.verify_checksum(&cached_archive, &expected)?;
+        }
+        _ => {
+            debug!("Skipping checksum verification in offline mode");
+        }
+    }
+
+    let cache_dir = config::cache_dir().ok_or(VexError::HomeDirectoryNotFound)?;
+    let extract_dir = cache_dir.join(format!("{}-{}-extract-offline", tool.name(), version));
+
+    let mut guard = CleanupGuard::new();
+    guard.add(extract_dir.clone());
+
+    // Extract
+    progress.set_message("Extracting archive");
+    fs::create_dir_all(&extract_dir)?;
+
+    let tar_gz = fs::File::open(&cached_archive)?;
+    let tar = GzDecoder::new(tar_gz);
+    let mut archive = Archive::new(tar);
+
+    // Use same extraction logic as online install
+    extract_archive(&mut archive, &extract_dir)?;
+
+    // Find extracted root
+    progress.set_message("Finalizing installation");
+    let extracted_root = find_extracted_root(&extract_dir)?;
+
+    // Move to final location
+    let toolchains_dir = vex.join("toolchains").join(tool.name());
+    fs::create_dir_all(&toolchains_dir)?;
+    fs::rename(&extracted_root, &final_dir)?;
+
+    // Post-install
+    tool.post_install(&final_dir, arch)?;
+
+    guard.disarm();
+    let _ = fs::remove_dir_all(&extract_dir);
+
+    progress.finish_with_success(&format!(
+        "Installed {} {} (offline) to {}",
+        tool.name().yellow(),
+        version.yellow(),
+        final_dir.display().to_string().dimmed()
+    ));
+
+    Ok(())
 }
 
 /// Install specified tool version
@@ -193,6 +310,10 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
             )));
         }
     };
+
+    // 2.5. Store archive in cache for future offline use
+    let archive_cache = ArchiveCache::new(&vex);
+    let _ = archive_cache.store_archive(tool.name(), version, &archive_name, &archive_path);
 
     // 3. Extract
     progress.set_message("Extracting archive");
@@ -422,6 +543,133 @@ pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Extract archive with path validation
+fn extract_archive(archive: &mut Archive<GzDecoder<fs::File>>, extract_dir: &Path) -> Result<()> {
+    // Collect entries with their data for parallel processing
+    struct EntryData {
+        path: PathBuf,
+        is_dir: bool,
+        data: Vec<u8>,
+        mode: u32,
+    }
+
+    let mut entries = Vec::new();
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?.to_path_buf();
+
+        // Check for path traversal attempts
+        if path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            return Err(VexError::Parse(format!(
+                "Archive contains unsafe path: {}. Path traversal detected.",
+                path.display()
+            )));
+        }
+
+        // Check for absolute paths
+        if path.is_absolute() {
+            return Err(VexError::Parse(format!(
+                "Archive contains absolute path: {}. Only relative paths are allowed.",
+                path.display()
+            )));
+        }
+
+        let entry_type = entry.header().entry_type();
+
+        // Handle symlinks separately
+        if entry_type.is_symlink() {
+            let link_name = entry
+                .link_name()?
+                .ok_or_else(|| VexError::Parse("Symlink without target".to_string()))?;
+
+            if link_name.is_absolute() {
+                return Err(VexError::Parse(format!(
+                    "Archive contains absolute symlink target: {}",
+                    link_name.display()
+                )));
+            }
+
+            let symlink_location = extract_dir.join(&path);
+            if let Some(parent) = symlink_location.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(&link_name, &symlink_location)?;
+            continue;
+        }
+
+        if entry_type.is_dir() {
+            entries.push(EntryData {
+                path,
+                is_dir: true,
+                data: Vec::new(),
+                mode: 0o755,
+            });
+        } else if entry_type.is_file() {
+            let mut data = Vec::new();
+            std::io::copy(&mut entry, &mut data)?;
+            let mode = entry.header().mode()?;
+            entries.push(EntryData {
+                path,
+                is_dir: false,
+                data,
+                mode,
+            });
+        }
+    }
+
+    // Create directories sequentially
+    for entry in &entries {
+        if entry.is_dir {
+            let dir_path = extract_dir.join(&entry.path);
+            fs::create_dir_all(&dir_path)?;
+        }
+    }
+
+    // Write files in parallel
+    let errors = Mutex::new(Vec::new());
+    entries.par_iter().filter(|e| !e.is_dir).for_each(|entry| {
+        let file_path = extract_dir.join(&entry.path);
+        if let Some(parent) = file_path.parent() {
+            if let Err(e) = fs::create_dir_all(parent) {
+                errors.lock().unwrap().push(e);
+                return;
+            }
+        }
+        if let Err(e) = fs::write(&file_path, &entry.data) {
+            errors.lock().unwrap().push(e);
+            return;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = fs::Permissions::from_mode(entry.mode);
+            let _ = fs::set_permissions(&file_path, perms);
+        }
+    });
+
+    let errors = errors.into_inner().unwrap();
+    if let Some(err) = errors.into_iter().next() {
+        return Err(VexError::Io(err));
+    }
+
+    Ok(())
+}
+
+/// Find the root directory after extraction
+fn find_extracted_root(extract_dir: &Path) -> Result<PathBuf> {
+    let entries: Vec<_> = fs::read_dir(extract_dir)?.collect();
+    let dir_entry = entries
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .find(|e| e.file_type().ok().map(|t| t.is_dir()).unwrap_or(false))
+        .ok_or_else(|| VexError::Parse("No directory found after extraction".to_string()))?;
+    Ok(dir_entry.path())
 }
 
 #[cfg(test)]
