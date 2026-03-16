@@ -622,18 +622,22 @@ fn test_prune_removes_only_unmanaged_items() {
 // --- alias 命令测试 ---
 
 #[test]
-fn test_alias_invalid_tool() {
-    let output = vex_bin().args(["alias", "ruby"]).output().unwrap();
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Tool not found"));
+fn test_alias_list_no_aliases() {
+    let output = vex_bin().args(["alias", "list"]).output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("No aliases found") || stdout.contains("aliases"));
 }
 
 #[test]
-fn test_alias_valid_tool_format() {
-    let output = vex_bin().args(["alias", "node"]).output().unwrap();
+fn test_alias_set_invalid_tool() {
+    let output = vex_bin()
+        .args(["alias", "set", "ruby", "test", "3.0.0"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!stderr.contains("Invalid spec format"));
+    assert!(stderr.contains("Tool not found"));
 }
 
 // --- install from version files ---
