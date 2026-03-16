@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-03-16
+
+### Added
+
+- **User-defined aliases** — `vex alias set/list/delete` for custom version aliases:
+  - Project-local aliases in `.vex.toml`
+  - Global aliases in `~/.vex/aliases.toml`
+  - Project aliases override global aliases
+  - Works with all 5 tools (node, go, java, rust, python)
+
+- **TUI dashboard** — `vex tui` launches interactive dashboard:
+  - Current active versions for all tools
+  - Managed versions from `.tool-versions`
+  - Missing installations detection
+  - Health warnings from lifecycle advisories
+  - Disk usage summary
+
+- **Offline mode and archive cache** — Reusable download cache:
+  - `--offline` flag for cache-only operations
+  - Archive cache at `~/.vex/cache/archives/<tool>/<version>/`
+  - Prevents re-downloading same version
+  - Configurable cache TTL via `config.toml`
+
+- **Lockfile support** — Reproducible toolchain setups:
+  - `vex lock` generates `.tool-versions.lock` with SHA256 checksums
+  - `vex install --frozen` enforces exact lockfile versions
+  - `vex sync --frozen` restores environment from lockfile
+  - Lockfile includes version, checksum, and optional URL
+
+- **Auto-export environment variables** — Tool-specific env vars:
+  - Java: `JAVA_HOME` (with macOS `Contents/Home` handling)
+  - Go: `GOROOT`
+  - Rust: `CARGO_HOME`
+  - Automatic export in shell hooks for all supported shells
+
 ## [1.3.0] - 2026-03-15
 
 ### Added

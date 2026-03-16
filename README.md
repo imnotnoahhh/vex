@@ -42,6 +42,11 @@
 - **Shell auto-configuration** — `vex init --shell auto` detects and configures your shell automatically (zsh, bash, fish, nushell)
 - **Fuzzy version matching** — `node@20` resolves to latest 20.x, `node@lts` to latest LTS
 - **Version aliases** — `latest`, `lts`, `lts-<codename>`, `stable`, minor version matching
+- **User-defined aliases** — `vex alias set/list/delete` for custom version shortcuts
+- **TUI dashboard** — `vex tui` for interactive version overview and health check
+- **Offline mode** — `--offline` flag for cache-only operations, no network required
+- **Lockfile support** — `vex lock` generates reproducible `.tool-versions.lock` with checksums
+- **Auto-export env vars** — Automatic `JAVA_HOME`, `GOROOT`, `CARGO_HOME` in shell hooks
 - **One-command upgrade** — `vex upgrade node` installs and switches to the latest version
 - **Managed context upgrades** — `vex outdated` inspects the current project/global/active scope, and `vex upgrade --all` upgrades that whole managed set
 - **Transient execution** — `vex exec -- <command>` runs tools in the resolved vex environment without changing global symlinks
@@ -228,6 +233,13 @@ vex install
 | `vex prune --dry-run` | Preview cache, stale-lock, and unused-toolchain cleanup | `vex prune --dry-run` |
 | `vex gc` | Alias for `vex prune` | `vex gc --dry-run` |
 | `vex alias <tool>` | Show available version aliases | `vex alias node` |
+| `vex alias set <tool> <alias> <version>` | Set custom version alias | `vex alias set node lts-current 20.11.0` |
+| `vex alias list [tool]` | List all aliases | `vex alias list node` |
+| `vex alias delete <tool> <alias>` | Delete an alias | `vex alias delete node lts-current` |
+| `vex lock` | Generate lockfile from `.tool-versions` | `vex lock` |
+| `vex sync --frozen` | Install from lockfile | `vex sync --frozen` |
+| `vex tui` | Launch interactive dashboard | `vex tui` |
+| `vex install --offline` | Install from cache only | `vex install node@20 --offline` |
 | `vex exec -- <command>` | Run a command in the resolved vex environment without switching global state | `vex exec -- node -v` |
 | `vex run <task>` | Run a named task from `.vex.toml` | `vex run test` |
 | `vex current` | Show active versions | `vex current` |
@@ -263,6 +275,10 @@ Global settings live in `~/.vex/config.toml`. Project settings in `.vex.toml` ca
 ```toml
 # ~/.vex/config.toml
 cache_ttl_secs = 300
+
+[cache]
+archive_enabled = true
+archive_ttl_secs = 2592000  # 30 days
 
 [network]
 connect_timeout_secs = 30
@@ -303,6 +319,60 @@ vex run test
 ```
 
 For more detail, see [docs/guides/configuration.md](docs/guides/configuration.md).
+
+## Lockfile Workflow
+
+Lock your toolchain versions for reproducible environments:
+
+```bash
+# 1. Pin versions in .tool-versions
+vex local node@20.11.0
+vex local go@1.23.5
+
+# 2. Generate lockfile with checksums
+vex lock
+# Creates .tool-versions.lock with SHA256 checksums
+
+# 3. Commit both files
+git add .tool-versions .tool-versions.lock
+git commit -m "Lock toolchain versions"
+```
+
+Teammates can restore the exact environment:
+
+```bash
+# Install with frozen lockfile (enforces exact versions)
+vex sync --frozen
+```
+
+The lockfile includes SHA256 checksums for security and reproducibility.
+
+## User-Defined Aliases
+
+Create custom version shortcuts:
+
+```bash
+# Set a project-local alias
+vex alias set node lts-current 20.11.0
+
+# Set a global alias
+vex alias set --global node production 20.11.0
+
+# List all aliases
+vex alias list node
+
+# Use the alias
+vex install node@lts-current
+
+# Delete an alias
+vex alias delete node lts-current
+```
+
+Aliases are stored in:
+- Project: `.vex.toml` (committed to git)
+- Global: `~/.vex/aliases.toml` (user-specific)
+
+Project aliases override global aliases.
 
 ## Fuzzy Version Matching
 
