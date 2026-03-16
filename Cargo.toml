@@ -67,6 +67,11 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 # 临时文件 RAII
 tempfile = "3"
 
+# TUI 框架
+ratatui = "0.29"
+crossterm = "0.28"
+atty = "0.2"
+
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
