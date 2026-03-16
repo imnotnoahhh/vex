@@ -410,14 +410,14 @@ mod tests {
 
     #[test]
     fn test_read_tool_versions_with_content() {
-        use tempfile::NamedTempFile;
         use std::io::Write;
+        use tempfile::NamedTempFile;
 
         let mut file = NamedTempFile::new().unwrap();
         writeln!(file, "node 20.11.0").unwrap();
         writeln!(file, "go 1.23.5").unwrap();
         writeln!(file, "# comment").unwrap();
-        writeln!(file, "").unwrap();
+        writeln!(file).unwrap();
         file.flush().unwrap();
 
         let versions = read_tool_versions(file.path());
@@ -436,8 +436,8 @@ mod tests {
 
     #[test]
     fn test_dir_size_with_file() {
-        use tempfile::TempDir;
         use std::fs;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.txt");
