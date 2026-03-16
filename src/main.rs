@@ -323,11 +323,9 @@ enum Commands {
     },
 }
 
-/// Get vex root directory (~/.vex)
+/// Get vex root directory (~/.vex or VEX_HOME)
 pub fn vex_dir() -> Result<PathBuf> {
-    dirs::home_dir()
-        .map(|p| p.join(".vex"))
-        .ok_or(error::VexError::HomeDirectoryNotFound)
+    config::vex_home().ok_or(error::VexError::HomeDirectoryNotFound)
 }
 
 /// Migrate ~/.tool-versions → ~/.vex/tool-versions if the old file exists and the new one doesn't.

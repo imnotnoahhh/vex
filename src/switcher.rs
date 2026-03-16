@@ -3,6 +3,7 @@
 //! Implements tool version switching via atomic symlink updates.
 //! Updates `~/.vex/current/<tool>` and executable links in `~/.vex/bin/`.
 
+use crate::config;
 use crate::error::{Result, VexError};
 use crate::tools::Tool;
 use owo_colors::OwoColorize;
@@ -13,9 +14,7 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 fn vex_dir() -> Result<PathBuf> {
-    dirs::home_dir()
-        .map(|p| p.join(".vex"))
-        .ok_or(VexError::HomeDirectoryNotFound)
+    config::vex_home().ok_or(VexError::HomeDirectoryNotFound)
 }
 
 /// Switch tool to specified version
