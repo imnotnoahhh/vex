@@ -1470,14 +1470,14 @@ fn get_installed_checksum(tool: &dyn tools::Tool, version: &str) -> Result<Optio
 /// Install from version files with frozen mode support
 fn install_from_version_files_with_frozen(frozen: bool, offline: bool) -> Result<()> {
     if frozen {
-        install_from_lockfile_frozen()
+        install_from_lockfile_frozen(offline)
     } else {
         install_from_version_files(offline)
     }
 }
 
 /// Install from lockfile in frozen mode
-fn install_from_lockfile_frozen() -> Result<()> {
+fn install_from_lockfile_frozen(offline: bool) -> Result<()> {
     let cwd = resolver::current_dir();
     let lockfile = lockfile::Lockfile::load_from_ancestors(&cwd)?.ok_or_else(|| {
         error::VexError::Config(
@@ -1533,7 +1533,7 @@ fn install_from_lockfile_frozen() -> Result<()> {
             continue;
         }
 
-        installer::install(tool.as_ref(), &lock_entry.version)?;
+        installer::install_with_mode(tool.as_ref(), &lock_entry.version, offline)?;
         switcher::switch_version(tool.as_ref(), &lock_entry.version)?;
     }
 
@@ -1543,14 +1543,14 @@ fn install_from_lockfile_frozen() -> Result<()> {
 /// Sync from current context with frozen mode support
 fn sync_from_current_context_with_frozen(frozen: bool, offline: bool) -> Result<()> {
     if frozen {
-        sync_from_lockfile_frozen()
+        sync_from_lockfile_frozen(offline)
     } else {
         sync_from_current_context(offline)
     }
 }
 
 /// Sync from lockfile in frozen mode
-fn sync_from_lockfile_frozen() -> Result<()> {
+fn sync_from_lockfile_frozen(offline: bool) -> Result<()> {
     let cwd = resolver::current_dir();
     let lockfile = lockfile::Lockfile::load_from_ancestors(&cwd)?.ok_or_else(|| {
         error::VexError::Config(
@@ -1589,7 +1589,7 @@ fn sync_from_lockfile_frozen() -> Result<()> {
         .iter()
         .map(|(k, v)| (k.clone(), v.version.clone()))
         .collect();
-    sync_versions(&versions_vec)
+    sync_versions(&versions_vec, offline)
 }
 
 /// Find the active python3 binary from vex bin dir, falling back to system python3
@@ -1639,11 +1639,11 @@ fn run() -> Result<()> {
                 install_from_version_files_with_frozen(frozen, offline)?;
             }
         }
-        Commands::Sync { from, frozen, offline } => {
-            }
-        }
-        Commands::Sync { from, offline } => {
->>>>>>> origin/main
+        Commands::Sync {
+            from,
+            frozen,
+            offline,
+        } => {
             if let Some(from_path) = from {
                 sync_from_file(&from_path, offline)?;
             } else {
