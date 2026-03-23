@@ -6,9 +6,9 @@ Welcome to the vex documentation! This directory contains guides and resources t
 
 - [Getting Started Guide](guides/getting-started.md) - New to vex? Start here!
 - [Installation Guide](guides/installation.md) - Detailed installation instructions
-- [Configuration Guide](guides/configuration.md) - Global config, `.vex.toml`, `exec`, and `run`
+- [Configuration Guide](guides/configuration.md) - Global config, `.vex.toml`, `vex-config.toml`, `exec`, and `run`
 - [Shell Integration Guide](guides/shell-integration.md) - Set up auto-switching for your shell
-- [Troubleshooting Guide](guides/troubleshooting.md) - Common issues and solutions
+- [Troubleshooting Guide](guides/troubleshooting.md) - Common issues, template conflicts, and CI/team-config recovery tips
 
 ## Main Documentation
 
@@ -48,10 +48,10 @@ The API documentation includes:
 ### User Guides (`guides/`)
 
 - **getting-started.md** - Quick start guide for new users
-- **installation.md** - Detailed installation instructions for all methods
-- **configuration.md** - Global configuration, project config, and task execution
+- **installation.md** - Detailed installation instructions for local installs plus the official macOS GitHub Action
+- **configuration.md** - Global configuration, project config, team config sync, and task execution
 - **shell-integration.md** - Shell hook setup for zsh, bash, fish, and nushell
-- **troubleshooting.md** - Common problems and how to fix them
+- **troubleshooting.md** - Common problems, conflict handling, and recovery guidance
 
 ### Developer Documentation
 
@@ -75,6 +75,13 @@ Found a typo or want to improve the docs? Contributions are welcome!
 2. **Maintainer docs**: Edit files in `docs/development/`
 3. **API docs**: Edit doc comments in source files (`src/**/*.rs`)
 4. **Main docs**: Edit files in project root (README.md, CONTRIBUTING.md, etc.)
+
+Recent user-facing additions that should stay in sync across these docs:
+
+- `vex init --template`, `--list-templates`, and `--add-only`
+- safe remote team config sources via `vex install --from` / `vex sync --from`
+- the macOS-only `imnotnoahhh/vex` GitHub Action and cache behavior
+- failure recovery expectations for install and switch workflows
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
 

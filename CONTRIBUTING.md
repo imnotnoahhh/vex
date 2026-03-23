@@ -50,9 +50,10 @@ rm -rf /tmp/vex-dev
 Before opening a PR, make sure all checks pass:
 
 ```bash
-cargo fmt --all -- --check
+cargo fmt --all --check
 cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-features
+cargo test
+bash scripts/check-docs.sh
 ```
 
 CI runs fmt, clippy, test, and audit checks.
@@ -66,24 +67,24 @@ CI runs fmt, clippy, test, and audit checks.
 
 ## Project Structure
 
-```
+```text
 src/
-├── main.rs          # CLI entry, command routing, local/global/install flows, doctor command
-├── tools/           # Tool adapters (download URL, remote versions, fuzzy matching)
-│   ├── mod.rs       # Tool trait, get_tool(), resolve_fuzzy_version()
-│   ├── node.rs      # Node.js with LTS support
-│   ├── go.rs        # Go with minor version matching
-│   ├── java.rs      # Java (Eclipse Temurin JDK)
-│   ├── rust.rs      # Rust with complete toolchain
-│   └── python.rs    # Python via python-build-standalone
-├── downloader.rs    # HTTP download, SHA256 verification, retry logic, timeout configuration
-├── installer.rs     # Extract tar.gz, disk space check, path traversal protection
-├── switcher.rs      # Symlink management for bin/ and current/
-├── resolver.rs      # Version file resolution (.tool-versions / .node-version / etc.); falls back to ~/.vex/tool-versions for global defaults
-├── shell.rs         # Shell hook generation (zsh, bash, fish, nushell)
-├── cache.rs         # Remote version list caching with TTL
-├── lock.rs          # Installation lock mechanism
-├── updater.rs       # Self-update: fetch latest GitHub release and replace binary
+├── main.rs          # Thin binary entry point
+├── app.rs           # CLI dispatch
+├── cli/             # clap argument definitions
+├── commands/        # Command implementations
+├── tools/           # Tool adapters plus shared resolution helpers
+├── downloader/      # Download transport, retry, and progress plumbing
+├── installer/       # Online/offline install orchestration and extraction helpers
+├── switcher/        # Symlink updates, rollback, and failure fixtures
+├── resolver/        # Version file discovery and parsing
+├── templates/       # Built-in project starters, merge planning, rollback-safe writes
+├── team_config/     # Safe `--from` sources (`vex-config.toml`, HTTPS, Git)
+├── shell/           # Shell detection and generated hooks
+├── updater/         # Self-update release selection, extraction, and repair helpers
+├── version_files.rs # `.tool-versions` and single-value writers
+├── checksum.rs      # Shared SHA256 helpers
+├── versioning.rs    # Shared version normalization helpers
 └── error.rs         # Unified error types with actionable suggestions
 ```
 
@@ -166,10 +167,10 @@ chore: bump MSRV to 1.89
 
 ```bash
 # Run all tests (excluding ignored)
-cargo test --all-features
+cargo test
 
 # Run all tests including network-dependent ones
-cargo test --all-features -- --ignored
+cargo test --features network-tests
 
 # Run specific test
 cargo test test_name
@@ -185,6 +186,8 @@ cargo bench
 - Ensure tests are deterministic and don't depend on external state
 - Use `tempfile` crate for temporary directories in tests
 - Test both success and error cases
+- If you touch install/switch failure paths, add or update cleanup/rollback coverage
+- If you change templates or team config behavior, update both CLI tests and docs in the same PR
 
 ### Security Testing
 

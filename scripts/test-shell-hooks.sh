@@ -1,174 +1,219 @@
 #!/bin/bash
-# vex Shell Hook Test Script
-# Tests shell hook generation for zsh, bash, fish, and nushell
-# Usage: bash scripts/test-shell-hooks.sh
+# Focused shell integration smoke test for vex env hooks.
 
 set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VEX_BIN="${VEX_BIN:-}"
+if [ -z "$VEX_BIN" ]; then
+    if [ -x "$ROOT_DIR/target/debug/vex" ]; then
+        VEX_BIN="$ROOT_DIR/target/debug/vex"
+    elif command -v vex >/dev/null 2>&1; then
+        VEX_BIN="$(command -v vex)"
+    else
+        echo "Could not find vex. Set VEX_BIN=/path/to/vex or build target/debug/vex first." >&2
+        exit 1
+    fi
+fi
+
+BASE_PATH="$PATH"
+TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/vex-shell-hooks.XXXXXX")"
 
 PASS=0
 FAIL=0
 
-pass() { echo "  ✓ $1"; PASS=$((PASS+1)); }
-fail() { echo "  ✗ $1"; FAIL=$((FAIL+1)); }
+cleanup() {
+    rm -rf "$TMP_ROOT"
+}
+trap cleanup EXIT
+
+pass() {
+    echo "  ✓ $1"
+    PASS=$((PASS + 1))
+}
+
+fail() {
+    echo "  ✗ $1"
+    FAIL=$((FAIL + 1))
+}
+
+setup_fake_workspace() {
+    local home="$1"
+    local workspace="$2"
+    local project="$3"
+
+    mkdir -p \
+        "$home/.vex/toolchains/node/20.20.1/bin" \
+        "$home/.vex/toolchains/node/25.8.0/bin" \
+        "$workspace" \
+        "$project/.venv/bin"
+
+    cat > "$home/.vex/toolchains/node/20.20.1/bin/node" <<'EOF'
+#!/bin/sh
+echo workspace-node
+EOF
+    cat > "$home/.vex/toolchains/node/25.8.0/bin/node" <<'EOF'
+#!/bin/sh
+echo project-node
+EOF
+    chmod +x \
+        "$home/.vex/toolchains/node/20.20.1/bin/node" \
+        "$home/.vex/toolchains/node/25.8.0/bin/node"
+
+    cat > "$workspace/.tool-versions" <<'EOF'
+node 20.20.1
+EOF
+
+    cat > "$project/.tool-versions" <<'EOF'
+node 25.8.0
+EOF
+
+    cat > "$project/.venv/bin/activate" <<'EOF'
+VIRTUAL_ENV="$PWD/.venv"
+export VIRTUAL_ENV
+deactivate() { unset VIRTUAL_ENV; }
+EOF
+}
 
 echo ""
-echo "=== vex Shell Hook Tests ==="
+echo "============================================================"
+echo "vex shell hook smoke test"
+echo "Text generation + real zsh/bash directory switching + .venv activation"
+echo "============================================================"
+
 echo ""
+echo "[ hook generation ]"
 
-# ── 1. Zsh Hook ──────────────────────────────────────────────
-echo "[ 1. Zsh Hook ]"
-
-ZSH_HOOK=$(vex hook zsh 2>&1)
-
-if echo "$ZSH_HOOK" | grep -q "__vex_use_if_found"; then
-    pass "zsh hook contains __vex_use_if_found function"
+zsh_hook="$TMP_ROOT/zsh-hook.txt"
+"$VEX_BIN" env zsh > "$zsh_hook"
+if grep -Fq '# vex shell integration' "$zsh_hook" \
+    && grep -Fq 'add-zsh-hook chpwd' "$zsh_hook" \
+    && grep -Fq '__vex_use_if_found' "$zsh_hook" \
+    && grep -Fq '__vex_activate_venv' "$zsh_hook"; then
+    pass "env zsh renders the current zsh hook"
 else
-    fail "zsh hook missing __vex_use_if_found function"
+    fail "env zsh did not render the expected zsh hook"
 fi
 
-if echo "$ZSH_HOOK" | grep -q "__vex_activate_venv"; then
-    pass "zsh hook contains __vex_activate_venv function"
+bash_hook="$TMP_ROOT/bash-hook.txt"
+"$VEX_BIN" env bash > "$bash_hook"
+if grep -Fq '# vex shell integration' "$bash_hook" \
+    && grep -Fq 'PROMPT_COMMAND' "$bash_hook" \
+    && grep -Fq '__vex_prompt_command' "$bash_hook" \
+    && grep -Fq '__vex_activate_venv' "$bash_hook"; then
+    pass "env bash renders the current bash hook"
 else
-    fail "zsh hook missing __vex_activate_venv function"
+    fail "env bash did not render the expected bash hook"
 fi
 
-if echo "$ZSH_HOOK" | grep -q "chpwd_functions"; then
-    pass "zsh hook registers chpwd_functions"
+fish_hook="$TMP_ROOT/fish-hook.txt"
+"$VEX_BIN" env fish > "$fish_hook"
+if grep -Fq '# vex shell integration' "$fish_hook" \
+    && grep -Fq 'function __vex_use_if_found' "$fish_hook" \
+    && grep -Fq 'on-variable PWD' "$fish_hook" \
+    && grep -Fq '__vex_activate_venv' "$fish_hook"; then
+    pass "env fish renders the current fish hook"
 else
-    fail "zsh hook missing chpwd_functions registration"
+    fail "env fish did not render the expected fish hook"
 fi
 
-if echo "$ZSH_HOOK" | grep -q ".tool-versions"; then
-    pass "zsh hook checks for .tool-versions"
+nu_hook="$TMP_ROOT/nu-hook.txt"
+"$VEX_BIN" env nu > "$nu_hook"
+if grep -Fq '# vex shell integration' "$nu_hook" \
+    && grep -Fq 'def --env __vex_use_if_found' "$nu_hook" \
+    && grep -Fq 'pre_prompt' "$nu_hook" \
+    && grep -Fq '__vex_activate_venv' "$nu_hook"; then
+    pass "env nu renders the current nushell hook"
 else
-    fail "zsh hook missing .tool-versions check"
+    fail "env nu did not render the expected nushell hook"
 fi
 
-if echo "$ZSH_HOOK" | grep -q ".venv"; then
-    pass "zsh hook checks for .venv"
+invalid_shell="$TMP_ROOT/invalid-shell.txt"
+if "$VEX_BIN" env csh >"$invalid_shell" 2>&1; then
+    fail "env should reject unsupported shells"
+elif grep -Fq 'Unsupported shell' "$invalid_shell"; then
+    pass "env rejects unsupported shells clearly"
 else
-    fail "zsh hook missing .venv check"
+    fail "env reported an unexpected unsupported-shell error"
 fi
 
-# ── 2. Bash Hook ──────────────────────────────────────────────
 echo ""
-echo "[ 2. Bash Hook ]"
+echo "[ real zsh workflow ]"
 
-BASH_HOOK=$(vex hook bash 2>&1)
+ZSH_HOME="$TMP_ROOT/zsh-home"
+ZSH_WORKSPACE="$TMP_ROOT/zsh-workspace"
+ZSH_PROJECT="$ZSH_WORKSPACE/project"
+setup_fake_workspace "$ZSH_HOME" "$ZSH_WORKSPACE" "$ZSH_PROJECT"
 
-if echo "$BASH_HOOK" | grep -q "__vex_use_if_found"; then
-    pass "bash hook contains __vex_use_if_found function"
+zsh_result="$TMP_ROOT/zsh-workflow.txt"
+HOME="$ZSH_HOME" PATH="$ROOT_DIR/target/debug:$BASE_PATH" VEX_BIN="$VEX_BIN" WORKSPACE="$ZSH_WORKSPACE" PROJECT="$ZSH_PROJECT" zsh -lc '
+  eval "$("$VEX_BIN" env zsh)"
+  cd "$WORKSPACE"
+  workspace_node=$("$HOME/.vex/bin/node")
+  cd "$PROJECT"
+  project_node=$("$HOME/.vex/bin/node")
+  project_venv=${VIRTUAL_ENV:-unset}
+  cd "$WORKSPACE"
+  after_node=$("$HOME/.vex/bin/node")
+  after_venv=${VIRTUAL_ENV:-unset}
+  printf "NODE1<<%s>>\nNODE2<<%s>>\nNODE3<<%s>>\nVENV1<<%s>>\nVENV2<<%s>>\n" \
+    "$workspace_node" "$project_node" "$after_node" "$project_venv" "$after_venv"
+' > "$zsh_result"
+
+if grep -Fq 'NODE1<<workspace-node>>' "$zsh_result" \
+    && grep -Fq 'NODE2<<project-node>>' "$zsh_result" \
+    && grep -Fq 'NODE3<<workspace-node>>' "$zsh_result" \
+    && grep -Fq 'VENV1<<' "$zsh_result" \
+    && grep -Fq '/project/.venv>>' "$zsh_result" \
+    && grep -Fq 'VENV2<<unset>>' "$zsh_result"; then
+    pass "zsh hook auto-switches versions across directories and toggles .venv activation"
 else
-    fail "bash hook missing __vex_use_if_found function"
+    fail "zsh hook did not auto-switch and toggle .venv as expected"
 fi
 
-if echo "$BASH_HOOK" | grep -q "__vex_activate_venv"; then
-    pass "bash hook contains __vex_activate_venv function"
-else
-    fail "bash hook missing __vex_activate_venv function"
-fi
-
-if echo "$BASH_HOOK" | grep -q "PROMPT_COMMAND"; then
-    pass "bash hook registers PROMPT_COMMAND"
-else
-    fail "bash hook missing PROMPT_COMMAND registration"
-fi
-
-if echo "$BASH_HOOK" | grep -q ".tool-versions"; then
-    pass "bash hook checks for .tool-versions"
-else
-    fail "bash hook missing .tool-versions check"
-fi
-
-if echo "$BASH_HOOK" | grep -q ".venv"; then
-    pass "bash hook checks for .venv"
-else
-    fail "bash hook missing .venv check"
-fi
-
-# ── 3. Fish Hook ──────────────────────────────────────────────
 echo ""
-echo "[ 3. Fish Hook ]"
+echo "[ real bash workflow ]"
 
-FISH_HOOK=$(vex hook fish 2>&1)
+BASH_HOME="$TMP_ROOT/bash-home"
+BASH_WORKSPACE="$TMP_ROOT/bash-workspace"
+BASH_PROJECT="$BASH_WORKSPACE/project"
+setup_fake_workspace "$BASH_HOME" "$BASH_WORKSPACE" "$BASH_PROJECT"
 
-if echo "$FISH_HOOK" | grep -q "__vex_use_if_found"; then
-    pass "fish hook contains __vex_use_if_found function"
+bash_result="$TMP_ROOT/bash-workflow.txt"
+HOME="$BASH_HOME" PATH="$ROOT_DIR/target/debug:$BASE_PATH" VEX_BIN="$VEX_BIN" WORKSPACE="$BASH_WORKSPACE" PROJECT="$BASH_PROJECT" bash -lc '
+  eval "$("$VEX_BIN" env bash)"
+  cd "$WORKSPACE"
+  __vex_prompt_command
+  workspace_node=$("$HOME/.vex/bin/node")
+  cd "$PROJECT"
+  __vex_prompt_command
+  project_node=$("$HOME/.vex/bin/node")
+  project_venv=${VIRTUAL_ENV:-unset}
+  cd "$WORKSPACE"
+  __vex_prompt_command
+  after_node=$("$HOME/.vex/bin/node")
+  after_venv=${VIRTUAL_ENV:-unset}
+  printf "NODE1<<%s>>\nNODE2<<%s>>\nNODE3<<%s>>\nVENV1<<%s>>\nVENV2<<%s>>\n" \
+    "$workspace_node" "$project_node" "$after_node" "$project_venv" "$after_venv"
+' > "$bash_result"
+
+if grep -Fq 'NODE1<<workspace-node>>' "$bash_result" \
+    && grep -Fq 'NODE2<<project-node>>' "$bash_result" \
+    && grep -Fq 'NODE3<<workspace-node>>' "$bash_result" \
+    && grep -Fq 'VENV1<<' "$bash_result" \
+    && grep -Fq '/project/.venv>>' "$bash_result" \
+    && grep -Fq 'VENV2<<unset>>' "$bash_result"; then
+    pass "bash hook auto-switches versions across directories and toggles .venv activation"
 else
-    fail "fish hook missing __vex_use_if_found function"
+    fail "bash hook did not auto-switch and toggle .venv as expected"
 fi
 
-if echo "$FISH_HOOK" | grep -q "__vex_activate_venv"; then
-    pass "fish hook contains __vex_activate_venv function"
-else
-    fail "fish hook missing __vex_activate_venv function"
-fi
-
-if echo "$FISH_HOOK" | grep -q "fish_prompt"; then
-    pass "fish hook registers fish_prompt event"
-else
-    fail "fish hook missing fish_prompt event"
-fi
-
-if echo "$FISH_HOOK" | grep -q ".tool-versions"; then
-    pass "fish hook checks for .tool-versions"
-else
-    fail "fish hook missing .tool-versions check"
-fi
-
-if echo "$FISH_HOOK" | grep -q ".venv"; then
-    pass "fish hook checks for .venv"
-else
-    fail "fish hook missing .venv check"
-fi
-
-# ── 4. Nushell Hook ──────────────────────────────────────────────
 echo ""
-echo "[ 4. Nushell Hook ]"
+echo "============================================================"
+echo "Passed : $PASS"
+echo "Failed : $FAIL"
+echo "============================================================"
 
-NUSHELL_HOOK=$(vex hook nushell 2>&1)
-
-if echo "$NUSHELL_HOOK" | grep -q "def --env __vex_use_if_found"; then
-    pass "nushell hook contains __vex_use_if_found function"
-else
-    fail "nushell hook missing __vex_use_if_found function"
-fi
-
-if echo "$NUSHELL_HOOK" | grep -q "def --env __vex_activate_venv"; then
-    pass "nushell hook contains __vex_activate_venv function"
-else
-    fail "nushell hook missing __vex_activate_venv function"
-fi
-
-if echo "$NUSHELL_HOOK" | grep -q "hooks"; then
-    pass "nushell hook registers hooks"
-else
-    fail "nushell hook missing hooks registration"
-fi
-
-if echo "$NUSHELL_HOOK" | grep -q ".tool-versions"; then
-    pass "nushell hook checks for .tool-versions"
-else
-    fail "nushell hook missing .tool-versions check"
-fi
-
-if echo "$NUSHELL_HOOK" | grep -q ".venv"; then
-    pass "nushell hook checks for .venv"
-else
-    fail "nushell hook missing .venv check"
-fi
-
-# ── Summary ──────────────────────────────────────────────
-echo ""
-echo "=== Summary ==="
-echo "  Passed: $PASS"
-echo "  Failed: $FAIL"
-echo ""
-
-if [ "$FAIL" -eq 0 ]; then
-    echo "✓ All shell hook tests passed!"
-    exit 0
-else
-    echo "✗ Some shell hook tests failed"
+if [ "$FAIL" -ne 0 ]; then
     exit 1
 fi

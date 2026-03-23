@@ -187,6 +187,34 @@ find ~/.vex -type l ! -exec test -e {} \; -print
    vex install node@20.11.0
    ```
 
+#### Partial install or switch left the repo in a bad state
+
+**Symptoms**:
+
+- an install fails midway
+- `~/.vex/toolchains/<tool>/<version>` exists but looks incomplete
+- `vex use` fails while updating `~/.vex/bin`
+
+**What vex now does by default**:
+
+- failed installs clean up extracted temp directories and any partially moved final toolchain directory
+- failed switches attempt rollback to the previously active version
+
+**Recovery steps**:
+
+```bash
+vex doctor
+vex install <tool@version> --no-switch
+vex use <tool@version>
+```
+
+If you still see broken links:
+
+```bash
+find ~/.vex/bin -type l ! -exec test -e {} \; -print
+find ~/.vex/current -type l ! -exec test -e {} \; -print
+```
+
 ### Download and Installation Issues
 
 #### Network timeout
@@ -230,6 +258,64 @@ vex doctor
    ```
 
 3. **Check network stability** (unstable connection can corrupt downloads)
+
+#### `vex init --template` reports conflicts
+
+**Symptoms**: Template initialization exits and lists existing files.
+
+**Explanation**: Template mode is intentionally safe. By default it does not partially overwrite existing project files.
+
+**Solutions**:
+
+1. Preview first:
+   ```bash
+   vex init --template python-venv --dry-run
+   ```
+2. Use safe add-only mode when you only need missing starter files:
+   ```bash
+   vex init --template python-venv --add-only
+   ```
+3. If the conflict is `.vex.toml`, `Cargo.toml`, `package.json`, `go.mod`, or starter source files, merge those changes manually.
+
+#### `--from` source fails or seems to ignore team defaults
+
+**Symptoms**:
+
+- `vex sync --from ...` fails to parse config
+- a team-provided version is not applied
+- SSH or HTTPS repo sources clone correctly but load no tools
+
+**Checklist**:
+
+```bash
+cat vex-config.toml
+```
+
+The file must look like:
+
+```toml
+version = 1
+
+[tools]
+node = "20"
+python = "3.12"
+```
+
+Notes:
+
+- only `[tools]` is supported
+- local `.tool-versions` overrides matching tools from the team config
+- Git sources must contain `vex-config.toml` at the repository root
+
+#### GitHub Action cache restored but tools are missing from PATH
+
+**Symptoms**: The `imnotnoahhh/vex` GitHub Action reports a cache hit, but `node`, `go`, or `python` still cannot be found later in the workflow.
+
+**Resolution**:
+
+- use the official action from this repository, which restores cache and then re-runs activation
+- ensure later workflow steps run after the action step
+- if debugging a custom workflow, verify `~/.vex/bin` is on `PATH`
 
 #### Disk space insufficient
 
