@@ -114,6 +114,36 @@ source ~/.zshrc
 - Rust stable (install via [rustup](https://rustup.rs/))
 - Xcode Command Line Tools: `xcode-select --install`
 
+### Method 5: GitHub Actions on macOS
+
+For CI, this repository now ships a macOS-only composite action:
+
+```yaml
+- uses: imnotnoahhh/vex@v1
+  with:
+    tools: node@20 go@1.24
+```
+
+Or let vex read the current repository version files:
+
+```yaml
+- uses: imnotnoahhh/vex@v1
+  with:
+    auto-install: true
+```
+
+The action:
+
+1. Downloads the published vex release for the runner architecture
+2. Restores `~/.vex/cache` and `~/.vex/toolchains` when caching is enabled
+3. Re-activates tools after cache restore so `~/.vex/bin` is usable in later steps
+
+Current scope:
+
+- macOS runners only
+- action implementation lives in this repository root (`action.yml`)
+- cache targets are `~/.vex/cache` and `~/.vex/toolchains`
+
 ## Verify Installation
 
 After installation, verify vex is working:

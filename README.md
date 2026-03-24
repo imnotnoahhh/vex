@@ -54,6 +54,7 @@
 - **Managed context upgrades** — `vex outdated` inspects the current project/global/active scope, and `vex upgrade --all` upgrades that whole managed set
 - **Transient execution** — `vex exec -- <command>` runs tools in the resolved vex environment without changing global symlinks
 - **Project task runner** — `.vex.toml` can define project env vars and named commands for `vex run <task>`
+- **Official GitHub Action** — `uses: imnotnoahhh/vex@v1` installs `vex` plus cached toolchains on macOS GitHub Actions runners
 - **`.tool-versions` support** — per-project pinning, auto-switch on `cd`, batch install
 - **Project configuration** — `.vex.toml` adds project-local commands, env vars, behavior overrides, and optional network/mirror overrides
 - **Smart version filtering** — `vex list-remote node --filter lts` shows only LTS versions
@@ -377,6 +378,30 @@ Rules:
 - local `.tool-versions` entries override the remote baseline for matching tools
 - team config is only loaded when you explicitly pass `--from`
 - local `--from` file paths are resolved relative to your current working directory
+
+## GitHub Actions
+
+This repository now publishes a macOS-only composite action:
+
+```yaml
+- uses: imnotnoahhh/vex@v1
+  with:
+    tools: node@20 go@1.24
+```
+
+Or:
+
+```yaml
+- uses: imnotnoahhh/vex@v1
+  with:
+    auto-install: true
+```
+
+The action:
+
+- installs the latest `vex` release or a requested release tag
+- caches `~/.vex/cache` and `~/.vex/toolchains`
+- re-runs activation after cache restore so `~/.vex/bin` is ready in `PATH`
 
 ## Lockfile Workflow
 
