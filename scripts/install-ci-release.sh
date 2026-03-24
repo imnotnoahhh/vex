@@ -47,18 +47,6 @@ command -v tar >/dev/null 2>&1 || fail "tar is required"
 command -v shasum >/dev/null 2>&1 || fail "shasum is required"
 command -v python3 >/dev/null 2>&1 || fail "python3 is required"
 
-curl_api_args() {
-  local args=(
-    -fsSL
-    -H "Accept: application/vnd.github+json"
-    -H "X-GitHub-Api-Version: 2022-11-28"
-  )
-  if [ -n "${GITHUB_TOKEN:-}" ]; then
-    args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
-  fi
-  printf '%s\0' "${args[@]}"
-}
-
 if [ -n "$VERSION" ]; then
   if ! printf '%s' "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+([-+].+)?$'; then
     fail "Invalid version tag format: '$VERSION'. Expected pattern: v1.2.3"
@@ -95,8 +83,22 @@ else
 fi
 
 printf 'Fetching vex release metadata...\n'
-mapfile -d '' -t CURL_API_ARGS < <(curl_api_args)
-RELEASE_JSON="$(curl "${CURL_API_ARGS[@]}" "$RELEASE_API_URL")" || fail "Failed to fetch release metadata"
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+  RELEASE_JSON="$(
+    curl -fsSL \
+      -H "Accept: application/vnd.github+json" \
+      -H "X-GitHub-Api-Version: 2022-11-28" \
+      -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+      "$RELEASE_API_URL"
+  )" || fail "Failed to fetch release metadata"
+else
+  RELEASE_JSON="$(
+    curl -fsSL \
+      -H "Accept: application/vnd.github+json" \
+      -H "X-GitHub-Api-Version: 2022-11-28" \
+      "$RELEASE_API_URL"
+  )" || fail "Failed to fetch release metadata"
+fi
 RELEASE_JSON_PATH="${TMP_DIR}/release.json"
 printf '%s' "$RELEASE_JSON" > "$RELEASE_JSON_PATH"
 
