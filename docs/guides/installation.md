@@ -131,7 +131,7 @@ which vex
 Create the vex directory structure:
 
 ```bash
-vex init
+vex init --shell auto
 ```
 
 This creates:
@@ -143,6 +143,13 @@ This creates:
 ├── cache/        # Download cache
 ├── locks/        # Installation locks
 └── config.toml   # Configuration
+```
+
+To preview project starters without writing files:
+
+```bash
+vex init --list-templates
+vex init --template rust-cli --dry-run
 ```
 
 ## Set Up Shell Integration
@@ -257,7 +264,7 @@ python = "https://mirror.example.com/python"
 APP_ENV = "dev"
 
 [commands]
-test = "cargo test --all-features"
+test = "cargo test"
 dev = "node server.js"
 ```
 

@@ -40,12 +40,15 @@
 - **Multi-language** — manage Node.js, Go, Java (Eclipse Temurin), Rust, and Python from one tool
 - **Python venv integration** — `vex python init/freeze/sync` for venv and lockfile management; shell hook auto-activates `.venv` on `cd`
 - **Shell auto-configuration** — `vex init --shell auto` detects and configures your shell automatically (zsh, bash, fish, nushell)
+- **Project templates** — `vex init --list-templates` and `vex init --template <name>` bootstrap official starters for Node, Go, Java, Rust, and Python
+- **Safe add-only templating** — `vex init --template <name> --add-only` only merges `.tool-versions` and `.gitignore`, then creates missing starter files
 - **Fuzzy version matching** — `node@20` resolves to latest 20.x, `node@lts` to latest LTS
 - **Version aliases** — `latest`, `lts`, `lts-<codename>`, `stable`, minor version matching
 - **User-defined aliases** — `vex alias set/list/delete` for custom version shortcuts
 - **TUI dashboard** — `vex tui` for interactive version overview and health check
 - **Offline mode** — `--offline` flag for cache-only operations, no network required
 - **Lockfile support** — `vex lock` generates reproducible `.tool-versions.lock` with checksums
+- **Team config sync** — `vex install --from` / `vex sync --from` support local files, `vex-config.toml`, HTTPS team configs, and Git repositories with a safe `[tools]` schema
 - **Auto-export env vars** — Automatic `JAVA_HOME`, `GOROOT`, `CARGO_HOME` in shell hooks
 - **One-command upgrade** — `vex upgrade node` installs and switches to the latest version
 - **Managed context upgrades** — `vex outdated` inspects the current project/global/active scope, and `vex upgrade --all` upgrades that whole managed set
@@ -53,7 +56,6 @@
 - **Project task runner** — `.vex.toml` can define project env vars and named commands for `vex run <task>`
 - **`.tool-versions` support** — per-project pinning, auto-switch on `cd`, batch install
 - **Project configuration** — `.vex.toml` adds project-local commands, env vars, behavior overrides, and optional network/mirror overrides
-- **Interactive selection** — `vex install node` lets you pick from a version list
 - **Smart version filtering** — `vex list-remote node --filter lts` shows only LTS versions
 - **Remote version cache** — cached for 5 min by default, configurable via `config.toml`
 - **Concurrent install protection** — file-based locking prevents parallel install corruption
@@ -162,9 +164,6 @@ echo 'source ~/.config/nushell/vex.nu' >> ~/.config/nushell/config.nu
 ### Usage
 
 ```bash
-# Interactive install (pick from version list)
-vex install node
-
 # Install a specific version (fuzzy matching)
 # Note: Automatically switches to the installed version
 vex install node@20          # → latest 20.x
@@ -178,6 +177,16 @@ vex install node@20 --no-switch
 vex install node@lts-iron    # → specific LTS codename
 vex install go@1.23          # → latest 1.23.x
 vex install rust@stable      # → latest stable
+
+# Bootstrap a project starter
+vex init --list-templates
+vex init --template node-typescript
+vex init --template python-venv --add-only
+
+# Sync from a team-managed source
+vex sync --from vex-config.toml
+vex sync --from https://company.example/vex-config.toml
+vex install --from git@github.com:company/vex-config.git
 
 # Upgrade to latest
 vex upgrade node
@@ -212,9 +221,13 @@ vex install
 | `vex init` | Initialize directory structure | `vex init` |
 | `vex init --shell auto` | Initialize and auto-configure shell | `vex init --shell auto` |
 | `vex init --shell zsh` | Initialize and configure specific shell | `vex init --shell zsh` |
-| `vex install <tool>` | Interactive install | `vex install node` |
-| `vex install <tool@version>` | Install specific version | `vex install node@20` |
+| `vex init --list-templates` | List built-in project templates | `vex init --list-templates` |
+| `vex init --template <name>` | Bootstrap a project starter | `vex init --template rust-cli` |
+| `vex init --template <name> --add-only` | Safely merge missing template files into an existing repo | `vex init --template python-venv --add-only` |
+| `vex install <tool@version>` | Install a specific version | `vex install node@20` |
+| `vex install <tool@version> <tool@version>...` | Install multiple specific versions | `vex install node@20 go@1.24` |
 | `vex install` | Install all from `.tool-versions` | `vex install` |
+| `vex install --from <source>` | Install from a version file, `vex-config.toml`, HTTPS URL, or Git repo | `vex install --from git@github.com:company/vex-config.git` |
 | `vex use <tool@version>` | Switch to installed version | `vex use node@22` |
 | `vex use --auto` | Auto-switch from version files | `vex use --auto` |
 | `vex local <tool@version>` | Pin version in `.tool-versions` | `vex local node@20.11.0` |
@@ -237,6 +250,7 @@ vex install
 | `vex alias list [tool]` | List all aliases | `vex alias list node` |
 | `vex alias delete <tool> <alias>` | Delete an alias | `vex alias delete node lts-current` |
 | `vex lock` | Generate lockfile from `.tool-versions` | `vex lock` |
+| `vex sync --from <source>` | Sync from a version file, `vex-config.toml`, HTTPS URL, or Git repo | `vex sync --from https://company.example/vex-config.toml` |
 | `vex sync --frozen` | Install from lockfile | `vex sync --frozen` |
 | `vex tui` | Launch interactive dashboard | `vex tui` |
 | `vex install --offline` | Install from cache only | `vex install node@20 --offline` |
@@ -276,10 +290,6 @@ Global settings live in `~/.vex/config.toml`. Project settings in `.vex.toml` ca
 # ~/.vex/config.toml
 cache_ttl_secs = 300
 
-[cache]
-archive_enabled = true
-archive_ttl_secs = 2592000  # 30 days
-
 [network]
 connect_timeout_secs = 30
 read_timeout_secs = 300
@@ -307,7 +317,7 @@ rust = "https://mirror.example.com/rust"
 RUST_LOG = "debug"
 
 [commands]
-test = "cargo test --all-features"
+test = "cargo test"
 lint = "cargo clippy --all-targets --all-features -- -D warnings"
 ```
 
@@ -319,6 +329,54 @@ vex run test
 ```
 
 For more detail, see [docs/guides/configuration.md](docs/guides/configuration.md).
+
+## Project Templates
+
+`vex init` now has two explicit modes:
+
+- `vex init --shell ...` initializes `~/.vex` and shell integration
+- `vex init --template ...` bootstraps the current project directory
+
+The built-in core templates are:
+
+- `node-typescript`
+- `go-service`
+- `java-basic`
+- `rust-cli`
+- `python-venv`
+
+Template defaults:
+
+- `--dry-run` previews every file without writing anything
+- strict mode exits without writing if any target file already exists
+- `--add-only` only merges `.tool-versions` and `.gitignore`, then creates any missing starter files
+
+## Team Config Sync
+
+`vex install --from` and `vex sync --from` can now consume:
+
+- a local version file such as `.tool-versions`
+- a local `vex-config.toml`
+- an HTTPS-hosted `vex-config.toml`
+- an HTTPS or SSH Git repository whose root contains `vex-config.toml`
+
+Team config is intentionally narrow and safe:
+
+```toml
+version = 1
+
+[tools]
+node = "20"
+go = "1.24"
+python = "3.12"
+```
+
+Rules:
+
+- remote team config only supports `[tools]`
+- local `.tool-versions` entries override the remote baseline for matching tools
+- team config is only loaded when you explicitly pass `--from`
+- local `--from` file paths are resolved relative to your current working directory
 
 ## Lockfile Workflow
 
@@ -352,11 +410,11 @@ The lockfile includes SHA256 checksums for security and reproducibility.
 Create custom version shortcuts:
 
 ```bash
-# Set a project-local alias
-vex alias set node lts-current 20.11.0
+# Set a global alias (default)
+vex alias set node production 20.11.0
 
-# Set a global alias
-vex alias set --global node production 20.11.0
+# Set a project-local alias
+vex alias set --project node lts-current 20.11.0
 
 # List all aliases
 vex alias list node
@@ -419,7 +477,7 @@ cd my-project        # → switches to node 20.11.0, go 1.23.5
 
 ## Python Workflow
 
-Python binaries come from [python-build-standalone](https://github.com/astral-sh/python-build-standalone) — prebuilt, standalone CPython binaries, no compilation needed.
+Python binaries come from [python-build-standalone](https://github.com/astral-sh/python-build-standalone) standard `install_only` CPython packages — prebuilt, standalone binaries with no compilation needed. `vex` does not currently manage free-threaded Python variants.
 
 ```bash
 # 1. Install a Python version
@@ -545,7 +603,10 @@ rm -f ~/.local/bin/vex
 git clone https://github.com/imnotnoahhh/vex.git
 cd vex
 cargo build
-cargo test --all-features
+cargo test
+
+# Optional: run network-dependent tests explicitly
+cargo test --features network-tests
 ```
 
 ### Documentation
