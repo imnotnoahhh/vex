@@ -10,10 +10,10 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
-use std::io;
+use std::io::{self, IsTerminal};
 
 pub fn run() -> Result<()> {
-    if !atty::is(atty::Stream::Stdout) {
+    if !io::stdout().is_terminal() {
         return Err(VexError::Dialog(
             "TUI requires an interactive terminal".to_string(),
         ));

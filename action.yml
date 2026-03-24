@@ -54,6 +54,7 @@ runs:
       shell: bash
       env:
         INPUT_VERSION: ${{ inputs.version }}
+        GITHUB_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         if [ "$INPUT_VERSION" = "latest" ]; then
