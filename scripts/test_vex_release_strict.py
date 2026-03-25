@@ -35,7 +35,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 
 USER_AGENT = "vex-macos-strict-test/1.0"
@@ -1280,14 +1280,15 @@ def choose_alt_versions(plans: Dict[str, ToolPlan]) -> Dict[str, str]:
 
 
 def choose_alt_version(plan: ToolPlan) -> Optional[str]:
+    if plan.name == "java":
+        return choose_alt_java_version(plan)
+
     versions = plan.meta.get("versions")
     if isinstance(versions, list):
         normalized = [str(version) for version in versions if str(version) != plan.resolved_version]
         selected = pick_preferred_alt_version(plan.name, plan.resolved_version, normalized)
         if selected is not None:
             return selected
-    if plan.name == "java":
-        return choose_alt_java_version(plan)
     if plan.name == "rust":
         return choose_alt_rust_version(plan)
     return None
@@ -1333,10 +1334,25 @@ def choose_alt_rust_version(plan: ToolPlan) -> Optional[str]:
 
 def choose_alt_java_version(plan: ToolPlan) -> Optional[str]:
     arch = "aarch64" if os.uname().machine in {"arm64", "aarch64"} else "x64"
-    for candidate in JAVA_FALLBACK_LTS_CANDIDATES:
-        version = str(candidate)
+
+    candidates: List[str] = []
+    lts_versions = plan.meta.get("lts_versions")
+    if isinstance(lts_versions, list):
+        candidates.extend(str(candidate) for candidate in lts_versions)
+
+    versions = plan.meta.get("versions")
+    if isinstance(versions, list):
+        candidates.extend(str(candidate) for candidate in versions)
+
+    candidates.extend(str(candidate) for candidate in JAVA_FALLBACK_LTS_CANDIDATES)
+
+    seen: Set[str] = set()
+    for version in candidates:
         if version == plan.resolved_version:
             continue
+        if version in seen:
+            continue
+        seen.add(version)
         try:
             resolve_java_download_url(version, arch)
             return version
