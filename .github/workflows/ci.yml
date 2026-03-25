@@ -103,7 +103,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Prepare auto-install input
         if: ${{ matrix.mode == 'auto-install' }}
-        run: echo "node 20" > .tool-versions
+        run: echo "node 20.20.1" > .tool-versions
       - name: Run setup-vex with explicit tools
         if: ${{ matrix.mode == 'tools' }}
         uses: ./

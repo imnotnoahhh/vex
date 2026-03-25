@@ -2,6 +2,7 @@ use super::summary::{print_install_summary, InstallResult};
 use crate::error::{Result, VexError};
 use crate::installer;
 use crate::paths::vex_dir;
+use crate::requested_versions;
 use crate::resolver;
 use crate::spec::parse_spec;
 use crate::switcher;
@@ -42,7 +43,7 @@ pub fn install_specs(specs: &[String], no_switch: bool, force: bool, offline: bo
             }
         };
 
-        let resolved = match tools::resolve_fuzzy_version(tool.as_ref(), &version) {
+        let resolved = match requested_versions::resolve_for_install(tool.as_ref(), &version) {
             Ok(version) => version,
             Err(error) => {
                 results.push((tool_name.clone(), version.clone(), Err(error)));
@@ -115,14 +116,29 @@ fn install_version_pairs(
             }
         };
 
-        let install_dir = vex.join("toolchains").join(tool_name).join(version);
-        if install_dir.exists() {
-            results.push((tool_name.clone(), version.clone(), Ok(false)));
+        if let Some(installed) =
+            requested_versions::resolve_installed_version(&vex, tool_name, version)?
+        {
+            results.push((tool_name.clone(), installed, Ok(false)));
             continue;
         }
 
-        let result = install_single(tool.as_ref(), version, offline, switch_after_install);
-        results.push((tool_name.clone(), version.clone(), result));
+        let resolved = match requested_versions::resolve_for_install(tool.as_ref(), version) {
+            Ok(resolved) => resolved,
+            Err(error) => {
+                results.push((tool_name.clone(), version.clone(), Err(error)));
+                continue;
+            }
+        };
+
+        let install_dir = vex.join("toolchains").join(tool_name).join(&resolved);
+        if install_dir.exists() {
+            results.push((tool_name.clone(), resolved, Ok(false)));
+            continue;
+        }
+
+        let result = install_single(tool.as_ref(), &resolved, offline, switch_after_install);
+        results.push((tool_name.clone(), resolved, result));
     }
 
     Ok(results)

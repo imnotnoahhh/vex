@@ -309,6 +309,19 @@ else
     fail "install with no specs did not use the current project .tool-versions"
 fi
 
+fuzzy_project_dir="$TMP_ROOT/fuzzy-project"
+mkdir -p "$fuzzy_project_dir"
+cat > "$fuzzy_project_dir/.tool-versions" <<'EOF'
+node 20
+EOF
+fuzzy_install_out="$TMP_ROOT/fuzzy-install.txt"
+run_local_in "$fuzzy_project_dir" install > "$fuzzy_install_out"
+if grep -Fq 'node@20.20.1 already installed, skipping.' "$fuzzy_install_out"; then
+    pass "install resolves fuzzy project version pins before checking installed toolchains"
+else
+    fail "install did not resolve fuzzy project version pins as expected"
+fi
+
 project_install_offline_out="$TMP_ROOT/project-install-offline.txt"
 run_local_in "$PROJECT_DIR" install --offline > "$project_install_offline_out"
 if grep -Fq 'node@25.8.0 already installed, skipping.' "$project_install_offline_out"; then

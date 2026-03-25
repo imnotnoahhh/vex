@@ -1,5 +1,6 @@
 use crate::config;
 use crate::error::{Result, VexError};
+use crate::versioning::version_sort_key;
 use std::fs;
 
 pub(super) fn latest_installed_version(tool_name: &str) -> Result<Option<String>> {
@@ -26,12 +27,4 @@ pub(super) fn latest_installed_version(tool_name: &str) -> Result<Option<String>
 
     versions.sort_by_key(|version| version_sort_key(version));
     Ok(versions.pop())
-}
-
-fn version_sort_key(version: &str) -> Vec<u32> {
-    version
-        .trim_start_matches('v')
-        .split('.')
-        .filter_map(|segment| segment.parse::<u32>().ok())
-        .collect()
 }

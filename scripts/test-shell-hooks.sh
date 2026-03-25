@@ -61,7 +61,7 @@ EOF
         "$home/.vex/toolchains/node/25.8.0/bin/node"
 
     cat > "$workspace/.tool-versions" <<'EOF'
-node 20.20.1
+node 20
 EOF
 
     cat > "$project/.tool-versions" <<'EOF'
@@ -147,6 +147,7 @@ setup_fake_workspace "$ZSH_HOME" "$ZSH_WORKSPACE" "$ZSH_PROJECT"
 
 zsh_result="$TMP_ROOT/zsh-workflow.txt"
 HOME="$ZSH_HOME" PATH="$ROOT_DIR/target/debug:$BASE_PATH" VEX_BIN="$VEX_BIN" WORKSPACE="$ZSH_WORKSPACE" PROJECT="$ZSH_PROJECT" zsh -lc '
+  vex() { "$VEX_BIN" "$@"; }
   eval "$("$VEX_BIN" env zsh)"
   cd "$WORKSPACE"
   workspace_node=$("$HOME/.vex/bin/node")
@@ -181,6 +182,7 @@ setup_fake_workspace "$BASH_HOME" "$BASH_WORKSPACE" "$BASH_PROJECT"
 
 bash_result="$TMP_ROOT/bash-workflow.txt"
 HOME="$BASH_HOME" PATH="$ROOT_DIR/target/debug:$BASE_PATH" VEX_BIN="$VEX_BIN" WORKSPACE="$BASH_WORKSPACE" PROJECT="$BASH_PROJECT" bash -lc '
+  vex() { "$VEX_BIN" "$@"; }
   eval "$("$VEX_BIN" env bash)"
   cd "$WORKSPACE"
   __vex_prompt_command

@@ -1,6 +1,7 @@
 use crate::error::{Result, VexError};
 use crate::lockfile;
 use crate::paths::vex_dir;
+use crate::requested_versions;
 use crate::resolver;
 use crate::tools::{self, Tool};
 use owo_colors::OwoColorize;
@@ -27,7 +28,13 @@ pub fn generate_lockfile() -> Result<()> {
             }
         };
 
-        let version_dir = vex_dir()?.join("toolchains").join(tool_name).join(version);
+        let resolved =
+            requested_versions::resolve_installed_version(&vex_dir()?, tool_name, version)?
+                .unwrap_or_else(|| version.clone());
+        let version_dir = vex_dir()?
+            .join("toolchains")
+            .join(tool_name)
+            .join(&resolved);
         if !version_dir.exists() {
             return Err(VexError::Config(format!(
                 "Version {}@{} is not installed. Run 'vex install' first.",
@@ -35,11 +42,11 @@ pub fn generate_lockfile() -> Result<()> {
             )));
         }
 
-        let sha256 = get_installed_checksum(tool.as_ref(), version)?;
+        let sha256 = get_installed_checksum(tool.as_ref(), &resolved)?;
         lockfile.add_tool(
             tool_name.clone(),
             lockfile::LockEntry {
-                version: version.clone(),
+                version: resolved,
                 sha256,
                 url: None,
             },

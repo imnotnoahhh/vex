@@ -1,4 +1,5 @@
 use crate::error::Result;
+use crate::requested_versions;
 use crate::resolver;
 use std::collections::HashMap;
 use std::fs;
@@ -36,14 +37,20 @@ pub fn retained_versions(vex_dir: &Path, cwd: &Path) -> Result<HashMap<(String, 
 
     let global_path = vex_dir.join("tool-versions");
     for (tool, version) in resolver::read_tool_versions_file(&global_path) {
+        let retained_version =
+            requested_versions::resolve_installed_version(vex_dir, &tool, &version)?
+                .unwrap_or(version);
         retained
-            .entry((tool, version))
+            .entry((tool, retained_version))
             .or_insert_with(|| "global default".to_string());
     }
 
     for (tool, version) in resolver::resolve_project_versions(cwd) {
+        let retained_version =
+            requested_versions::resolve_installed_version(vex_dir, &tool, &version)?
+                .unwrap_or(version);
         retained
-            .entry((tool, version))
+            .entry((tool, retained_version))
             .or_insert_with(|| "current project".to_string());
     }
 

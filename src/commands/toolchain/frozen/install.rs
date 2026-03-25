@@ -3,6 +3,7 @@ use super::NO_VERSION_FILES_MESSAGE;
 use crate::error::Result;
 use crate::installer;
 use crate::paths::vex_dir;
+use crate::requested_versions;
 use crate::resolver;
 use crate::switcher;
 use crate::tools;
@@ -46,14 +47,22 @@ fn install_requested_versions(requested: &[(String, String)], offline: bool) -> 
             }
         };
 
-        let version_dir = vex.join("toolchains").join(tool_name).join(version);
-        if version_dir.exists() {
-            println!("{}@{} already installed, skipping.", tool_name, version);
+        if let Some(installed) =
+            requested_versions::resolve_installed_version(&vex, tool_name, version)?
+        {
+            println!("{}@{} already installed, skipping.", tool_name, installed);
             continue;
         }
 
-        installer::install_with_mode(tool.as_ref(), version, offline)?;
-        switcher::switch_version(tool.as_ref(), version)?;
+        let resolved = requested_versions::resolve_for_install(tool.as_ref(), version)?;
+        let version_dir = vex.join("toolchains").join(tool_name).join(&resolved);
+        if version_dir.exists() {
+            println!("{}@{} already installed, skipping.", tool_name, resolved);
+            continue;
+        }
+
+        installer::install_with_mode(tool.as_ref(), &resolved, offline)?;
+        switcher::switch_version(tool.as_ref(), &resolved)?;
     }
 
     Ok(())

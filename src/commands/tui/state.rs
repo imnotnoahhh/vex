@@ -3,6 +3,7 @@ use crate::commands::current::{collect_current, CurrentEntry};
 use crate::config;
 use crate::error::{Result, VexError};
 use crate::fs_utils::path_size;
+use crate::requested_versions;
 use crate::resolver;
 use std::collections::HashMap;
 use std::fs;
@@ -40,8 +41,7 @@ pub(super) fn collect_dashboard_state() -> Result<DashboardState> {
 
     let mut missing_installs = Vec::new();
     for (tool, version) in &managed_versions {
-        let tool_dir = vex_dir.join("toolchains").join(tool).join(version);
-        if !tool_dir.exists() {
+        if requested_versions::resolve_installed_version(&vex_dir, tool, version)?.is_none() {
             missing_installs.push(format!("{}@{}", tool, version));
         }
     }

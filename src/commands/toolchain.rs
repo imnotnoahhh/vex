@@ -1,6 +1,7 @@
 use crate::config;
 use crate::error::Result;
 use crate::paths::vex_dir;
+use crate::requested_versions;
 use crate::resolver;
 use crate::switcher;
 use crate::tools;
@@ -42,27 +43,28 @@ pub fn auto_switch() -> Result<()> {
             Err(_) => continue,
         };
 
-        let version_dir = vex.join("toolchains").join(tool_name).join(version);
-        if !version_dir.exists() {
+        let Some(resolved) =
+            requested_versions::resolve_installed_version(&vex, tool_name, version)?
+        else {
             eprintln!(
                 "vex: {}@{} not installed. Run 'vex install' to install.",
                 tool_name, version
             );
             continue;
-        }
+        };
 
         let current_link = vex.join("current").join(tool_name);
         if current_link.exists() {
             if let Ok(target) = fs::read_link(&current_link) {
                 if let Some(current_ver) = target.file_name() {
-                    if current_ver.to_string_lossy() == version.as_str() {
+                    if current_ver.to_string_lossy() == resolved.as_str() {
                         continue;
                     }
                 }
             }
         }
 
-        switcher::switch_version(tool.as_ref(), version)?;
+        switcher::switch_version(tool.as_ref(), &resolved)?;
     }
 
     Ok(())

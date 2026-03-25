@@ -24,6 +24,7 @@ mod logging;
 mod output;
 mod paths;
 mod project;
+mod requested_versions;
 mod resolver;
 mod shell;
 mod spec;
