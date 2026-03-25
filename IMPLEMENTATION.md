@@ -19,7 +19,7 @@ VersionNotFound {
 }
 ```
 
-### 2. Suggestion Generation (`src/tools/mod.rs`)
+### 2. Suggestion Generation (`src/tools/resolve/suggest.rs`)
 
 Added `generate_version_suggestions()` function that provides:
 
@@ -43,17 +43,17 @@ Run 'vex list-remote node' to see all available versions.
 ### 3. Integration
 
 Updated all 7 files that use `VexError::VersionNotFound`:
-- `src/main.rs` - uninstall command
+- `src/app.rs` / `src/commands/manage/uninstall.rs` - uninstall flow
 - `src/switcher.rs` - version switching
-- `src/commands/updates.rs` - upgrade command
+- `src/commands/updates/upgrade.rs` - upgrade command
 - `src/activation.rs` - version activation
-- `src/tools/java.rs` - Java download URL
-- `src/tools/python.rs` - Python download URL
+- `src/tools/java.rs` - Java resolution and download selection
+- `src/tools/python.rs` - Python resolution and download selection
 - `src/error.rs` - tests
 
 ### 4. Tests Added
 
-Added 5 new unit tests in `src/tools/mod.rs`:
+Added 5 new unit tests in `src/tools/tests.rs`:
 - `test_generate_version_suggestions_same_major`
 - `test_generate_version_suggestions_same_minor`
 - `test_generate_version_suggestions_nearby`
@@ -80,10 +80,10 @@ Updated existing tests to handle the new error structure.
 ## Files Modified
 
 - `src/error.rs` - Error type definition
-- `src/tools/mod.rs` - Suggestion generation logic
-- `src/main.rs` - Error construction
+- `src/tools/resolve/suggest.rs` - Suggestion generation logic
+- `src/app.rs` / `src/commands/manage/uninstall.rs` - Error construction
 - `src/switcher.rs` - Error construction
-- `src/commands/updates.rs` - Error construction
+- `src/commands/updates/upgrade.rs` - Error construction
 - `src/activation.rs` - Error construction
 - `src/tools/java.rs` - Error construction
 - `src/tools/python.rs` - Error construction
@@ -95,7 +95,7 @@ Run the following commands to verify:
 ```bash
 cargo test --all-features -- --test-threads=1
 cargo clippy --all-targets --all-features -- -D warnings
-cargo fmt --all -- --check
+cargo fmt --all --check
 ```
 
 Or use the convenience script:
@@ -103,3 +103,15 @@ Or use the convenience script:
 ```bash
 ./verify.sh
 ```
+
+## 2026-03-19 Follow-Up
+
+Subsequent roadmap work added four larger capability areas that build on the version-resolution improvements above.
+
+The codebase has since been split into thinner entrypoints (`src/main.rs`, `src/app.rs`, `src/cli/`) plus command and subsystem submodules. Treat the file paths above as responsibility areas from the original implementation moment; for the current layout, use [docs/development/architecture.md](docs/development/architecture.md) as the source of truth.
+- `#72` hardens install and switch failure recovery with deterministic cleanup and rollback tests
+- `#66` adds built-in project templates via `vex init --template`
+- `#67` adds safe team-config loading through `vex install --from` / `vex sync --from`
+- `#68` adds the repository-root macOS GitHub Action for CI setup
+
+For the current state of those features, treat [README.md](README.md) and [docs/development/architecture.md](docs/development/architecture.md) as the canonical references.

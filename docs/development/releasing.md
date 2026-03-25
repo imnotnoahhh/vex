@@ -41,13 +41,13 @@ During the 0.x phase:
 
 - [ ] All tests pass locally
   ```bash
-  cargo test --all-features
-  cargo test --all-features -- --ignored  # Network tests
+  cargo test
+  cargo test --features network-tests  # Network tests
   ```
 
 - [ ] Code is formatted
   ```bash
-  cargo fmt --all -- --check
+  cargo fmt --all --check
   ```
 
 - [ ] No clippy warnings
@@ -64,6 +64,11 @@ During the 0.x phase:
   ```bash
   bash scripts/test-management-features.sh
   ```
+
+- [ ] repository-root GitHub Action behavior is still correct on macOS
+  - verify `action.yml`
+  - verify `scripts/install-ci-release.sh`
+  - verify `scripts/setup-action-tools.sh`
 
 - [ ] No security vulnerabilities
   ```bash
@@ -129,6 +134,8 @@ Update version in the following files:
 - [ ] Update docs/development/architecture.md if needed
   - New modules
   - Changed data flows
+
+- [ ] Update docs for new template IDs, safe team-config schema, and GitHub Action behavior
 
 ### 5. Commit Changes
 
@@ -221,6 +228,7 @@ jobs:
   clippy:   # Linting
   test:     # Unit and integration tests
   audit:    # Security audit
+  setup-action-smoke:  # Local composite action validation on macOS
 ```
 
 #### 2. Release Workflow (`.github/workflows/release.yml`)

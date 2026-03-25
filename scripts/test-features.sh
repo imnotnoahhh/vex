@@ -472,7 +472,7 @@ check "--filter latest returns 1 version" \
 check "--filter lts returns LTS versions" \
     "vex list-remote node --filter lts" "LTS:"
 check "--filter major sorted descending" \
-    "vex list-remote node --filter major" "25.0.0"
+    "vex list-remote node --filter major" "25.8.1"
 echo ""
 
 # ══════════════════════════════════════════════════════════════
@@ -482,7 +482,7 @@ echo "[ 11. Install Options ]"
 check "install switches by default" \
     "vex install node@20.10.0" "Switched"
 check "install --no-switch does not switch" \
-    "vex install node@20.9.0 --no-switch" "To activate this version"
+    "vex install node@20.9.0 --no-switch" "Installed:"
 echo ""
 
 # ══════════════════════════════════════════════════════════════
@@ -582,11 +582,11 @@ rm -rf "$LOCAL_TEST_DIR"
 # Test upgrade command
 check "upgrade installs latest version" "vex upgrade node 2>&1" "Switched"
 
-# Test alias command
-check "alias shows node aliases" "vex alias node" "latest"
-check "alias shows node LTS aliases" "vex alias node" "lts"
-check "alias shows rust aliases" "vex alias rust" "stable"
-check "alias shows go aliases" "vex alias go" "latest"
+# Test alias command help surface
+check "alias help shows set subcommand" "vex alias --help" "set"
+check "alias help shows list subcommand" "vex alias --help" "list"
+check "alias help shows delete subcommand" "vex alias --help" "delete"
+check "alias help shows command usage" "vex alias --help" "Usage: vex alias <COMMAND>"
 
 # Test self-update command (dry run check)
 check "self-update checks for updates" "vex self-update --help" "Update vex"
@@ -607,6 +607,28 @@ check "doctor checks installed tools" "vex doctor" "Checking installed tools"
 check "doctor checks symlinks integrity" "vex doctor" "Checking symlinks integrity"
 check "doctor checks binary executability" "vex doctor" "Checking binary executability"
 check "doctor checks network connectivity" "vex doctor" "Checking network connectivity"
+echo ""
+
+# ══════════════════════════════════════════════════════════════
+# 16. Focused Management Workflows
+# ══════════════════════════════════════════════════════════════
+echo "[ 16. Focused Management Workflows ]"
+if VEX_BIN="$(command -v vex)" bash "$(pwd)/scripts/test-management-features.sh"; then
+    pass "management workflow bash suite passes"
+else
+    fail "management workflow bash suite failed"
+fi
+echo ""
+
+# ══════════════════════════════════════════════════════════════
+# 17. Shell Hook Workflows
+# ══════════════════════════════════════════════════════════════
+echo "[ 17. Shell Hook Workflows ]"
+if VEX_BIN="$(command -v vex)" bash "$(pwd)/scripts/test-shell-hooks.sh"; then
+    pass "shell hook bash suite passes"
+else
+    fail "shell hook bash suite failed"
+fi
 echo ""
 
 # ══════════════════════════════════════════════════════════════

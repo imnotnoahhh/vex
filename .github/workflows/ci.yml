@@ -22,7 +22,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - run: cargo fmt --all -- --check
+      - run: cargo fmt --all --check
 
   clippy:
     name: Clippy (${{ matrix.os }})
@@ -52,7 +52,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.os }}
-      - run: cargo test --all-features -- --test-threads=1
+      - run: cargo test -- --test-threads=1
 
   audit:
     name: Security Audit (${{ matrix.os }})
@@ -92,6 +92,30 @@ jobs:
           key: feature-smoke-macos-14
       - run: cargo build
       - run: bash scripts/test-management-features.sh
+
+  setup-action-smoke:
+    name: setup-vex Action (${{ matrix.mode }})
+    runs-on: macos-14
+    strategy:
+      matrix:
+        mode: [tools, auto-install]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Prepare auto-install input
+        if: ${{ matrix.mode == 'auto-install' }}
+        run: echo "node 20.20.1" > .tool-versions
+      - name: Run setup-vex with explicit tools
+        if: ${{ matrix.mode == 'tools' }}
+        uses: ./
+        with:
+          tools: node@20
+      - name: Run setup-vex with auto-install
+        if: ${{ matrix.mode == 'auto-install' }}
+        uses: ./
+        with:
+          auto-install: true
+      - run: vex current
+      - run: node --version
 
   docs:
     name: Docs Check

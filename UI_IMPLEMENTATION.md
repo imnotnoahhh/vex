@@ -1,12 +1,14 @@
 # UI Foundation Implementation (Issue #57)
 
+> Historical note: this implementation record only covers the UI-foundation branch. The current codebase now keeps the UI in `src/ui.rs`, `src/ui/primitives.rs`, `src/ui/progress.rs`, `src/ui/summary.rs`, `src/ui/table.rs`, and `src/ui/tests.rs`. For current template, team-config, GitHub Action, and recovery behavior, rely on the main docs and development docs in this repository.
+
 ## Summary
 
 This branch implements a rich terminal UI foundation for vex, providing shared rendering primitives for consistent output across all commands.
 
 ## Changes
 
-### New Module: `src/ui.rs`
+### UI Module Family: `src/ui.rs` + `src/ui/*`
 
 Created a comprehensive UI module with the following components:
 
@@ -21,13 +23,11 @@ Created a comprehensive UI module with the following components:
 
 3. **Table**: Builder pattern for aligned tabular output
 4. **Progress**: Spinner for indeterminate operations
-5. **ProgressBar**: Progress bar for operations with known total
-6. **Summary**: Builder for final status summaries
-7. **Interactive Prompts**: `confirm()`, `select()`, `input()`
+5. **Summary**: Builder for final status summaries
 
 ### Updated Commands
 
-#### `src/installer.rs`
+#### `src/installer/online.rs` and `src/installer/offline.rs`
 - Replaced manual `println!` with `ui::Progress` for installation steps
 - Uses `ui::success()` for completion messages
 - Uses `ui::info()` for hints (e.g., Corepack notice)
@@ -37,7 +37,7 @@ Created a comprehensive UI module with the following components:
 - Uses `ui::Table` for aligned tool/version display
 - Uses `ui::dimmed()` for empty state messages
 
-#### `src/commands/updates.rs`
+#### `src/commands/updates/render.rs`
 - Uses `ui::header()` for section titles
 - Uses `ui::Table` for outdated tools display
 - Uses `ui::Summary` for upgrade results
@@ -54,12 +54,11 @@ Added `atty = "0.2"` to `Cargo.toml` for terminal detection.
 
 ### Tests
 
-Created `tests/ui_test.rs` with comprehensive tests for:
+Created `src/ui/tests.rs` with comprehensive tests for:
 - UI context creation
 - Table rendering (empty and with data)
 - Summary rendering (empty and with items)
 - Progress indicators (non-interactive mode)
-- Progress bars (non-interactive mode)
 
 ## Design Principles
 
@@ -73,31 +72,31 @@ Created `tests/ui_test.rs` with comprehensive tests for:
 
 Run the verification script:
 ```bash
-./verify-ui.sh
+cargo test ui::
 ```
 
 Full test suite (requires Rust toolchain):
 ```bash
 cargo test --all-features -- --test-threads=1
 cargo clippy --all-targets --all-features -- -D warnings
-cargo fmt --all -- --check
+cargo fmt --all --check
 cargo build --release
 ```
 
 ## Acceptance Criteria
 
-- ✅ Shared rendering primitives created in `src/ui.rs`
+- ✅ Shared rendering primitives created in `src/ui.rs` and `src/ui/*`
 - ✅ `install` command uses new UI components
 - ✅ `current` command uses new UI components
 - ✅ `outdated` command uses new UI components
 - ✅ `doctor` command uses new UI components
-- ✅ Non-interactive mode works (tested via UiContext::non_interactive())
+- ✅ Non-interactive mode works
 - ✅ JSON output unchanged (only text rendering modified)
 - ✅ Tests added for UI components
 
 ## Next Steps
 
 1. Run full test suite in environment with Rust toolchain
-2. Manual testing of interactive features (spinners, progress bars)
+2. Manual testing of spinner-heavy commands and structured summaries
 3. Create PR and request review
 4. Consider extending to other commands (list-remote, uninstall, etc.)

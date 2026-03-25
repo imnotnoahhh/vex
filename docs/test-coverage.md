@@ -2,6 +2,13 @@
 
 本文档描述仓库当前用于验证 vex 的主要测试入口，以及它们覆盖到的能力范围。
 
+当前这套覆盖已经额外纳入：
+
+- `vex init --template` / `--list-templates` / `--add-only`
+- 安全 team config 来源解析（本地文件、HTTPS、Git）
+- 安装失败后的清理与切换失败后的回滚
+- 仓库内 `imnotnoahhh/vex` GitHub Action 所依赖的脚本和 CI smoke path
+
 ## 验证入口
 
 ### 1. 快速功能回归
@@ -59,6 +66,7 @@
 - 项目与全局切换：`.tool-versions`、`vex global`、shell hook `cd` 自动切换
 - Python 自动激活：进入项目自动激活 `.venv`，离开项目自动退出
 - 健康检查：`vex doctor`
+- 模板与 team-config 相关 CLI：由单元测试与 CLI integration tests 覆盖
 
 ## 当前发现并验证的二进制数量
 
@@ -117,6 +125,7 @@ VEX_TEST_HOME=/tmp/vex-audit-home python3 scripts/test_vex_local_build_strict.py
 - 某种工具新增或移除可链接二进制
 - 严格验证脚本新增新的测试阶段
 - 快速功能脚本的覆盖目标发生明显变化
+- 新增模板、team config 语义、或 GitHub Action 行为变化
 
-**Last Updated**: 2026-03-13
+**Last Updated**: 2026-03-23
 **Status**: ✅ Comprehensive coverage
