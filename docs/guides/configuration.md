@@ -5,6 +5,8 @@ vex has two configuration layers:
 - `~/.vex/config.toml` for machine-wide defaults
 - `.vex.toml` for project-local behavior, network overrides, environment variables, mirrors, and named tasks
 
+For team-wide version baselines, `vex install --from` and `vex sync --from` also support a dedicated `vex-config.toml` format described below.
+
 `CLI flags` override everything. Environment variables override both global and project file-based configuration. Project config is intended for repo-local behavior, not for replacing `.tool-versions`.
 
 ## Global Configuration
@@ -138,7 +140,7 @@ RUST_LOG = "debug"
 APP_ENV = "dev"
 
 [commands]
-test = "cargo test --all-features"
+test = "cargo test"
 lint = "cargo clippy --all-targets --all-features -- -D warnings"
 dev = "node server.js"
 ```
@@ -153,6 +155,46 @@ dev = "node server.js"
   - adjust project-local behavior
   - tune network settings for that repository
   - point selected tools at repo-specific mirrors
+
+### Team Config Sync (`vex-config.toml`)
+
+Remote and shared team config is intentionally narrower than `.vex.toml`.
+
+Supported sources:
+
+- local `vex-config.toml`
+- HTTPS URL pointing to `vex-config.toml`
+- HTTPS Git repository with `vex-config.toml` at the repo root
+- SSH Git repository with `vex-config.toml` at the repo root
+
+Supported schema:
+
+```toml
+version = 1
+
+[tools]
+node = "20"
+go = "1.24"
+java = "21"
+rust = "stable"
+python = "3.12"
+```
+
+Important limits:
+
+- only `[tools]` is supported
+- remote team config cannot define `env`, `commands`, mirrors, shell behavior, or arbitrary scripts
+- local `.tool-versions` entries override matching tools from team config
+- team config is only used when you explicitly pass `--from`
+- local `--from` file paths are resolved relative to your current working directory
+
+Examples:
+
+```bash
+vex sync --from vex-config.toml
+vex sync --from https://company.example/vex-config.toml
+vex install --from git@github.com:company/vex-config.git
+```
 
 ### Supported Project Keys
 

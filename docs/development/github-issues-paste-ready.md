@@ -11,6 +11,17 @@ How to use:
 5. Set the `Milestone`.
 6. Copy the `Body` starting from `## Summary`.
 
+## 2026-03-19 Roadmap Update
+
+Before pasting any of the older issue bodies below, update them to match the current scopes:
+
+- templates: five built-in core templates, `--list-templates`, `--dry-run`, and safe `--add-only`
+- team config: `vex-config.toml` with `version = 1` plus `[tools]` only, loaded from local files, HTTPS, or Git, with local `.tool-versions` taking precedence
+- GitHub Action: repository-root macOS-only composite action with cache restore and explicit re-activation
+- Docker: deferred, not an active implementation item
+- engineering quality: emphasize cleanup, rollback, and failure-recovery validation rather than chasing a coverage percentage
+- older file-path references below should be read as responsibility areas, not exact current files; the live codebase now uses `src/main.rs` only as a thin entrypoint and routes through `src/app.rs`, `src/cli/`, and subsystem directories
+
 ---
 
 ## 01
@@ -940,7 +951,7 @@ Support:
 ## 15
 
 Title:
-`Ecosystem: publish an official setup-vex GitHub Action for CI workflows`
+`Ecosystem: publish an official repository-root GitHub Action for CI workflows`
 
 Labels:
 - `enhancement`
@@ -959,13 +970,13 @@ Create an official GitHub Action for installing `vex` and managed toolchains in 
 
 Support at least:
 
-    - uses: vex-sh/setup-vex@v1
+    - uses: imnotnoahhh/vex@v1
       with:
         tools: node@20 go@1.22
 
 And:
 
-    - uses: vex-sh/setup-vex@v1
+    - uses: imnotnoahhh/vex@v1
       with:
         auto-install: true
 
