@@ -10,6 +10,7 @@ This document describes the testing strategy and guidelines for vex.
 - [Writing Tests](#writing-tests)
 - [Test Coverage](#test-coverage)
 - [CI/CD Testing](#cicd-testing)
+- [Failure-Recovery Tests](#6-failure-recovery-tests)
 
 ## Test Organization
 
@@ -18,18 +19,24 @@ vex uses a multi-layered testing approach:
 ```
 vex/
 ├── src/
-│   ├── main.rs              # Unit tests: #[cfg(test)] mod tests
+│   ├── main.rs              # Thin binary entry point
+│   ├── main_tests.rs        # Top-level smoke-style unit tests
+│   ├── app.rs / cli/        # CLI dispatch and argument definitions
 │   ├── tools/
-│   │   ├── mod.rs           # Unit tests for Tool trait
-│   │   ├── node.rs          # Unit tests for Node.js adapter
-│   │   ├── go.rs            # Unit tests for Go adapter
-│   │   ├── java.rs          # Unit tests for Java adapter
-│   │   └── rust.rs          # Unit tests for Rust adapter
-│   ├── downloader.rs        # Unit tests for HTTP download
-│   ├── installer.rs         # Unit tests for installation logic
-│   ├── switcher.rs          # Unit tests for symlink management
-│   ├── resolver.rs          # Unit tests for version file parsing
-│   ├── shell.rs             # Unit tests for shell hooks
+│   │   ├── tests.rs         # Tool trait and shared resolution tests
+│   │   ├── node/tests.rs    # Node.js adapter tests
+│   │   ├── go/tests.rs      # Go adapter tests
+│   │   ├── java/tests.rs    # Java adapter tests
+│   │   ├── rust/tests.rs    # Rust adapter tests
+│   │   └── python/tests.rs  # Python adapter tests
+│   ├── downloader.rs        # Checksum entrypoints and public API
+│   ├── downloader/tests.rs  # Download transport tests
+│   ├── installer/tests.rs   # Installation logic and cleanup tests
+│   ├── switcher/tests.rs    # Symlink management and rollback tests
+│   ├── resolver/tests.rs    # Version file parsing and discovery tests
+│   ├── templates/tests.rs   # Project template rendering and merge-rule tests
+│   ├── team_config/tests.rs # Safe remote/local team config loading tests
+│   ├── shell/tests.rs       # Shell hook tests
 │   ├── cache.rs             # Unit tests for caching
 │   ├── lock.rs              # Unit tests for locking
 │   └── error.rs             # Unit tests for error handling
@@ -45,23 +52,23 @@ vex/
 ### All Tests (Excluding Network-Dependent)
 
 ```bash
-cargo test --all-features
+cargo test
 ```
 
-This runs all unit tests and CLI integration tests, but skips tests marked with `#[ignore]`.
+This runs all unit tests and CLI integration tests. Network-dependent tests stay opt-in behind the `network-tests` feature.
 
 ### Network-Dependent Tests
 
 ```bash
-cargo test --all-features -- --ignored
+cargo test --features network-tests
 ```
 
-These tests require internet access and may be slow. They are skipped in CI.
+These tests require internet access and may be slow. They are opt-in locally and skipped in CI.
 
 ### All Tests (Including Network-Dependent)
 
 ```bash
-cargo test --all-features -- --include-ignored
+cargo test --features network-tests
 ```
 
 ### Specific Test
@@ -104,6 +111,8 @@ Benchmarks are not run in CI to keep build times fast.
 - Validate path components
 - Check disk space calculations
 - Verify checksum algorithms
+- Verify template conflict handling and `add-only` merges
+- Validate safe team config schema and local override precedence
 
 **Guidelines**:
 - Test both success and error cases
@@ -139,9 +148,11 @@ mod tests {
 
 **Examples**:
 - `vex init` creates directory structure
+- `vex init --template ...` previews or writes starter files
 - `vex env zsh` generates correct hook
 - `vex current` shows active versions
 - `vex doctor` validates installation
+- `vex install --from vex-config.toml` honors local `.tool-versions` overrides
 
 **Guidelines**:
 - Use `tempfile::TempDir` for isolated test environments
@@ -179,7 +190,7 @@ fn test_init_command() {
 - Uninstall versions
 
 **Guidelines**:
-- Mark with `#[ignore]` (network-dependent)
+- Mark with `#[cfg_attr(not(feature = "network-tests"), ignore = "requires --features network-tests")]`
 - Use real API endpoints
 - Test with small, fast downloads when possible
 - Clean up installed versions after tests
@@ -187,7 +198,7 @@ fn test_init_command() {
 **Example**:
 ```rust
 #[test]
-#[ignore] // Network-dependent
+#[cfg_attr(not(feature = "network-tests"), ignore = "requires --features network-tests")]
 fn test_install_node() {
     let temp_dir = TempDir::new().unwrap();
     env::set_var("HOME", temp_dir.path());
@@ -247,7 +258,7 @@ criterion_main!(benches);
 
 ### 5. Parallel Operations Tests
 
-**Location**: Unit tests in `src/downloader.rs` and `src/installer.rs`
+**Location**: Unit tests in `src/downloader/tests.rs`, `src/archive_cache/tests.rs`, and `src/installer/tests.rs`
 
 **Purpose**: Test parallel download and extraction functionality
 
@@ -283,6 +294,24 @@ fn test_atomic_write_cleanup_on_error() {
     assert_eq!(entries.len(), 0, "Temp files should be cleaned up");
 }
 ```
+
+### 6. Failure-Recovery Tests
+
+**Location**: Unit tests in `src/installer/tests.rs` and `src/switcher/tests.rs`, plus CLI coverage in `tests/cli_test.rs`
+
+**Purpose**: Prove that partial failures leave `~/.vex` in a deterministic and recoverable state
+
+**Current examples**:
+- post-install failures clean up the partially moved final toolchain directory
+- switch failures roll back to the previously active version
+- template conflict handling avoids partial writes
+- safe team-config parsing rejects unsupported fields before touching install/sync flows
+
+**Guidelines**:
+- Prefer deterministic failure fixtures over timing-sensitive tests
+- Keep any injected failure points test-only (`#[cfg(test)]`)
+- Assert on cleanup and rollback state, not just the top-level error message
+- Cover both the temp path and the final on-disk path when testing installer cleanup
 
 ## Writing Tests
 
@@ -359,11 +388,11 @@ fn test_function_error() {
 
 ### Network-Dependent Tests
 
-Mark tests that require network access with `#[ignore]`:
+Mark tests that require network access with the `network-tests` opt-in:
 
 ```rust
 #[test]
-#[ignore] // Network-dependent
+#[cfg_attr(not(feature = "network-tests"), ignore = "requires --features network-tests")]
 fn test_download_from_api() {
     // Test code that makes HTTP requests
 }
@@ -371,7 +400,7 @@ fn test_download_from_api() {
 
 Run these tests explicitly:
 ```bash
-cargo test -- --ignored
+cargo test --features network-tests
 ```
 
 ### Security Testing
@@ -431,7 +460,7 @@ fn test_disk_space_insufficient() {
 
 ```rust
 #[test]
-#[ignore] // Network-dependent
+#[cfg_attr(not(feature = "network-tests"), ignore = "requires --features network-tests")]
 fn test_http_timeout() {
     let client = create_http_client();
     let result = client.get("http://httpbin.org/delay/10").send();
@@ -537,7 +566,7 @@ test:
     - uses: actions/checkout@v6
     - uses: dtolnay/rust-toolchain@stable
     - uses: Swatinem/rust-cache@v2
-    - run: cargo test --all-features
+    - run: cargo test
 ```
 
 ### What CI Tests
@@ -559,16 +588,16 @@ Before pushing, run:
 cargo fmt --all
 
 # Check formatting
-cargo fmt --all -- --check
+cargo fmt --all --check
 
 # Run clippy
 cargo clippy --all-targets --all-features -- -D warnings
 
 # Run tests
-cargo test --all-features
+cargo test
 
-# Optional: Run ignored tests
-cargo test --all-features -- --ignored
+# Optional: Run network-dependent tests
+cargo test --features network-tests
 
 # Check release/homebrew tooling
 bash scripts/check-release-tooling.sh
@@ -593,7 +622,7 @@ make test
 - ✅ Use descriptive test names
 - ✅ Keep tests fast and isolated
 - ✅ Clean up after tests (use `TempDir`)
-- ✅ Mark network tests with `#[ignore]`
+- ✅ Gate network tests behind `network-tests`
 - ✅ Test security features thoroughly
 
 ### DON'T
@@ -616,7 +645,7 @@ make test
 
 ### Tests Pass Locally But Fail in CI
 
-- Check for network dependencies (mark with `#[ignore]`)
+- Check for network dependencies (gate with `network-tests`)
 - Check for platform-specific code (macOS vs Linux)
 - Check for timing issues (use `sleep` or retries)
 

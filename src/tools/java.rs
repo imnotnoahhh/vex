@@ -3,55 +3,18 @@
 //! Uses Adoptium API v3 to query versions, only supports JDK + HotSpot combination.
 //! macOS JDK directory structure is special: `Contents/Home/bin/`.
 
+mod api;
+mod resolve;
+
 use crate::error::{Result, VexError};
-use crate::http;
 use crate::tools::{Arch, Tool, Version};
-use serde::Deserialize;
+use api::{fetch_available_releases, fetch_temurin_releases};
+use resolve::{build_remote_versions, resolve_alias_version};
+#[cfg(test)]
+mod tests;
 
 /// Java (Eclipse Temurin JDK) tool
 pub struct JavaTool;
-const FALLBACK_LTS_VERSIONS: &[u32] = &[25, 21, 17, 11, 8];
-
-#[derive(Deserialize, Debug)]
-struct AvailableReleases {
-    available_lts_releases: Vec<u32>,
-    available_releases: Vec<u32>,
-    #[serde(default)]
-    most_recent_lts: Option<u32>,
-}
-
-#[derive(Deserialize, Debug)]
-struct TemurinRelease {
-    binary: Binary,
-    #[allow(dead_code)]
-    version: VersionData,
-}
-
-#[derive(Deserialize, Debug)]
-struct Binary {
-    package: Package,
-}
-
-#[derive(Deserialize, Debug)]
-struct Package {
-    #[allow(dead_code)]
-    name: String,
-    link: String,
-    checksum: String,
-    #[allow(dead_code)]
-    size: u64,
-}
-
-#[derive(Deserialize, Debug)]
-#[allow(dead_code)]
-struct VersionData {
-    major: u32,
-    minor: u32,
-    security: u32,
-    #[serde(default)]
-    build: u32,
-    semver: String,
-}
 
 impl Tool for JavaTool {
     fn name(&self) -> &str {
@@ -59,48 +22,12 @@ impl Tool for JavaTool {
     }
 
     fn list_remote(&self) -> Result<Vec<Version>> {
-        let url = "https://api.adoptium.net/v3/info/available_releases";
-        let releases: AvailableReleases =
-            http::get_json_in_current_context(url, concat!("vex/", env!("CARGO_PKG_VERSION")))?;
-        let lts_versions_list = lts_versions(&releases);
-        let available_versions = available_versions(&releases);
-
-        // Get all available versions, mark LTS versions
-        let mut versions = Vec::new();
-
-        for version in available_versions {
-            let is_lts = lts_versions_list.contains(&version);
-            versions.push(Version {
-                version: version.to_string(),
-                lts: if is_lts {
-                    Some("LTS".to_string())
-                } else {
-                    None
-                },
-            });
-        }
-
-        // Sort descending (newest version first)
-        versions.reverse();
-
-        Ok(versions)
+        let releases = fetch_available_releases()?;
+        Ok(build_remote_versions(&releases))
     }
 
     fn download_url(&self, version: &str, arch: Arch) -> Result<String> {
-        // Get download link from API
-        let arch_str = match arch {
-            Arch::Arm64 => "aarch64",
-            Arch::X86_64 => "x64",
-        };
-
-        let url = format!(
-            "https://api.adoptium.net/v3/assets/latest/{}/hotspot?architecture={}&image_type=jdk&os=mac&vendor=eclipse",
-            version, arch_str
-        );
-
-        let releases: Vec<TemurinRelease> =
-            http::get_json_in_current_context(&url, concat!("vex/", env!("CARGO_PKG_VERSION")))?;
-
+        let releases = fetch_temurin_releases(version, arch)?;
         if let Some(release) = releases.first() {
             Ok(release.binary.package.link.clone())
         } else {
@@ -158,19 +85,7 @@ impl Tool for JavaTool {
     }
 
     fn get_checksum(&self, version: &str, arch: Arch) -> Result<Option<String>> {
-        let arch_str = match arch {
-            Arch::Arm64 => "aarch64",
-            Arch::X86_64 => "x64",
-        };
-
-        let url = format!(
-            "https://api.adoptium.net/v3/assets/latest/{}/hotspot?architecture={}&image_type=jdk&os=mac&vendor=eclipse",
-            version, arch_str
-        );
-
-        let releases: Vec<TemurinRelease> =
-            http::get_json_in_current_context(&url, concat!("vex/", env!("CARGO_PKG_VERSION")))?;
-
+        let releases = fetch_temurin_releases(version, arch)?;
         if let Some(release) = releases.first() {
             Ok(Some(release.binary.package.checksum.clone()))
         } else {
@@ -180,211 +95,6 @@ impl Tool for JavaTool {
 
     fn resolve_alias(&self, alias: &str) -> Result<Option<String>> {
         let versions = self.list_remote()?;
-
-        match alias {
-            "latest" => {
-                // Return the first version (most recent, list is descending)
-                Ok(versions.first().map(|v| v.version.clone()))
-            }
-            "lts" => {
-                // Return the first LTS version
-                if let Some(version) = versions
-                    .iter()
-                    .find(|v| v.lts.is_some())
-                    .map(|v| v.version.clone())
-                {
-                    return Ok(Some(version));
-                }
-
-                let arch = Arch::detect();
-                for candidate in FALLBACK_LTS_VERSIONS {
-                    if self.download_url(&candidate.to_string(), arch).is_ok() {
-                        return Ok(Some(candidate.to_string()));
-                    }
-                }
-
-                Ok(None)
-            }
-            _ => Ok(None),
-        }
-    }
-}
-
-fn available_versions(releases: &AvailableReleases) -> Vec<u32> {
-    releases
-        .available_releases
-        .iter()
-        .copied()
-        .filter(|version| *version > 0)
-        .collect()
-}
-
-fn lts_versions(releases: &AvailableReleases) -> Vec<u32> {
-    let explicit_lts: Vec<u32> = releases
-        .available_lts_releases
-        .iter()
-        .copied()
-        .filter(|version| *version > 0)
-        .collect();
-    if !explicit_lts.is_empty() {
-        return explicit_lts;
-    }
-
-    releases
-        .most_recent_lts
-        .filter(|version| *version > 0)
-        .map(|version| vec![version])
-        .unwrap_or_default()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_name() {
-        assert_eq!(JavaTool.name(), "java");
-    }
-
-    #[test]
-    fn test_bin_names() {
-        let names = JavaTool.bin_names();
-        assert!(names.contains(&"java"));
-        assert!(names.contains(&"javac"));
-        assert!(names.contains(&"jar"));
-        assert!(names.contains(&"javadoc"));
-        assert!(names.contains(&"jshell"));
-        assert!(names.contains(&"keytool"));
-        assert_eq!(names.len(), 30);
-    }
-
-    #[test]
-    fn test_bin_subpath() {
-        assert_eq!(JavaTool.bin_subpath(), "Contents/Home/bin");
-    }
-
-    #[test]
-    fn test_bin_paths_default() {
-        let paths = JavaTool.bin_paths();
-        // All binaries share the same subpath
-        assert_eq!(paths.len(), 30);
-        for (_, subpath) in &paths {
-            assert_eq!(*subpath, "Contents/Home/bin");
-        }
-    }
-
-    #[test]
-    fn test_checksum_url_is_none() {
-        assert_eq!(JavaTool.checksum_url("21", Arch::Arm64), None);
-    }
-
-    #[test]
-    fn test_lts_versions_falls_back_to_most_recent_lts() {
-        let releases = AvailableReleases {
-            available_lts_releases: Vec::new(),
-            available_releases: vec![25, 24, 21],
-            most_recent_lts: Some(25),
-        };
-
-        assert_eq!(lts_versions(&releases), vec![25]);
-    }
-
-    #[test]
-    fn test_lts_versions_ignores_zero_entries() {
-        let releases = AvailableReleases {
-            available_lts_releases: vec![0, 25, 21],
-            available_releases: vec![25, 24, 21],
-            most_recent_lts: Some(0),
-        };
-
-        assert_eq!(lts_versions(&releases), vec![25, 21]);
-    }
-
-    #[test]
-    fn test_available_versions_ignores_zero_entries() {
-        let releases = AvailableReleases {
-            available_lts_releases: vec![25, 21],
-            available_releases: vec![0, 25, 24, 21],
-            most_recent_lts: Some(25),
-        };
-
-        assert_eq!(available_versions(&releases), vec![25, 24, 21]);
-    }
-
-    #[test]
-    #[ignore] // Requires network
-    fn test_list_remote() {
-        let versions = JavaTool.list_remote().unwrap();
-        assert!(!versions.is_empty());
-        // Should have LTS versions
-        let has_lts = versions.iter().any(|v| v.lts.is_some());
-        assert!(has_lts);
-    }
-
-    #[test]
-    #[ignore]
-    fn test_download_url() {
-        let url = JavaTool.download_url("21", Arch::Arm64).unwrap();
-        assert!(url.contains("temurin"));
-        assert!(url.ends_with(".tar.gz"));
-    }
-
-    #[test]
-    #[ignore] // Requires network
-    fn test_resolve_alias_latest() {
-        let result = JavaTool.resolve_alias("latest").unwrap();
-        assert!(result.is_some());
-        // Should be a number
-        assert!(result.unwrap().parse::<u32>().is_ok());
-    }
-
-    #[test]
-    #[ignore] // Requires network
-    fn test_resolve_alias_lts() {
-        let result = JavaTool.resolve_alias("lts").unwrap();
-        assert!(result.is_some());
-        let version: u32 = result.unwrap().parse().unwrap();
-        // LTS versions are 8, 11, 17, 21, 25...
-        assert!(version >= 8);
-    }
-
-    #[test]
-    #[ignore] // Requires network access
-    fn test_resolve_alias_unknown() {
-        let result = JavaTool.resolve_alias("foobar").unwrap();
-        assert!(result.is_none());
-
-        let result = JavaTool.resolve_alias("stable").unwrap();
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_download_url_format_arm64() {
-        // Test URL format without network
-        let version = "21";
-        let arch = Arch::Arm64;
-        // We can't test the actual URL without network, but we can test error handling
-        // The function will fail with network error, not format error
-        let result = JavaTool.download_url(version, arch);
-        // Should either succeed or fail with network error, not format error
-        assert!(result.is_ok() || matches!(result, Err(VexError::Network(_))));
-    }
-
-    #[test]
-    fn test_download_url_format_x86() {
-        let version = "21";
-        let arch = Arch::X86_64;
-        let result = JavaTool.download_url(version, arch);
-        assert!(result.is_ok() || matches!(result, Err(VexError::Network(_))));
-    }
-
-    #[test]
-    #[ignore] // Requires network
-    fn test_get_checksum_format() {
-        // Test that get_checksum returns proper format
-        let version = "21";
-        let arch = Arch::Arm64;
-        let result = JavaTool.get_checksum(version, arch);
-        assert!(result.is_ok());
+        resolve_alias_version(self, alias, &versions)
     }
 }

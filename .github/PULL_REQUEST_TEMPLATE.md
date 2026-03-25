@@ -12,11 +12,11 @@
 
 ## Checklist
 
-- [ ] `cargo fmt --all -- --check` passes
-- [ ] `cargo clippy -- -D warnings` passes
-- [ ] `cargo test --all-features` passes
+- [ ] `cargo fmt --all --check` passes
+- [ ] `cargo clippy --all-targets --all-features -- -D warnings` passes
+- [ ] `cargo test -- --test-threads=1` passes
 - [ ] Added tests for new features (if applicable)
-- [ ] Updated README if CLI interface changed
+- [ ] Updated README and relevant docs if CLI, templates, team config, or GitHub Action behavior changed
 - [ ] Updated CHANGELOG.md with changes
 
 ## Related Issue

@@ -2,6 +2,8 @@
 
 vex keeps direct installation as the primary path, but also maintains an optional official Homebrew tap for users who already rely on `brew`.
 
+For CI usage, prefer the repository-root GitHub Action (`uses: imnotnoahhh/vex@v1`) instead of Homebrew. The tap is primarily for interactive local installs.
+
 ## Official Tap
 
 The tap repository is intended to live at:
