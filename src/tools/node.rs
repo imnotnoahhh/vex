@@ -3,23 +3,19 @@
 //! Uses nodejs.org official API to query versions, supports LTS aliases (`lts`, `lts-iron`, etc.).
 //! Checksums obtained via SHASUMS256.txt file.
 
+mod api;
+mod dist;
+#[cfg(test)]
+mod tests;
+
 use crate::error::Result;
 use crate::http;
 use crate::tools::{Arch, Tool, Version};
-use serde::Deserialize;
+use api::{fetch_releases, resolve_alias_from_versions, version_from_release};
+use dist::{checksum_url as dist_checksum_url, download_url as dist_download_url, find_checksum};
 
 /// Node.js tool (nodejs.org official distribution)
 pub struct NodeTool;
-
-#[derive(Deserialize, Debug)]
-struct NodeRelease {
-    version: String,
-    #[allow(dead_code)]
-    date: String,
-    #[allow(dead_code)]
-    files: Vec<String>,
-    lts: serde_json::Value,
-}
 
 impl Tool for NodeTool {
     fn name(&self) -> &str {
@@ -27,54 +23,18 @@ impl Tool for NodeTool {
     }
 
     fn list_remote(&self) -> Result<Vec<Version>> {
-        let url = "https://nodejs.org/dist/index.json";
-        let releases: Vec<NodeRelease> =
-            http::get_json_in_current_context(url, concat!("vex/", env!("CARGO_PKG_VERSION")))?;
-
-        let versions = releases
+        Ok(fetch_releases()?
             .into_iter()
-            .map(|r| Version {
-                version: r.version.clone(),
-                lts: match r.lts {
-                    serde_json::Value::String(s) => Some(s),
-                    _ => None,
-                },
-            })
-            .collect();
-
-        Ok(versions)
+            .map(version_from_release)
+            .collect())
     }
 
     fn download_url(&self, version: &str, arch: Arch) -> Result<String> {
-        // Ensure version has v prefix
-        let version = if version.starts_with('v') {
-            version.to_string()
-        } else {
-            format!("v{}", version)
-        };
-
-        let arch_str = match arch {
-            Arch::Arm64 => "arm64",
-            Arch::X86_64 => "x64",
-        };
-
-        Ok(format!(
-            "https://nodejs.org/dist/{}/node-{}-darwin-{}.tar.gz",
-            version, version, arch_str
-        ))
+        Ok(dist_download_url(version, arch))
     }
 
     fn checksum_url(&self, version: &str, _arch: Arch) -> Option<String> {
-        let version = if version.starts_with('v') {
-            version.to_string()
-        } else {
-            format!("v{}", version)
-        };
-
-        Some(format!(
-            "https://nodejs.org/dist/{}/SHASUMS256.txt",
-            version
-        ))
+        Some(dist_checksum_url(version))
     }
 
     fn bin_names(&self) -> Vec<&str> {
@@ -96,208 +56,20 @@ impl Tool for NodeTool {
             concat!("vex/", env!("CARGO_PKG_VERSION")),
         )?;
 
-        let version = if version.starts_with('v') {
-            version.to_string()
-        } else {
-            format!("v{}", version)
-        };
-
-        let arch_str = match arch {
-            Arch::Arm64 => "arm64",
-            Arch::X86_64 => "x64",
-        };
-
-        let filename = format!("node-{}-darwin-{}.tar.gz", version, arch_str);
-
-        for line in content.lines() {
-            if line.contains(&filename) {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    return Ok(Some(parts[0].to_string()));
-                }
-            }
-        }
-
-        Ok(None)
+        Ok(find_checksum(&content, version, arch))
     }
 
     fn resolve_alias(&self, alias: &str) -> Result<Option<String>> {
         match alias {
-            "latest" => {
+            "latest" | "lts" => {
                 let versions = self.list_remote()?;
-                // Return the first version (most recent)
-                Ok(versions.first().map(|v| {
-                    v.version
-                        .strip_prefix('v')
-                        .unwrap_or(&v.version)
-                        .to_string()
-                }))
-            }
-            "lts" => {
-                let versions = self.list_remote()?;
-                // Return the first LTS version
-                Ok(versions.iter().find(|v| v.lts.is_some()).map(|v| {
-                    v.version
-                        .strip_prefix('v')
-                        .unwrap_or(&v.version)
-                        .to_string()
-                }))
+                Ok(resolve_alias_from_versions(&versions, alias))
             }
             _ if alias.starts_with("lts-") => {
                 let versions = self.list_remote()?;
-                // lts-<codename> (e.g., lts-iron, lts-hydrogen)
-                let codename = alias.strip_prefix("lts-").unwrap().to_lowercase();
-                Ok(versions
-                    .iter()
-                    .find(|v| {
-                        v.lts
-                            .as_ref()
-                            .map(|lts| lts.to_lowercase() == codename)
-                            .unwrap_or(false)
-                    })
-                    .map(|v| {
-                        v.version
-                            .strip_prefix('v')
-                            .unwrap_or(&v.version)
-                            .to_string()
-                    }))
+                Ok(resolve_alias_from_versions(&versions, alias))
             }
             _ => Ok(None),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_name() {
-        let tool = NodeTool;
-        assert_eq!(tool.name(), "node");
-    }
-
-    #[test]
-    fn test_bin_names() {
-        let tool = NodeTool;
-        assert_eq!(tool.bin_names(), vec!["node", "npm", "npx"]);
-    }
-
-    #[test]
-    fn test_bin_subpath() {
-        let tool = NodeTool;
-        assert_eq!(tool.bin_subpath(), "bin");
-    }
-
-    #[test]
-    fn test_bin_paths_default() {
-        let tool = NodeTool;
-        let paths = tool.bin_paths();
-        assert_eq!(
-            paths,
-            vec![("node", "bin"), ("npm", "bin"), ("npx", "bin"),]
-        );
-    }
-
-    #[test]
-    fn test_download_url_arm64() {
-        let tool = NodeTool;
-        let url = tool.download_url("20.11.0", Arch::Arm64).unwrap();
-        assert_eq!(
-            url,
-            "https://nodejs.org/dist/v20.11.0/node-v20.11.0-darwin-arm64.tar.gz"
-        );
-    }
-
-    #[test]
-    fn test_download_url_x86() {
-        let tool = NodeTool;
-        let url = tool.download_url("20.11.0", Arch::X86_64).unwrap();
-        assert_eq!(
-            url,
-            "https://nodejs.org/dist/v20.11.0/node-v20.11.0-darwin-x64.tar.gz"
-        );
-    }
-
-    #[test]
-    fn test_download_url_with_v_prefix() {
-        let tool = NodeTool;
-        let url = tool.download_url("v20.11.0", Arch::Arm64).unwrap();
-        assert_eq!(
-            url,
-            "https://nodejs.org/dist/v20.11.0/node-v20.11.0-darwin-arm64.tar.gz"
-        );
-    }
-
-    #[test]
-    fn test_checksum_url() {
-        let tool = NodeTool;
-        let url = tool.checksum_url("20.11.0", Arch::Arm64);
-        assert_eq!(
-            url,
-            Some("https://nodejs.org/dist/v20.11.0/SHASUMS256.txt".to_string())
-        );
-    }
-
-    #[test]
-    fn test_checksum_url_with_v_prefix() {
-        let tool = NodeTool;
-        let url = tool.checksum_url("v20.11.0", Arch::Arm64);
-        assert_eq!(
-            url,
-            Some("https://nodejs.org/dist/v20.11.0/SHASUMS256.txt".to_string())
-        );
-    }
-
-    #[test]
-    #[ignore] // Requires network
-    fn test_list_remote() {
-        let tool = NodeTool;
-        let versions = tool.list_remote().unwrap();
-        assert!(!versions.is_empty());
-        // First version should have v prefix
-        assert!(versions[0].version.starts_with('v'));
-    }
-
-    #[test]
-    #[ignore]
-    fn test_list_remote_has_lts() {
-        let tool = NodeTool;
-        let versions = tool.list_remote().unwrap();
-        // Should have at least one LTS version
-        let has_lts = versions.iter().any(|v| v.lts.is_some());
-        assert!(has_lts);
-    }
-
-    #[test]
-    #[ignore] // Requires network
-    fn test_resolve_alias_latest() {
-        let result = NodeTool.resolve_alias("latest").unwrap();
-        assert!(result.is_some());
-        // Should not have v prefix
-        assert!(!result.as_ref().unwrap().starts_with('v'));
-    }
-
-    #[test]
-    #[ignore] // Requires network
-    fn test_resolve_alias_lts() {
-        let result = NodeTool.resolve_alias("lts").unwrap();
-        assert!(result.is_some());
-        assert!(!result.as_ref().unwrap().starts_with('v'));
-    }
-
-    #[test]
-    #[ignore] // Requires network
-    fn test_resolve_alias_lts_codename() {
-        // "iron" is Node 20 LTS codename
-        let result = NodeTool.resolve_alias("lts-iron").unwrap();
-        assert!(result.is_some());
-        assert!(result.unwrap().starts_with("20."));
-    }
-
-    #[test]
-    fn test_resolve_alias_unknown() {
-        let result = NodeTool.resolve_alias("foobar").unwrap();
-        assert!(result.is_none());
     }
 }

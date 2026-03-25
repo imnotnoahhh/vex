@@ -87,6 +87,11 @@ vex includes the following security protections:
    - Actionable error messages with troubleshooting steps
    - No sensitive information leaked in error messages
 
+10. **Safe Team Config Scope** (v1.5+)
+   - Remote/shared team config is limited to `version = 1` plus `[tools]`
+   - Team config cannot inject `env`, commands, mirrors, or arbitrary script execution
+   - Local `.tool-versions` remains the highest-precedence project pin when using `--from`
+
 ## Supported Versions
 
 | Version | Supported |

@@ -1,5 +1,7 @@
 # Build Rich Terminal UI Foundation
 
+> Historical note: this document describes the dedicated UI-foundation PR. The current codebase now keeps the UI in `src/ui.rs`, `src/ui/primitives.rs`, `src/ui/progress.rs`, `src/ui/summary.rs`, `src/ui/table.rs`, and `src/ui/tests.rs`. Current repository docs should also be read alongside the newer template, team-config, action, and failure-recovery work tracked in `README.md` and `docs/development/`.
+
 Closes #57
 
 ## Summary
@@ -8,16 +10,14 @@ This PR implements a shared terminal UI layer for vex, providing consistent rend
 
 ## Changes
 
-### New Module: `src/ui.rs`
+### UI Module Family: `src/ui.rs` + `src/ui/*`
 
 Created comprehensive UI components:
 - **UiContext**: Detects interactive vs non-interactive mode
 - **Basic Functions**: `header()`, `success()`, `warning()`, `error()`, `info()`, `dimmed()`
 - **Table**: Builder for aligned tabular output
 - **Progress**: Spinner for indeterminate operations
-- **ProgressBar**: Progress bar for known-total operations
 - **Summary**: Builder for final status summaries
-- **Prompts**: `confirm()`, `select()`, `input()`
 
 ### Updated Commands
 
@@ -33,7 +33,7 @@ Added `atty = "0.2"` for terminal detection.
 
 ### Tests
 
-Added `tests/ui_test.rs` with comprehensive coverage of all UI components.
+Added `src/ui/tests.rs` with comprehensive coverage of the UI components.
 
 ## Design Principles
 
@@ -47,14 +47,14 @@ Added `tests/ui_test.rs` with comprehensive coverage of all UI components.
 
 Basic verification passed:
 ```bash
-./verify-ui.sh
+cargo test ui::
 ```
 
 Full test suite requires:
 ```bash
 cargo test --all-features -- --test-threads=1
 cargo clippy --all-targets --all-features -- -D warnings
-cargo fmt --all -- --check
+cargo fmt --all --check
 cargo build --release
 ```
 

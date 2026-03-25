@@ -1,7 +1,12 @@
+pub mod aliases;
 pub mod current;
 pub mod doctor;
+pub mod init;
+pub mod manage;
 pub mod process;
 pub mod prune;
+pub mod python;
+pub mod toolchain;
 pub mod tui;
 pub mod updates;
 pub mod versions;

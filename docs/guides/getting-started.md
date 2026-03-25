@@ -30,10 +30,10 @@ This will:
 ### 2. Initialize vex
 
 ```bash
-vex init
+vex init --shell auto
 ```
 
-This creates the `~/.vex` directory structure where vex stores installed versions.
+This creates the `~/.vex` directory structure where vex stores installed versions and sets up shell integration in one step.
 
 ### 3. Set up shell integration
 
@@ -67,10 +67,6 @@ echo 'source ~/.config/nushell/vex.nu' >> ~/.config/nushell/config.nu
 Let's install Node.js:
 
 ```bash
-# Interactive install (pick from a list)
-vex install node
-
-# Or install a specific version
 vex install node@20
 ```
 
@@ -90,14 +86,28 @@ npm --version
 # 10.2.4
 ```
 
+### 6. Bootstrap a project template
+
+Use the built-in starters to create a repo with `.tool-versions`, `.vex.toml`, and minimal source files:
+
+```bash
+vex init --list-templates
+vex init --template node-typescript
+```
+
+For an existing repository, use safe add-only mode:
+
+```bash
+vex init --template python-venv --add-only
+```
+
+`--add-only` only merges `.tool-versions` and `.gitignore`, then creates missing starter files. If a non-mergeable file already exists, vex exits without partial writes.
+
 ## Basic Commands
 
 ### Install a tool
 
 ```bash
-# Interactive (pick from list)
-vex install node
-
 # Specific version
 vex install node@20.11.0
 
@@ -123,11 +133,11 @@ vex list node
 ### List available versions
 
 ```bash
-# Show latest 20 versions (interactive)
+# Show all available versions
 vex list-remote node
 
-# Show all versions
-vex list-remote node --filter all
+# Show only the newest patch per major line
+vex list-remote node --filter major
 ```
 
 ### Show current versions
@@ -189,7 +199,7 @@ Use `.vex.toml` plus `vex run` for repeatable project tasks:
 
 ```toml
 [commands]
-test = "cargo test --all-features"
+test = "cargo test"
 lint = "cargo clippy --all-targets --all-features -- -D warnings"
 ```
 
@@ -200,7 +210,7 @@ vex run lint
 
 ## Python Workflow
 
-Python support uses [python-build-standalone](https://github.com/astral-sh/python-build-standalone) — prebuilt CPython binaries, no compilation needed.
+Python support uses [python-build-standalone](https://github.com/astral-sh/python-build-standalone) standard `install_only` CPython packages — prebuilt binaries with no compilation needed. `vex` currently targets the standard package line, not free-threaded variants.
 
 ### Step 1 — Install Python globally
 
@@ -244,6 +254,18 @@ vex python sync   # creates .venv if missing, then pip install -r requirements.l
 ### Auto-activation
 
 With the shell hook enabled (`eval "$(vex env zsh)"`), the `.venv` is automatically activated when you `cd` into the project and deactivated when you leave — no manual `source .venv/bin/activate` needed.
+
+---
+
+## Team Defaults
+
+If your team keeps a shared `vex-config.toml`, you can layer it in explicitly:
+
+```bash
+vex sync --from https://company.example/vex-config.toml
+```
+
+Local `.tool-versions` entries still win over matching tools from the team baseline, so repo-specific pins stay explicit.
 
 ---
 

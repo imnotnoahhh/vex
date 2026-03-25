@@ -36,14 +36,14 @@ vex is a Rust-based version manager that uses **symlinks + PATH prepending** (no
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                         CLI Layer                            │
-│  (main.rs - clap command parsing and routing)               │
+│  (main.rs → app.rs / cli/ parsing and routing)              │
 └────────────┬────────────────────────────────────────────────┘
              │
              ├──────────────────────────────────────────────────┐
              │                                                  │
 ┌────────────▼──────────┐  ┌──────────────┐  ┌───────────────▼┐
 │   Command Handlers    │  │   Resolver   │  │  Shell Hooks   │
-│  (install/use/list)   │  │ (.tool-vers) │  │ (zsh/bash/fish)│
+│  (commands/*)        │  │ (resolver/*) │  │ (shell/*)      │
 └────────────┬──────────┘  └──────┬───────┘  └────────────────┘
              │                    │
              │                    │
@@ -51,8 +51,14 @@ vex is a Rust-based version manager that uses **symlinks + PATH prepending** (no
 │                      Core Services                          │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
 │  │Downloader│  │Installer │  │ Switcher │  │  Cache   │  │
-│  │(HTTP+SHA)│  │(tar+disk)│  │(symlinks)│  │ (5 min)  │  │
+│  │(HTTP+SHA)│  │(online/  │  │(links +  │  │ (5 min)  │  │
+│  │          │  │ offline) │  │ rollback)│  │          │  │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────┘  │
+│  ┌──────────┐  ┌──────────────┐                            │
+│  │Templates │  │Team Config   │                            │
+│  │(catalog +│  │(source +     │                            │
+│  │ rollback)│  │ parse)       │                            │
+│  └──────────┘  └──────────────┘                            │
 └────────────────────────┬────────────────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────────────────┐
@@ -81,50 +87,65 @@ vex is a Rust-based version manager that uses **symlinks + PATH prepending** (no
 
 ```
 main.rs
-  ├─> tools/mod.rs (Tool trait)
-  │     ├─> tools/node.rs
-  │     ├─> tools/go.rs
-  │     ├─> tools/java.rs
-  │     ├─> tools/rust.rs
-  │     └─> tools/python.rs
-  ├─> installer.rs
-  │     ├─> downloader.rs
-  │     ├─> lock.rs
-  │     └─> error.rs
-  ├─> switcher.rs
-  │     └─> error.rs
-  ├─> resolver.rs
-  │     └─> error.rs
-  ├─> shell.rs
-  ├─> cache.rs
-  │     └─> error.rs
-  └─> error.rs
+  └─> app.rs
+        ├─> cli/
+        ├─> commands/
+        │     ├─> toolchain/
+        │     ├─> updates/
+        │     ├─> versions/
+        │     ├─> doctor/
+        │     ├─> prune/
+        │     └─> python/
+        ├─> tools/
+        │     ├─> resolve.rs
+        │     ├─> node/
+        │     ├─> go/
+        │     ├─> java/
+        │     ├─> rust/
+        │     └─> python/
+        ├─> installer/
+        ├─> switcher/
+        ├─> resolver/
+        ├─> templates/
+        ├─> team_config/
+        ├─> shell/
+        ├─> updater/
+        ├─> checksum.rs
+        ├─> version_files.rs
+        └─> versioning.rs
 ```
 
 ### Module Responsibilities
 
 | Module | Responsibility | Key Functions |
 |--------|---------------|---------------|
-| `main.rs` | CLI entry point, command routing | `run()`, `install_tool()`, `run_doctor()` |
+| `main.rs` | Thin binary entry point | `main()` |
+| `app.rs` | CLI dispatch and top-level routing | `run()` |
+| `cli/` | clap argument definitions | `Commands`, command-specific `Args` types |
 | `tools/mod.rs` | Tool trait definition, architecture detection | `Tool` trait, `get_tool()`, `resolve_fuzzy_version()` |
-| `tools/node.rs` | Node.js adapter (nodejs.org API) | `list_remote()`, `download_url()`, `resolve_alias()` |
-| `tools/go.rs` | Go adapter (go.dev JSON API) | `list_remote()`, `download_url()` |
-| `tools/java.rs` | Java adapter (Adoptium API) | `list_remote()`, `download_url()` |
-| `tools/rust.rs` | Rust adapter (channel TOML) | `list_remote()`, `download_url()`, `post_install()` |
-| `tools/python.rs` | Python adapter (python-build-standalone GitHub releases) | `list_remote()`, `download_url()`, `get_checksum()`, `resolve_alias()` |
-| `downloader.rs` | HTTP download, SHA256 verification | `download()`, `verify_checksum()` |
-| `installer.rs` | Extract archives, disk space check | `install()`, `check_disk_space()` |
-| `switcher.rs` | Atomic symlink updates | `switch_version()` |
-| `resolver.rs` | Version file parsing | `resolve_versions()`, `resolve_version()` |
+| `tools/node.rs` + `tools/node/*` | Node.js adapter (nodejs.org API) | `list_remote()`, `download_url()`, `resolve_alias()` |
+| `tools/go.rs` + `tools/go/*` | Go adapter (go.dev JSON API) | `list_remote()`, `download_url()` |
+| `tools/java.rs` + `tools/java/*` | Java adapter (Adoptium API) | `list_remote()`, `download_url()` |
+| `tools/rust.rs` + `tools/rust/*` | Rust adapter (channel TOML) | `list_remote()`, `download_url()`, `post_install()` |
+| `tools/python.rs` + `tools/python/*` | Python adapter (python-build-standalone standard `install_only` GitHub releases) | `list_remote()`, `download_url()`, `get_checksum()`, `resolve_alias()` |
+| `downloader.rs` + `downloader/*` | HTTP download, SHA256 verification, retry transport | `download_with_retry()`, `verify_checksum()` |
+| `installer.rs` + `installer/*` | Online/offline install orchestration and extraction | `install()`, `install_with_mode()` |
+| `switcher.rs` + `switcher/*` | Atomic symlink updates and rollback | `switch_version()` |
+| `resolver.rs` + `resolver/*` | Version file parsing and discovery | `resolve_versions()`, `resolve_version()` |
+| `templates.rs` + `templates/*` | Built-in project starter rendering, planning, and rollback-safe writes | `init_template()`, `print_templates()` |
+| `team_config.rs` + `team_config/*` | Safe remote/local team version source loading | `load_versions_from_source()` |
 | `activation.rs` | Build transient execution environments | `build_activation_plan()` |
-| `project.rs` | Parse project-local `.vex.toml` files | `load_nearest_project_config()` |
-| `config.rs` | Global settings, env overrides, mirror rewriting | `load_settings()`, `rewrite_download_url()` |
+| `project.rs` + `project/*` | Parse project-local `.vex.toml` files | `load_nearest_project_config()` |
+| `config.rs` + `config/*` | Global settings, env overrides, mirror rewriting | `load_settings()`, `rewrite_download_url()` |
 | `http.rs` | Shared HTTP clients for global and project-scoped commands | `client_for_current_context()`, `client_for_global_settings()` |
-| `commands/*.rs` | Higher-level command implementations | `current`, `versions`, `updates`, `prune`, `doctor`, `process` |
+| `commands/` | Higher-level command implementations | `current`, `versions`, `updates`, `prune`, `doctor`, `process` |
 | `output.rs` | Shared text/JSON output helpers | `print_json()` |
-| `shell.rs` | Shell hook generation | `generate_hook()` |
+| `shell.rs` + `shell/*` | Shell hook generation | `generate_hook()` |
 | `cache.rs` | Remote version list caching | `get_cached_versions()`, `cache_versions()` |
 | `lock.rs` | Installation locking | `InstallLock::acquire()` |
+| `checksum.rs` | Shared SHA256 helpers | `sha256_hex()`, `verify_sha256()` |
+| `version_files.rs` | Version file update helpers | `write_tool_version()` |
+| `versioning.rs` | Shared version normalization helpers | `normalize_version()` |
 | `error.rs` | Unified error handling | `VexError` enum |
 
 ## Data Flow
@@ -167,6 +188,9 @@ User: vex install node@20
     Run post_install() hook
          │
          ▼
+    On failure: cleanup partial extract/final dir
+         │
+         ▼
     Switch to new version (update symlinks)
          │
          ▼
@@ -197,6 +221,51 @@ User: vex use node@22
     bin/node → current/node/bin/node
     bin/npm → current/node/bin/npm
     bin/npx → current/node/bin/npx
+         │
+         ▼
+    On failure: rollback to previous version
+```
+
+### Template Bootstrap Flow
+
+```
+User: vex init --template python-venv --add-only
+         │
+         ▼
+    Read template definition from templates/catalog.rs
+         │
+         ▼
+    Render starter files in-memory
+         │
+         ▼
+    Check conflicts in current project directory
+         │
+         ├── strict mode: any conflict aborts with no writes
+         └── add-only mode: merge `.tool-versions` / `.gitignore`, abort on other conflicts
+         │
+         ▼
+    Write missing files atomically
+```
+
+### Team Config Flow
+
+```
+User: vex sync --from git@github.com:company/vex-config.git
+         │
+         ▼
+    team_config/source.rs classifies source
+         │
+         ▼
+    Load local file, HTTPS file, or clone Git repo
+         │
+         ▼
+    Parse `vex-config.toml` (version = 1, [tools] only)
+         │
+         ▼
+    Merge local `.tool-versions` overrides on top
+         │
+         ▼
+    Reuse existing sync/install workflow
 ```
 
 ### Auto-Switch Flow (Shell Hook)
@@ -442,10 +511,10 @@ Solutions:
 
 ### Python Support
 
-Python is supported via [python-build-standalone](https://github.com/astral-sh/python-build-standalone) — prebuilt, standalone CPython binaries requiring no compilation.
+Python is supported via [python-build-standalone](https://github.com/astral-sh/python-build-standalone) standard `install_only` packages — prebuilt, standalone CPython binaries requiring no compilation. Free-threaded variants are intentionally out of scope for the current adapter.
 
 **Implementation**:
-- `src/tools/python.rs` implements the `Tool` trait
+- `src/tools/python.rs` implements the `Tool` trait, while `src/tools/python/*` handles release fetches, lifecycle parsing, aliases, and install fixups
 - Binaries: `python3`, `pip3`
 - Checksums verified via the `SHA256SUMS` file published alongside each release
 - Version aliases based on Python's support lifecycle: `bugfix`, `security`, `end-of-life`, `pre-release`
@@ -475,7 +544,7 @@ Python is supported via [python-build-standalone](https://github.com/astral-sh/p
 
 ## References
 
-- [../../CLAUDE.md](../../CLAUDE.md) - Development guidelines
+- `CLAUDE.md` - Development guidelines
 - [../../CONTRIBUTING.md](../../CONTRIBUTING.md) - Contribution guide
 - [../../SECURITY.md](../../SECURITY.md) - Security policy
 - [testing.md](testing.md) - Testing guidelines

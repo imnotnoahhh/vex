@@ -1,0 +1,83 @@
+name: setup-vex
+description: Install vex and optionally install or activate vex-managed toolchains on macOS runners.
+
+inputs:
+  version:
+    description: Release tag to install. Use "latest" to install the newest published release.
+    required: false
+    default: latest
+  tools:
+    description: Space, comma, or newline separated tool specs such as "node@20 go@1.24".
+    required: false
+    default: ""
+  auto-install:
+    description: Install and activate the tools declared in the current project's version files.
+    required: false
+    default: "false"
+  use-cache:
+    description: Restore and save ~/.vex/cache plus ~/.vex/toolchains between workflow runs.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs
+      shell: bash
+      env:
+        INPUT_TOOLS: ${{ inputs.tools }}
+        INPUT_AUTO_INSTALL: ${{ inputs.auto-install }}
+      run: |
+        set -euo pipefail
+        if [ "${RUNNER_OS}" != "macOS" ]; then
+          echo "setup-vex currently supports macOS runners only." >&2
+          exit 1
+        fi
+        if [ -n "$INPUT_TOOLS" ] && [ "$INPUT_AUTO_INSTALL" = "true" ]; then
+          echo "Use either 'tools' or 'auto-install: true', not both." >&2
+          exit 1
+        fi
+
+    - name: Restore vex cache
+      if: ${{ inputs.use-cache == 'true' }}
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.vex/cache
+          ~/.vex/toolchains
+        key: vex-${{ runner.os }}-${{ runner.arch }}-${{ inputs.version }}-${{ hashFiles('**/.tool-versions', '**/.tool-versions.lock') }}
+        restore-keys: |
+          vex-${{ runner.os }}-${{ runner.arch }}-${{ inputs.version }}-
+          vex-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Install vex
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        if [ "$INPUT_VERSION" = "latest" ]; then
+          bash "${{ github.action_path }}/scripts/install-ci-release.sh"
+        else
+          bash "${{ github.action_path }}/scripts/install-ci-release.sh" --version "$INPUT_VERSION"
+        fi
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        echo "$HOME/.vex/bin" >> "$GITHUB_PATH"
+        "$HOME/.local/bin/vex" --version
+
+    - name: Install and activate requested tools
+      if: ${{ inputs.tools != '' }}
+      shell: bash
+      env:
+        INPUT_TOOLS: ${{ inputs.tools }}
+      run: |
+        set -euo pipefail
+        bash "${{ github.action_path }}/scripts/setup-action-tools.sh" --tools "$INPUT_TOOLS"
+
+    - name: Install and activate project tools
+      if: ${{ inputs.auto-install == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        bash "${{ github.action_path }}/scripts/setup-action-tools.sh" --auto-install

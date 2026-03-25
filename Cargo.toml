@@ -7,6 +7,10 @@ authors = ["Noah Qin"]
 description = "A fast, multi-language version manager for macOS"
 repository = "https://github.com/imnotnoahhh/vex"
 
+[features]
+default = []
+network-tests = []
+
 [dependencies]
 # CLI 框架
 clap = { version = "4", features = ["derive"] }
@@ -42,9 +46,6 @@ sysinfo = "0.38"
 # 错误处理
 thiserror = "2"
 
-# 交互式选择
-dialoguer = "0.12"
-
 # 文件锁
 fs2 = "0.4"
 
@@ -70,7 +71,6 @@ tempfile = "3"
 # TUI 框架
 ratatui = "0.30"
 crossterm = "0.29"
-atty = "0.2"
 
 # The profile that 'dist' will build with
 [profile.dist]

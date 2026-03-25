@@ -6,6 +6,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
 
 fn vex_bin() -> Command {
@@ -30,10 +31,32 @@ fn is_active(tool: &str) -> bool {
     vex_home().join("current").join(tool).exists()
 }
 
+fn seed_remote_cache(home: &std::path::Path, tool: &str, versions: &[&str]) {
+    let cache_dir = home.join(".vex/cache");
+    fs::create_dir_all(&cache_dir).unwrap();
+    let cached_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let versions_json = versions
+        .iter()
+        .map(|version| format!(r#"{{"version":"{}","lts":null}}"#, version))
+        .collect::<Vec<_>>()
+        .join(",");
+    let json = format!(
+        r#"{{"versions":[{}],"cached_at":{}}}"#,
+        versions_json, cached_at
+    );
+    fs::write(cache_dir.join(format!("remote-{}.json", tool)), json).unwrap();
+}
+
 // --- Node.js 端到端测试 ---
 
 #[test]
-#[ignore] // 需要网络和较长时间
+#[cfg_attr(
+    not(feature = "network-tests"),
+    ignore = "requires --features network-tests"
+)]
 fn test_e2e_node_install_use_uninstall() {
     let test_version = "20.11.0";
 
@@ -98,7 +121,10 @@ fn test_e2e_node_install_use_uninstall() {
 // --- Go 端到端测试 ---
 
 #[test]
-#[ignore] // 需要网络和较长时间
+#[cfg_attr(
+    not(feature = "network-tests"),
+    ignore = "requires --features network-tests"
+)]
 fn test_e2e_go_install_use_uninstall() {
     let test_version = "1.22.0";
 
@@ -154,7 +180,10 @@ fn test_e2e_go_install_use_uninstall() {
 // --- 版本别名测试 ---
 
 #[test]
-#[ignore] // 需要网络
+#[cfg_attr(
+    not(feature = "network-tests"),
+    ignore = "requires --features network-tests"
+)]
 fn test_e2e_install_with_alias() {
     // 测试使用 lts 别名安装 Node.js
     println!("Testing Node.js LTS alias installation...");
@@ -173,7 +202,10 @@ fn test_e2e_install_with_alias() {
 // --- 多版本切换测试 ---
 
 #[test]
-#[ignore] // 需要网络和较长时间
+#[cfg_attr(
+    not(feature = "network-tests"),
+    ignore = "requires --features network-tests"
+)]
 fn test_e2e_switch_between_versions() {
     let version1 = "20.11.0";
     let version2 = "20.10.0";
@@ -225,6 +257,7 @@ fn test_e2e_switch_between_versions() {
 
 #[test]
 fn test_e2e_tool_versions_file() {
+    let home = TempDir::new().unwrap();
     let temp_dir = TempDir::new().unwrap();
     let tool_versions = temp_dir.path().join(".tool-versions");
 
@@ -234,6 +267,7 @@ fn test_e2e_tool_versions_file() {
     // 测试 use --auto 能读取文件
     let output = vex_bin()
         .args(["use", "--auto"])
+        .env("HOME", home.path())
         .current_dir(temp_dir.path())
         .output()
         .unwrap();
@@ -246,11 +280,14 @@ fn test_e2e_tool_versions_file() {
 
 #[test]
 fn test_e2e_local_command() {
+    let home = TempDir::new().unwrap();
     let temp_dir = TempDir::new().unwrap();
+    seed_remote_cache(home.path(), "node", &["20.11.0"]);
 
     // 执行 local 命令
     let output = vex_bin()
         .args(["local", "node@20.11.0"])
+        .env("HOME", home.path())
         .current_dir(temp_dir.path())
         .output()
         .unwrap();
@@ -272,6 +309,7 @@ fn test_e2e_local_command() {
 fn test_e2e_global_command() {
     let home = TempDir::new().unwrap();
     let global_versions = home.path().join(".vex/tool-versions");
+    seed_remote_cache(home.path(), "node", &["20.11.0"]);
 
     // 执行 global 命令
     let output = vex_bin()
@@ -318,7 +356,10 @@ fn test_e2e_list_command() {
 }
 
 #[test]
-#[ignore] // 需要网络
+#[cfg_attr(
+    not(feature = "network-tests"),
+    ignore = "requires --features network-tests"
+)]
 fn test_e2e_list_remote_command() {
     // 测试 list-remote 命令
     let output = vex_bin()
@@ -353,7 +394,10 @@ fn test_e2e_current_command() {
 // --- 并发安装保护测试 ---
 
 #[test]
-#[ignore] // 需要网络和较长时间
+#[cfg_attr(
+    not(feature = "network-tests"),
+    ignore = "requires --features network-tests"
+)]
 fn test_e2e_concurrent_install_protection() {
     use std::thread;
 
@@ -397,6 +441,7 @@ fn test_e2e_concurrent_install_protection() {
 fn test_e2e_global_version_fallback() {
     let home = TempDir::new().unwrap();
     let global_versions = home.path().join(".vex/tool-versions");
+    seed_remote_cache(home.path(), "node", &["20.11.0"]);
 
     // 设置全局版本
     let output = vex_bin()
@@ -438,22 +483,23 @@ fn test_e2e_current_shows_source() {
 
 #[test]
 fn test_e2e_project_override_priority() {
+    let home = TempDir::new().unwrap();
     let temp_dir = TempDir::new().unwrap();
-    let global_versions = dirs::home_dir().unwrap().join(".vex/tool-versions");
-
-    // 备份全局配置
-    let backup = if global_versions.exists() {
-        Some(fs::read_to_string(&global_versions).unwrap())
-    } else {
-        None
-    };
+    let global_versions = home.path().join(".vex/tool-versions");
+    seed_remote_cache(home.path(), "node", &["18.0.0", "20.11.0"]);
 
     // 设置全局版本
-    let _ = vex_bin().args(["global", "node@18.0.0"]).output().unwrap();
+    let output = vex_bin()
+        .args(["global", "node@18.0.0"])
+        .env("HOME", home.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "global command should succeed");
 
     // 在项目目录设置不同的版本
     let output = vex_bin()
         .args(["local", "node@20.11.0"])
+        .env("HOME", home.path())
         .current_dir(temp_dir.path())
         .output()
         .unwrap();
@@ -467,11 +513,6 @@ fn test_e2e_project_override_priority() {
         content.contains("node 20.11.0"),
         "should contain project version"
     );
-
-    // 恢复全局配置
-    if let Some(backup_content) = backup {
-        fs::write(&global_versions, backup_content).unwrap();
-    } else {
-        let _ = fs::remove_file(&global_versions);
-    }
+    let global_content = fs::read_to_string(&global_versions).unwrap();
+    assert!(global_content.contains("node 18.0.0"));
 }

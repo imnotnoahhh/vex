@@ -2,6 +2,7 @@ use serde_json::Value;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, os::unix::fs::PermissionsExt};
 
 static TEMP_DIR_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -29,6 +30,25 @@ fn write_executable_script(path: &std::path::Path, body: &str) {
     fs::set_permissions(path, perms).unwrap();
 }
 
+fn seed_remote_cache(home: &std::path::Path, tool: &str, versions: &[&str]) {
+    let cache_dir = home.join(".vex/cache");
+    fs::create_dir_all(&cache_dir).unwrap();
+    let cached_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let versions_json = versions
+        .iter()
+        .map(|version| format!(r#"{{"version":"{}","lts":null}}"#, version))
+        .collect::<Vec<_>>()
+        .join(",");
+    let json = format!(
+        r#"{{"versions":[{}],"cached_at":{}}}"#,
+        versions_json, cached_at
+    );
+    fs::write(cache_dir.join(format!("remote-{}.json", tool)), json).unwrap();
+}
+
 #[test]
 fn test_help() {
     let output = vex_bin().arg("--help").output().unwrap();
@@ -46,6 +66,74 @@ fn test_init() {
     assert!(stdout.contains("vex init --shell auto"));
 
     let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_init_list_templates() {
+    let output = vex_bin()
+        .args(["init", "--list-templates"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("node-typescript"));
+    assert!(stdout.contains("python-venv"));
+}
+
+#[test]
+fn test_init_list_templates_conflicts_with_dry_run() {
+    let output = vex_bin()
+        .args(["init", "--list-templates", "--dry-run"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "{:?}", output);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--dry-run"));
+    assert!(stderr.contains("--list-templates"));
+}
+
+#[test]
+fn test_init_template_dry_run_does_not_write_files() {
+    let project = fresh_temp_dir("vex_test_template_dry_run");
+
+    let output = vex_bin()
+        .args(["init", "--template", "python-venv", "--dry-run"])
+        .current_dir(&project)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{:?}", output);
+    assert!(!project.join(".tool-versions").exists());
+    assert!(!project.join(".vex.toml").exists());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("No files were written"));
+
+    let _ = std::fs::remove_dir_all(&project);
+}
+
+#[test]
+fn test_init_template_add_only_merges_safe_files() {
+    let project = fresh_temp_dir("vex_test_template_add_only");
+    fs::write(project.join(".tool-versions"), "rust stable\n").unwrap();
+    fs::write(project.join(".gitignore"), "target/\n").unwrap();
+
+    let output = vex_bin()
+        .args(["init", "--template", "python-venv", "--add-only"])
+        .current_dir(&project)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{:?}", output);
+    let tool_versions = fs::read_to_string(project.join(".tool-versions")).unwrap();
+    assert!(tool_versions.contains("rust stable"));
+    assert!(tool_versions.contains("python 3.12"));
+    let gitignore = fs::read_to_string(project.join(".gitignore")).unwrap();
+    assert!(gitignore.contains("target/"));
+    assert!(gitignore.contains(".venv/"));
+    assert!(project.join(".vex.toml").exists());
+    assert!(project.join("src/main.py").exists());
+
+    let _ = std::fs::remove_dir_all(&project);
 }
 
 #[test]
@@ -236,10 +324,19 @@ fn test_invalid_tool() {
 
 #[test]
 fn test_use_nonexistent_version() {
-    let output = vex_bin().args(["use", "node@99.99.99"]).output().unwrap();
+    let home = fresh_temp_dir("vex_test_use_nonexistent");
+    seed_remote_cache(&home, "node", &["20.11.0", "22.0.0"]);
+
+    let output = vex_bin()
+        .args(["use", "node@99.99.99"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Version not found"));
+
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 #[test]
@@ -466,13 +563,15 @@ fn test_local_invalid_tool() {
 
 #[test]
 fn test_local_writes_tool_versions() {
-    let dir = std::env::temp_dir().join("vex_test_local_write");
-    let _ = std::fs::remove_dir_all(&dir);
+    let home = fresh_temp_dir("vex_test_local_write_home");
+    let dir = home.join("project");
     std::fs::create_dir_all(&dir).unwrap();
+    seed_remote_cache(&home, "node", &["20.11.0"]);
 
     // local 命令会调用 resolve_fuzzy_version，对完整版本号直接返回
     let output = vex_bin()
         .args(["local", "node@20.11.0"])
+        .env("HOME", &home)
         .current_dir(&dir)
         .output()
         .unwrap();
@@ -481,7 +580,7 @@ fn test_local_writes_tool_versions() {
     let tv = std::fs::read_to_string(dir.join(".tool-versions")).unwrap();
     assert!(tv.contains("node 20.11.0"));
 
-    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 // --- doctor 命令测试 ---
@@ -694,9 +793,8 @@ fn test_global_invalid_tool() {
 
 #[test]
 fn test_global_writes_tool_versions() {
-    let home = std::env::temp_dir().join("vex_test_global_home");
-    let _ = std::fs::remove_dir_all(&home);
-    std::fs::create_dir_all(&home).unwrap();
+    let home = fresh_temp_dir("vex_test_global_home");
+    seed_remote_cache(&home, "node", &["20.11.0"]);
 
     let output = vex_bin()
         .args(["global", "node@20.11.0"])
@@ -1256,6 +1354,7 @@ fn test_init_unsupported_shell_powershell() {
 fn test_install_no_switch_flag() {
     let home = fresh_temp_dir("vex_test_install_no_switch");
     std::fs::create_dir_all(home.join(".vex/toolchains/node/20.11.0")).unwrap();
+    seed_remote_cache(&home, "node", &["20.11.0"]);
 
     let output = vex_bin()
         .args(["install", "node@20.11.0", "--no-switch"])
@@ -1294,7 +1393,10 @@ fn test_install_help_shows_no_switch() {
 // --- Multi-spec install tests ---
 
 #[test]
-#[ignore] // Requires network to validate versions
+#[cfg_attr(
+    not(feature = "network-tests"),
+    ignore = "requires --features network-tests"
+)]
 fn test_install_multiple_specs() {
     let home = fresh_temp_dir("vex_test_multi_install");
 
@@ -1360,6 +1462,35 @@ fn test_install_from_flag() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Sync Summary") || stdout.contains("already installed"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_install_from_team_config_file_prefers_local_tool_versions() {
+    let home = fresh_temp_dir("vex_test_install_from_team_config");
+    let project_dir = home.join("project");
+    std::fs::create_dir_all(&project_dir).unwrap();
+
+    std::fs::write(
+        project_dir.join("vex-config.toml"),
+        "version = 1\n\n[tools]\nnode = \"20.12.2\"\n",
+    )
+    .unwrap();
+    std::fs::write(project_dir.join(".tool-versions"), "node 22.0.0\n").unwrap();
+    std::fs::create_dir_all(home.join(".vex/toolchains/node/22.0.0")).unwrap();
+
+    let output = vex_bin()
+        .args(["install", "--from", "vex-config.toml"])
+        .env("HOME", &home)
+        .current_dir(&project_dir)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("22.0.0"));
+    assert!(stdout.contains("already installed"));
 
     let _ = std::fs::remove_dir_all(&home);
 }
@@ -1449,7 +1580,10 @@ fn test_sync_help() {
 // Advisory warning tests - verify that lifecycle warnings are shown
 
 #[test]
-#[ignore] // Network-dependent: requires actual tool installation
+#[cfg_attr(
+    not(feature = "network-tests"),
+    ignore = "requires --features network-tests"
+)]
 fn test_install_shows_eol_warning() {
     // This test verifies that installing an EOL version shows advisory warning
     // Example: node@16 is EOL and should show warning
@@ -1484,7 +1618,10 @@ fn test_install_shows_eol_warning() {
 }
 
 #[test]
-#[ignore] // Network-dependent: requires actual tool installation
+#[cfg_attr(
+    not(feature = "network-tests"),
+    ignore = "requires --features network-tests"
+)]
 fn test_use_shows_eol_warning() {
     // This test verifies that using an EOL version shows advisory warning
     let home = fresh_temp_dir("vex_test_use_eol_warning");
@@ -1529,7 +1666,10 @@ fn test_use_shows_eol_warning() {
 }
 
 #[test]
-#[ignore] // Network-dependent: requires actual tool installation
+#[cfg_attr(
+    not(feature = "network-tests"),
+    ignore = "requires --features network-tests"
+)]
 fn test_install_from_file_shows_warnings() {
     // This test verifies that install --from shows advisory warnings
     let home = fresh_temp_dir("vex_test_install_from_file_warnings");

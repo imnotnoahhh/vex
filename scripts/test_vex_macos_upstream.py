@@ -695,6 +695,7 @@ def resolve_python(spec: str) -> ToolPlan:
         name = parts[1].strip()
         if (
             name.endswith("install_only.tar.gz")
+            and "freethreaded" not in name
             and "stripped" not in name
             and arch_fragment in name
             and name.startswith("cpython-")
@@ -719,10 +720,15 @@ def resolve_python(spec: str) -> ToolPlan:
     else:
         resolved = resolve_prefix_version(spec, versions)
 
-    prefix = f"cpython-{resolved}+"
-    matching_name = next((asset_name for asset_name in asset_names if asset_name.startswith(prefix)), None)
+    matching_name = (
+        f"cpython-{resolved}+{tag}-{arch_fragment}-install_only.tar.gz"
+    )
     if not matching_name:
         raise TestFailure(f"python-build-standalone has no matching asset for {resolved}")
+    if matching_name not in asset_names:
+        raise TestFailure(
+            f"python-build-standalone has no standard install_only asset for {resolved}"
+        )
     download_url = (
         f"https://github.com/astral-sh/python-build-standalone/releases/download/{tag}/{matching_name}"
     )

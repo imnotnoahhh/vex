@@ -23,6 +23,17 @@ Recommended label set:
 - `priority:p3`
 - `ai-ready`
 
+## 2026-03-19 Roadmap Update
+
+The live GitHub issues have moved beyond some of the older draft text below. When copying from this file, align with the current scopes:
+
+- project templates now mean five built-in core templates (`node-typescript`, `go-service`, `java-basic`, `rust-cli`, `python-venv`) plus `--list-templates`, `--dry-run`, and safe `--add-only`
+- remote team config now means a narrow `vex-config.toml` schema with `version = 1` plus `[tools]`, loaded from local files, HTTPS, or Git, with local `.tool-versions` overriding the remote baseline
+- the official GitHub Action now lives in this repository as a macOS-only composite action with cache restore for `~/.vex/cache` and `~/.vex/toolchains`, plus explicit re-activation after cache restore
+- Docker support is deferred rather than treated as an active near-term ecosystem item
+- engineering quality work should emphasize failure recovery and deterministic cleanup, not raw coverage percentages
+- older file-path references below should be read as responsibility areas, not exact current files; the live codebase now routes through `src/main.rs` → `src/app.rs` / `src/cli/` and many subsystems are split into submodules
+
 Suggested milestone grouping:
 - `v1.3`: issues 02, 03, 04, 08, 09
 - `v1.4`: issues 05, 06, 07, 10, 11
@@ -39,7 +50,7 @@ Issue body:
 
 ## Background
 
-`vex` already supports multi-tool version management, `.tool-versions`, project-local `.vex.toml`, health checks, self-update, interactive version selection, and upgrade/outdated flows. The next phase should improve product quality in three directions:
+`vex` already supports multi-tool version management, `.tool-versions`, project-local `.vex.toml`, health checks, self-update, and upgrade/outdated flows. The next phase should improve product quality in three directions:
 
 - better decision support, such as lifecycle and upgrade advisories
 - better workflows, such as sync, lockfiles, offline mode, and team sharing
@@ -282,7 +293,7 @@ Issue body:
 
 ## Background
 
-`vex` currently mixes plain `println!`, spinner output, progress bars, and one-off interactive selection. The result works, but the UX is inconsistent and hard to scale as more workflows become interactive.
+`vex` currently mixes plain `println!`, spinner output, progress bars, and one-off command-specific UI code. The result works, but the UX is inconsistent and hard to scale as more workflows become interactive.
 
 ## Problem
 
@@ -987,7 +998,7 @@ vex sync --from git@github.com:company/vex-config.git
 Suggested labels: `type:feature`, `area:ecosystem`, `priority:p2`, `ai-ready`
 
 Title:
-`Ecosystem: publish an official setup-vex GitHub Action for CI workflows`
+`Ecosystem: publish an official repository-root GitHub Action for CI workflows`
 
 Issue body:
 
@@ -997,7 +1008,7 @@ An official setup action would reduce friction for GitHub Actions users and make
 
 ## Goal
 
-Create an official action, tentatively `vex-sh/setup-vex`, with support for:
+Create an official action in this repository (`uses: imnotnoahhh/vex@v1`) with support for:
 
 - explicit tool specs
 - auto-install from project definitions
@@ -1008,13 +1019,13 @@ Create an official action, tentatively `vex-sh/setup-vex`, with support for:
 Examples:
 
 ```yaml
-- uses: vex-sh/setup-vex@v1
+- uses: imnotnoahhh/vex@v1
   with:
     tools: node@20 go@1.22
 ```
 
 ```yaml
-- uses: vex-sh/setup-vex@v1
+- uses: imnotnoahhh/vex@v1
   with:
     auto-install: true
 ```
