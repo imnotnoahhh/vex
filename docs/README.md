@@ -8,6 +8,9 @@ Welcome to the vex documentation! This directory contains guides and resources t
 - [Installation Guide](guides/installation.md) - Detailed installation instructions
 - [Configuration Guide](guides/configuration.md) - Global config, `.vex.toml`, `vex-config.toml`, `exec`, and `run`
 - [Shell Integration Guide](guides/shell-integration.md) - Set up auto-switching for your shell
+- [Migration and Comparison Guide](guides/migration-comparison.md) - Move from `nvm`, `asdf`, or `pyenv` with verified scope
+- [Benchmark Methodology Guide](guides/benchmark-methodology.md) - Measure `vex` fairly and report results reproducibly
+- [Best Practices Guide](guides/best-practices.md) - Team, monorepo, CI, and Python workflow recommendations
 - [Troubleshooting Guide](guides/troubleshooting.md) - Common issues, template conflicts, and CI/team-config recovery tips
 
 ## Main Documentation
@@ -51,6 +54,9 @@ The API documentation includes:
 - **installation.md** - Detailed installation instructions for local installs plus the official macOS GitHub Action
 - **configuration.md** - Global configuration, project config, team config sync, and task execution
 - **shell-integration.md** - Shell hook setup for zsh, bash, fish, and nushell
+- **migration-comparison.md** - Source-backed migration guidance for `nvm`, `asdf`, and `pyenv`
+- **benchmark-methodology.md** - Reproducible benchmark guidance for internal and user-facing flows
+- **best-practices.md** - Recommended patterns for teams, monorepos, CI, and Python projects
 - **troubleshooting.md** - Common problems, conflict handling, and recovery guidance
 
 ### Developer Documentation
