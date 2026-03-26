@@ -6,6 +6,7 @@ Welcome to the vex documentation! This directory contains guides and resources t
 
 - [Getting Started Guide](guides/getting-started.md) - New to vex? Start here!
 - [Installation Guide](guides/installation.md) - Detailed installation instructions
+- [Command Reference](guides/command-reference.md) - Full top-level command, subcommand, and option reference
 - [Configuration Guide](guides/configuration.md) - Global config, `.vex.toml`, `vex-config.toml`, `exec`, and `run`
 - [Shell Integration Guide](guides/shell-integration.md) - Set up auto-switching for your shell
 - [Migration and Comparison Guide](guides/migration-comparison.md) - Move from `nvm`, `asdf`, or `pyenv` with verified scope
@@ -52,6 +53,7 @@ The API documentation includes:
 
 - **getting-started.md** - Quick start guide for new users
 - **installation.md** - Detailed installation instructions for local installs plus the official macOS GitHub Action
+- **command-reference.md** - Full CLI command and option reference aligned with `vex --help`
 - **configuration.md** - Global configuration, project config, team config sync, and task execution
 - **shell-integration.md** - Shell hook setup for zsh, bash, fish, and nushell
 - **migration-comparison.md** - Source-backed migration guidance for `nvm`, `asdf`, and `pyenv`
@@ -85,6 +87,7 @@ Found a typo or want to improve the docs? Contributions are welcome!
 Recent user-facing additions that should stay in sync across these docs:
 
 - `vex init --template`, `--list-templates`, and `--add-only`
+- full CLI reference coverage in `command-reference.md`
 - safe remote team config sources via `vex install --from` / `vex sync --from`
 - the macOS-only `imnotnoahhh/vex` GitHub Action and cache behavior
 - failure recovery expectations for install and switch workflows
