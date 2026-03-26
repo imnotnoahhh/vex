@@ -85,7 +85,7 @@ Automatically downloads the correct prebuilt binary for your macOS architecture 
 curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash
 
 # Specific tag
-curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.2.0
+curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.5.0
 ```
 
 For auditability, review the script before running:
@@ -196,8 +196,8 @@ vex upgrade --all
 # Show what is behind latest in the current managed context
 vex outdated
 
-# Show available aliases
-vex alias node
+# List user-defined aliases
+vex alias list
 
 # Run a command in the resolved vex-managed environment
 vex exec -- node -v
@@ -216,6 +216,8 @@ vex install
 ```
 
 ## Commands
+
+For the full CLI reference, including command groups and option details, see [docs/guides/command-reference.md](docs/guides/command-reference.md).
 
 | Command | Description | Example |
 |---------|-------------|---------|
@@ -246,17 +248,19 @@ vex install
 | `vex outdated --json` | Show outdated status as JSON | `vex outdated --json` |
 | `vex prune --dry-run` | Preview cache, stale-lock, and unused-toolchain cleanup | `vex prune --dry-run` |
 | `vex gc` | Alias for `vex prune` | `vex gc --dry-run` |
-| `vex alias <tool>` | Show available version aliases | `vex alias node` |
+| `vex install --force` | Reinstall a version even if it already exists | `vex install node@20 --force` |
+| `vex install --frozen` | Install from version files while strictly enforcing `.tool-versions.lock` | `vex install --frozen` |
 | `vex alias set <tool> <alias> <version>` | Set custom version alias | `vex alias set node lts-current 20.11.0` |
 | `vex alias list [tool]` | List all aliases | `vex alias list node` |
 | `vex alias delete <tool> <alias>` | Delete an alias | `vex alias delete node lts-current` |
 | `vex lock` | Generate lockfile from `.tool-versions` | `vex lock` |
 | `vex sync --from <source>` | Sync from a version file, `vex-config.toml`, HTTPS URL, or Git repo | `vex sync --from https://company.example/vex-config.toml` |
 | `vex sync --frozen` | Install from lockfile | `vex sync --frozen` |
+| `vex sync --offline` | Sync using cached metadata and archives only | `vex sync --offline` |
 | `vex tui` | Launch interactive dashboard | `vex tui` |
 | `vex install --offline` | Install from cache only | `vex install node@20 --offline` |
 | `vex exec -- <command>` | Run a command in the resolved vex environment without switching global state | `vex exec -- node -v` |
-| `vex run <task>` | Run a named task from `.vex.toml` | `vex run test` |
+| `vex run <task> [args...]` | Run a named task from `.vex.toml` | `vex run test -- --nocapture` |
 | `vex current` | Show active versions | `vex current` |
 | `vex current --json` | Show active versions as JSON | `vex current --json` |
 | `vex uninstall <tool@version>` | Uninstall a version | `vex uninstall node@20.11.0` |
@@ -281,6 +285,7 @@ vex install
 ## Documentation
 
 - User guides and troubleshooting: [docs/README.md](docs/README.md)
+- Full command reference: [docs/guides/command-reference.md](docs/guides/command-reference.md)
 - Migration and comparison: [docs/guides/migration-comparison.md](docs/guides/migration-comparison.md)
 - Benchmark methodology: [docs/guides/benchmark-methodology.md](docs/guides/benchmark-methodology.md)
 - Team and CI recommendations: [docs/guides/best-practices.md](docs/guides/best-practices.md)
@@ -482,7 +487,8 @@ vex install java@21       # exact (Java uses single numbers)
 | Python | `latest`, `stable`, `bugfix`, `security` |
 
 ```bash
-vex alias node    # show all aliases and their resolved values
+# Inspect remote versions before choosing a built-in alias
+vex list-remote node --filter lts
 ```
 
 ## `.tool-versions` Workflow

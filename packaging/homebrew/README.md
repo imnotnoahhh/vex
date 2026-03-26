@@ -22,10 +22,10 @@ The formula is rendered from release artifacts with:
 
 ```bash
 bash scripts/render-homebrew-formula.sh \
-  1.2.0 \
-  https://github.com/imnotnoahhh/vex/releases/download/v1.2.0/vex-aarch64-apple-darwin.tar.gz \
+  <version> \
+  https://github.com/imnotnoahhh/vex/releases/download/v<version>/vex-aarch64-apple-darwin.tar.gz \
   <arm64-sha256> \
-  https://github.com/imnotnoahhh/vex/releases/download/v1.2.0/vex-x86_64-apple-darwin.tar.gz \
+  https://github.com/imnotnoahhh/vex/releases/download/v<version>/vex-x86_64-apple-darwin.tar.gz \
   <x86_64-sha256> \
   /tmp/vex.rb
 ```

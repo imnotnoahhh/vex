@@ -31,7 +31,7 @@ This script will:
 #### Install Specific Version
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.2.0
+curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.5.0
 ```
 
 #### Audit the Script First
@@ -150,7 +150,7 @@ After installation, verify vex is working:
 
 ```bash
 vex --version
-# vex 1.2.0
+# vex 1.5.0
 
 which vex
 # /Users/yourname/.local/bin/vex
@@ -308,6 +308,7 @@ vex run test
 ```
 
 For the full configuration reference, see [Configuration Guide](configuration.md).
+For the full command surface, see [Command Reference](command-reference.md).
 
 ## Troubleshooting Installation
 
@@ -470,6 +471,7 @@ exec nu
 ## Next Steps
 
 - [Getting Started Guide](getting-started.md) - Learn basic usage
+- [Command Reference](command-reference.md) - Full CLI reference
 - [Shell Integration Guide](shell-integration.md) - Advanced shell setup
 - [Troubleshooting Guide](troubleshooting.md) - Common issues and solutions
 
