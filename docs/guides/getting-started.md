@@ -337,15 +337,16 @@ vex install rust@stable       # Latest stable
 vex install rust@latest       # Same as stable
 ```
 
-See available aliases:
+Inspect remote versions before choosing a built-in alias:
 
 ```bash
-vex alias node
+vex list-remote node --filter lts
 ```
 
 ## Next Steps
 
 - [Installation Guide](installation.md) - Detailed installation options
+- [Command Reference](command-reference.md) - Full CLI reference
 - [Shell Integration Guide](shell-integration.md) - Advanced shell setup
 - [Troubleshooting Guide](troubleshooting.md) - Common issues and solutions
 - [Main README](../../README.md) - Full feature list and documentation

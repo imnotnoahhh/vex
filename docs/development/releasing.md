@@ -24,9 +24,9 @@ MAJOR.MINOR.PATCH
 
 ### Version Examples
 
-- `1.1.0` → `1.1.1`: Bug fix
-- `1.1.1` → `1.2.0`: New feature (backward compatible)
-- `1.2.0` → `2.0.0`: Breaking change
+- `1.4.0` → `1.5.0`: New feature (backward compatible)
+- `1.5.0` → `1.5.1`: Bug fix
+- `1.5.0` → `2.0.0`: Breaking change
 
 ### Pre-1.0 Versioning
 
@@ -92,7 +92,7 @@ Update version in the following files:
 - [ ] `Cargo.toml`
   ```toml
   [package]
-  version = "1.2.0"
+  version = "1.5.0"
   ```
 
 - [ ] `Cargo.lock` (run `cargo build` to update)
@@ -111,7 +111,7 @@ Update version in the following files:
 ```markdown
 ## [Unreleased]
 
-## [1.2.0] - 2026-03-13
+## [1.5.0] - 2026-03-26
 
 ### Fixed
 - Rust version-specific checksum resolution for historical releases
@@ -143,13 +143,13 @@ Create a release preparation commit:
 
 ```bash
 git add Cargo.toml Cargo.lock CHANGELOG.md README.md
-git commit -m "chore: prepare v1.2.0 release"
+git commit -m "chore: prepare v1.5.0 release"
 ```
 
 ### 6. Create Pull Request
 
 - [ ] Open PR to `main` branch
-- [ ] Title: `chore: prepare v1.2.0 release`
+- [ ] Title: `chore: prepare v1.5.0 release`
 - [ ] Description: Link to CHANGELOG section
 - [ ] Wait for CI to pass
 - [ ] Get approval from maintainer
@@ -167,10 +167,10 @@ git checkout main
 git pull origin main
 
 # Create annotated tag
-git tag -a v1.2.0 -m "Release v1.2.0"
+git tag -a v1.5.0 -m "Release v1.5.0"
 
 # Push tag to GitHub
-git push origin v1.2.0
+git push origin v1.5.0
 ```
 
 ### 2. GitHub Release
@@ -186,8 +186,8 @@ GitHub Actions will automatically:
 
 1. Go to https://github.com/imnotnoahhh/vex/releases
 2. Click "Draft a new release"
-3. Choose tag: `v1.2.0`
-4. Release title: `v1.2.0`
+3. Choose tag: `v1.5.0`
+4. Release title: `v1.5.0`
 5. Description: Copy from CHANGELOG.md
 6. Attach binaries (if not automated):
    - `vex-aarch64-apple-darwin.tar.gz`
@@ -200,7 +200,7 @@ GitHub Actions will automatically:
 - [ ] Download and test binaries
   ```bash
   # Download
-  curl -LO https://github.com/imnotnoahhh/vex/releases/download/v1.2.0/vex-aarch64-apple-darwin.tar.gz
+  curl -LO https://github.com/imnotnoahhh/vex/releases/download/v1.5.0/vex-aarch64-apple-darwin.tar.gz
 
   # Extract
   tar -xzf vex-aarch64-apple-darwin.tar.gz
@@ -211,7 +211,7 @@ GitHub Actions will automatically:
 
 - [ ] Test installation script
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.2.0
+  curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.5.0
   ```
 
 ## CI/CD Pipeline
@@ -325,7 +325,7 @@ For critical bugs in production:
 ### 1. Create Hotfix Branch
 
 ```bash
-git checkout -b hotfix/v1.2.1 v1.2.0
+git checkout -b hotfix/v1.5.1 v1.5.0
 ```
 
 ### 2. Fix Bug
@@ -338,23 +338,22 @@ git commit -m "fix: critical bug description"
 
 ### 3. Update Version
 
-- Update `Cargo.toml` to `1.1.2` (PATCH bump)
-- Update `Cargo.toml` to `1.2.1` (PATCH bump)
+- Update `Cargo.toml` to `1.5.1` (PATCH bump)
 - Update `CHANGELOG.md`
 
 ### 4. Release
 
 ```bash
 # Commit version bump
-git commit -am "chore: prepare v1.2.1 hotfix"
+git commit -am "chore: prepare v1.5.1 hotfix"
 
 # Merge to main
 git checkout main
-git merge hotfix/v1.2.1
+git merge hotfix/v1.5.1
 
 # Tag and push
-git tag -a v1.2.1 -m "Hotfix v1.2.1"
-git push origin main v1.2.1
+git tag -a v1.5.1 -m "Hotfix v1.5.1"
+git push origin main v1.5.1
 ```
 
 ## Rollback Process
@@ -371,10 +370,10 @@ If a release has critical issues:
 
 ```bash
 # Delete tag locally
-git tag -d v1.2.0
+git tag -d v1.5.0
 
 # Delete tag on GitHub
-git push origin :refs/tags/v1.2.0
+git push origin :refs/tags/v1.5.0
 
 # Delete GitHub Release (manual)
 # Go to Releases page and delete
@@ -389,13 +388,15 @@ git push origin :refs/tags/v1.2.0
 ### 4. Fix and Re-Release
 
 - Fix the issue
-- Bump version (for example, `1.2.0` → `1.2.1`)
+- Bump version (for example, `1.5.0` → `1.5.1`)
 - Follow normal release process
 
 ## Version History
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.5.0 | 2026-03-26 | Templates, team config sync, official GitHub Action, release-ready docs refresh |
+| 1.4.0 | 2026-03-16 | Aliases, TUI, offline mode, lockfile support, env auto-export |
 | 1.0.0 | 2026-03-10 | Breaking: install auto-switch, Python binary expansion, security hardening |
 | 0.2.3 | 2026-03-08 | Fix self-update, static liblzma linking |
 | 0.2.2 | 2026-03-08 | ⚠️ Critical bugs - do not use |
