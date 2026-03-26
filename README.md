@@ -281,6 +281,9 @@ vex install
 ## Documentation
 
 - User guides and troubleshooting: [docs/README.md](docs/README.md)
+- Migration and comparison: [docs/guides/migration-comparison.md](docs/guides/migration-comparison.md)
+- Benchmark methodology: [docs/guides/benchmark-methodology.md](docs/guides/benchmark-methodology.md)
+- Team and CI recommendations: [docs/guides/best-practices.md](docs/guides/best-practices.md)
 - Maintainer and contributor docs: [docs/development/README.md](docs/development/README.md)
 
 ## Configuration
@@ -677,6 +680,8 @@ Benchmarked operations:
 - Parallel vs sequential file extraction
 
 Note: Benchmarks are not run in CI to keep build times fast. Run them locally to measure performance improvements.
+
+For reporting guidance and fair comparison rules, see [docs/guides/benchmark-methodology.md](docs/guides/benchmark-methodology.md).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
