@@ -102,7 +102,7 @@ src/
 **Permanent Branch:**
 - `main` — production branch, protected, only accepts PRs
   - Every merge to `main` should be release-ready
-  - Tagged with version numbers (for example, `v1.1.1`)
+  - Tagged with version numbers (for example, `v1.5.0`)
   - CI runs on every push
 
 **Temporary Branches:**

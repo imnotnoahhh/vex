@@ -7,16 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-03-26
+
 ### Added
 
 - **Project templates** — `vex init --list-templates`, five built-in core starters (`node-typescript`, `go-service`, `java-basic`, `rust-cli`, `python-venv`), plus safe `--dry-run` and `--add-only` modes for bootstrapping new or existing repositories.
 - **Safe team config sync** — `vex install --from` and `vex sync --from` now accept local version files, `vex-config.toml`, HTTPS-hosted team config, and Git repositories with a narrow `[tools]`-only schema. Local `.tool-versions` entries override the team baseline.
 - **Official macOS GitHub Action** — Added a repository-root composite action (`uses: imnotnoahhh/vex@v1`) with cache support for `~/.vex/cache` and `~/.vex/toolchains`, plus explicit tool re-activation after cache restore.
+- **Release-ready documentation sweep** — Added complete migration-comparison, benchmark-methodology, best-practices, and command-reference guides so the `v1.5.0` docs cover the current CLI surface and release workflows more completely.
 
 ### Changed
 
 - **Failure recovery hardening** — Install cleanup now removes partially moved final toolchain directories when post-install hooks fail, and tests now cover rollback and cleanup behavior for install/switch edge cases.
-- **Documentation refresh** — Updated user guides, maintainer docs, issue drafts, and workflow docs to reflect templates, safe team config sync, the macOS GitHub Action, and the current roadmap scope.
+- **Documentation refresh** — Updated README, user guides, maintainer docs, issue drafts, packaging docs, and workflow docs to reflect templates, safe team config sync, the macOS GitHub Action, the `v1.5.0` release, and the real `vex --help` command surface.
 
 ## [1.4.0] - 2026-03-16
 
