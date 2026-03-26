@@ -22,13 +22,15 @@ The formula is rendered from release artifacts with:
 
 ```bash
 bash scripts/render-homebrew-formula.sh \
-  <version> \
-  https://github.com/imnotnoahhh/vex/releases/download/v<version>/vex-aarch64-apple-darwin.tar.gz \
+  <semver> \
+  https://github.com/imnotnoahhh/vex/releases/download/v<semver>/vex-aarch64-apple-darwin.tar.gz \
   <arm64-sha256> \
-  https://github.com/imnotnoahhh/vex/releases/download/v<version>/vex-x86_64-apple-darwin.tar.gz \
+  https://github.com/imnotnoahhh/vex/releases/download/v<semver>/vex-x86_64-apple-darwin.tar.gz \
   <x86_64-sha256> \
   /tmp/vex.rb
 ```
+
+Use the plain semantic version for `<semver>` (for example, `1.5.0` without the leading `v`).
 
 The generated formula:
 
