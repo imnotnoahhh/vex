@@ -90,7 +90,8 @@ fn test_verify_checksum_success() {
 
     let mut hasher = Sha256::new();
     hasher.update(b"test content");
-    let expected = format!("{:x}", hasher.finalize());
+    let digest = hasher.finalize();
+    let expected: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
 
     assert!(cache.verify_checksum(&test_file, &expected).is_ok());
 }

@@ -5,6 +5,10 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+fn encode_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 pub(crate) fn sha256_hex(file_path: &Path) -> Result<String> {
     let mut file = File::open(file_path)?;
     let mut hasher = sha2::Sha256::new();
@@ -18,7 +22,7 @@ pub(crate) fn sha256_hex(file_path: &Path) -> Result<String> {
         hasher.update(&buffer[..bytes_read]);
     }
 
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(encode_hex(hasher.finalize().as_ref()))
 }
 
 pub(crate) fn verify_sha256(file_path: &Path, expected: &str) -> Result<()> {
