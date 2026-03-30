@@ -46,9 +46,8 @@ impl Progress {
     /// Finish with a success message
     pub fn finish_with_success(self, message: &str) {
         if let Some(bar) = self.bar {
-            bar.finish_with_message(format!("{} {}", "✓".green(), message));
-        } else {
-            success(message);
+            bar.finish_and_clear();
         }
+        success(message);
     }
 }

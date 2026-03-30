@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.5.0] - 2026-03-26
+## [1.5.0] - 2026-03-30
 
 ### Added
 
@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Failure recovery hardening** — Install cleanup now removes partially moved final toolchain directories when post-install hooks fail, and tests now cover rollback and cleanup behavior for install/switch edge cases.
 - **Documentation refresh** — Updated README, user guides, maintainer docs, issue drafts, packaging docs, and workflow docs to reflect templates, safe team config sync, the macOS GitHub Action, the `v1.5.0` release, and the real `vex --help` command surface.
+- **Logging is now opt-in** — Internal tracing output is now disabled by default unless `VEX_LOG` is set explicitly, so normal installs and upgrades no longer interleave file-and-line debug logs with user-facing progress output.
+
+### Fixed
+
+- **Interactive download output no longer fights itself** — Online installs now avoid stacking the installer spinner on top of the downloader progress bar during archive downloads, which prevents the garbled flashing terminal output seen in long Rust and Node downloads.
+- **Node lifecycle recommendations now track the current official LTS line** — Node advisories now follow the official Node.js release schedule, so maintenance-line warnings recommend `node@24` on 2026-03-28 instead of the stale `node@22` guidance.
+- **Strict macOS release checks now recover from local urllib edge cases** — The strict release validation scripts now fall back to `curl` for unexpected local urllib failures such as `unknown encoding: idna`, matching the manual validation path that passed on 2026-03-30.
 
 ## [1.4.0] - 2026-03-16
 

@@ -56,6 +56,10 @@ fn fetch_with_spinner(
     use_cache: bool,
     offline: bool,
 ) -> Result<Vec<Version>> {
+    if crate::logging::diagnostics_enabled() {
+        return fetch_versions_cached(tool, use_cache, offline);
+    }
+
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner()

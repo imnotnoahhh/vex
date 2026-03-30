@@ -444,6 +444,10 @@ def fetch_text(url: str, *, headers: Optional[Dict[str, str]] = None) -> str:
             last_error = exc
             if attempt == 3:
                 break
+        except Exception as exc:
+            last_error = exc
+            if attempt == 3:
+                break
     try:
         REPORT.warn(f"urllib fetch failed for {url}; retrying with curl")
         return fetch_text_with_curl(url, headers=req_headers)
@@ -486,6 +490,10 @@ def fetch_url_and_final_location(url: str, *, headers: Optional[Dict[str, str]] 
             with urllib.request.urlopen(request, timeout=60) as response:
                 return "", response.geturl()
         except (urllib.error.URLError, TimeoutError, http.client.HTTPException, http.client.IncompleteRead) as exc:
+            last_error = exc
+            if attempt == 3:
+                break
+        except Exception as exc:
             last_error = exc
             if attempt == 3:
                 break

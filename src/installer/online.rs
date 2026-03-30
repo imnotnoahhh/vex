@@ -42,10 +42,11 @@ pub(super) fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     check_disk_space(&vex, config::MIN_FREE_SPACE_BYTES)?;
 
     let ctx = ui::UiContext::new();
-    let progress = ui::Progress::new(
-        &ctx,
-        &format!("Installing {} {}", tool.name().yellow(), version.yellow()),
-    );
+    ui::info(&format!(
+        "Installing {} {}",
+        tool.name().yellow(),
+        version.yellow()
+    ));
 
     let cache_dir = config::cache_dir().ok_or(VexError::HomeDirectoryNotFound)?;
     fs::create_dir_all(&cache_dir)?;
@@ -64,16 +65,16 @@ pub(super) fn install(tool: &dyn Tool, version: &str) -> Result<()> {
         tool.name(),
         &tool.download_url(version, arch)?,
     )?;
-    progress.set_message(&format!("Downloading from {}", download_url.dimmed()));
     download_with_retry_in_current_context(
         &download_url,
         &archive_path,
         settings.network.download_retries,
     )?;
 
+    let progress = ui::Progress::new(&ctx, "Verifying checksum");
+
     let verified_checksum = match tool.get_checksum(version, arch) {
         Ok(Some(expected)) => {
-            progress.set_message("Verifying checksum");
             verify_checksum(&archive_path, &expected)?;
             Some(expected)
         }

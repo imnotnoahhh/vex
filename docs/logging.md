@@ -6,7 +6,7 @@ vex uses the `tracing` crate for structured logging, providing better debugging 
 
 ### Enabling Logs
 
-By default, vex logs at the `info` level. You can control the log level using the `VEX_LOG` environment variable:
+By default, vex does not emit internal tracing logs during normal CLI use. To enable diagnostics, set the `VEX_LOG` environment variable explicitly:
 
 ```bash
 # Show all logs (most verbose)
@@ -15,7 +15,7 @@ VEX_LOG=trace vex install node@20
 # Show debug information
 VEX_LOG=debug vex install node@20
 
-# Show general information (default)
+# Show general information
 VEX_LOG=info vex install node@20
 
 # Show warnings only
@@ -24,6 +24,8 @@ VEX_LOG=warn vex install node@20
 # Show errors only
 VEX_LOG=error vex install node@20
 ```
+
+When `VEX_LOG` is enabled, vex also disables interactive spinners and progress bars so diagnostic logs stay readable and do not overwrite progress output.
 
 ### Log Output
 
@@ -82,7 +84,7 @@ error!("Operation failed: {}", error);
 ## Benefits
 
 1. **Structured Logging**: Logs are structured and can be easily parsed
-2. **Performance**: Minimal overhead when logging is disabled
+2. **Performance**: Minimal overhead when logging is disabled by default
 3. **Debugging**: File and line numbers help locate issues quickly
 4. **Flexibility**: Easy to filter logs by level or module
 

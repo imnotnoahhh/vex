@@ -554,6 +554,44 @@ The strict validation scripts cover:
 - Python `.venv` init/freeze/sync workflows
 - manual multi-version switching and project/global `cd` auto-switching
 
+### Manual macOS Smoke Checklist
+
+When you want a release-candidate sanity pass by hand, use an isolated `HOME` so you do not touch your real `~/.vex` state:
+
+```bash
+export VEX_BIN="$HOME/.local/bin/vex"
+export VEX_TEST_HOME=/tmp/vex-manual-smoke
+export VEX_TEST_REPO=/tmp/vex-manual-project
+
+rm -rf "$VEX_TEST_HOME" "$VEX_TEST_REPO"
+mkdir -p "$VEX_TEST_HOME" "$VEX_TEST_REPO"
+
+HOME="$VEX_TEST_HOME" "$VEX_BIN" init
+touch "$VEX_TEST_HOME/.zshrc"
+printf 'export PATH="$HOME/.vex/bin:$PATH"\neval "$(vex env zsh)"\n' >> "$VEX_TEST_HOME/.zshrc"
+export PATH="$VEX_TEST_HOME/.vex/bin:$PATH"
+HOME="$VEX_TEST_HOME" "$VEX_BIN" doctor
+
+HOME="$VEX_TEST_HOME" "$VEX_BIN" install node@20
+HOME="$VEX_TEST_HOME" "$VEX_BIN" install go@latest
+HOME="$VEX_TEST_HOME" "$VEX_BIN" install rust@stable
+HOME="$VEX_TEST_HOME" "$VEX_BIN" install java@21
+HOME="$VEX_TEST_HOME" "$VEX_BIN" install python@3.12
+
+HOME="$VEX_TEST_HOME" "$VEX_BIN" current
+node -v
+go version
+rustc --version
+java -version
+python3 --version
+```
+
+Notes:
+- Create a temporary shell rc file in the isolated home before `vex doctor` so shell-hook checks do not fail just because the temp home started empty.
+- Export `PATH="$VEX_TEST_HOME/.vex/bin:$PATH"` before `vex doctor` so PATH checks reflect the isolated test environment.
+- Use `go@latest` or an active minor from `vex list-remote go`; do not hardcode stale Go lines in release smoke steps.
+- After the tool installs pass, continue with `.tool-versions`, `vex run`, `vex exec`, and `vex python init/freeze/sync` checks from the strict scripts if you want full manual coverage.
+
 ## CI/CD Testing
 
 ### GitHub Actions Workflow

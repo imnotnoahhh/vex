@@ -12,7 +12,7 @@ impl UiContext {
     /// Create a new UI context
     pub fn new() -> Self {
         Self {
-            interactive: io::stdout().is_terminal(),
+            interactive: io::stdout().is_terminal() && !crate::logging::diagnostics_enabled(),
         }
     }
 
