@@ -139,6 +139,10 @@ pub(super) fn node_advisory_at(version: &str, today: NaiveDate) -> Advisory {
 }
 
 fn phase_for(line: NodeLine, today: NaiveDate) -> NodePhase {
+    if today < line.start {
+        return NodePhase::Current;
+    }
+
     if today >= line.end {
         return NodePhase::Eol;
     }
@@ -155,11 +159,7 @@ fn phase_for(line: NodeLine, today: NaiveDate) -> NodePhase {
         }
     }
 
-    if today >= line.start {
-        NodePhase::Current
-    } else {
-        NodePhase::Current
-    }
+    NodePhase::Current
 }
 
 fn recommendation(today: NaiveDate, prefix: &str) -> String {
