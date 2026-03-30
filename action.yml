@@ -40,7 +40,7 @@ runs:
 
     - name: Restore vex cache
       if: ${{ inputs.use-cache == 'true' }}
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.vex/cache

@@ -35,7 +35,7 @@ xz2 = { version = "0.1", features = ["static"] }
 indicatif = "0.18"
 
 # 加密
-sha2 = "0.10"
+sha2 = "0.11"
 
 # 文件系统
 dirs = "6"
