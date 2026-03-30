@@ -24,8 +24,9 @@ fn test_list_installed_no_toolchains_dir() {
     use tempfile::TempDir;
 
     let temp = TempDir::new().unwrap();
-    let result =
-        with_home(temp.path(), || commands::versions::list_installed("node", output::OutputMode::Text));
+    let result = with_home(temp.path(), || {
+        commands::versions::list_installed("node", output::OutputMode::Text)
+    });
     assert!(result.is_ok());
 }
 
@@ -35,8 +36,9 @@ fn test_list_installed_empty_dir() {
 
     let temp = TempDir::new().unwrap();
     std::fs::create_dir_all(temp.path().join(".vex").join("toolchains").join("node")).unwrap();
-    let result =
-        with_home(temp.path(), || commands::versions::list_installed("node", output::OutputMode::Text));
+    let result = with_home(temp.path(), || {
+        commands::versions::list_installed("node", output::OutputMode::Text)
+    });
     assert!(result.is_ok());
 }
 
@@ -46,7 +48,9 @@ fn test_show_current_no_current_dir() {
 
     let temp = TempDir::new().unwrap();
     std::fs::create_dir_all(temp.path().join(".vex")).unwrap();
-    let result = with_home(temp.path(), || commands::current::show(output::OutputMode::Text));
+    let result = with_home(temp.path(), || {
+        commands::current::show(output::OutputMode::Text)
+    });
     assert!(result.is_ok());
 }
 
@@ -56,6 +60,8 @@ fn test_show_current_empty_current_dir() {
 
     let temp = TempDir::new().unwrap();
     std::fs::create_dir_all(temp.path().join(".vex").join("current")).unwrap();
-    let result = with_home(temp.path(), || commands::current::show(output::OutputMode::Text));
+    let result = with_home(temp.path(), || {
+        commands::current::show(output::OutputMode::Text)
+    });
     assert!(result.is_ok());
 }
