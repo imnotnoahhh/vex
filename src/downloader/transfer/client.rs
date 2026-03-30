@@ -3,7 +3,7 @@ use crate::error::{Result, VexError};
 #[cfg(test)]
 use crate::http;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::io::{Read, Write};
+use std::io::{IsTerminal, Read, Write};
 use std::path::Path;
 use tracing::{debug, error, info};
 
@@ -29,14 +29,19 @@ pub(super) fn download_file_with_client(
     let total_size = response.content_length().unwrap_or(0);
     debug!("Download size: {} bytes", total_size);
 
-    let progress = ProgressBar::new(total_size);
-    progress.set_style(
-        ProgressStyle::default_bar()
-            .template("{msg}\n{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} {binary_bytes_per_sec} ({eta})")
-            .unwrap()
-            .progress_chars("#>-"),
-    );
-    progress.set_message(format!("Downloading {}", url));
+    let progress = if std::io::stdout().is_terminal() && !crate::logging::diagnostics_enabled() {
+        let progress = ProgressBar::new(total_size);
+        progress.set_style(
+            ProgressStyle::default_bar()
+                .template("{msg}\n{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} {binary_bytes_per_sec} ({eta})")
+                .unwrap()
+                .progress_chars("#>-"),
+        );
+        progress.set_message(format!("Downloading {}", url));
+        progress
+    } else {
+        ProgressBar::hidden()
+    };
 
     let mut temp_file = tempfile::NamedTempFile::new_in(dest.parent().ok_or_else(|| {
         VexError::Io(std::io::Error::new(
@@ -62,13 +67,13 @@ pub(super) fn download_file_with_client(
     })();
 
     if result.is_err() {
-        progress.finish_with_message("Download failed");
+        progress.finish_and_clear();
         return result;
     }
 
     temp_file
         .persist(dest)
         .map_err(|err| VexError::Io(err.error))?;
-    progress.finish_with_message("Download complete");
+    progress.finish_and_clear();
     Ok(())
 }

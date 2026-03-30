@@ -130,12 +130,20 @@ fn test_resolve_alias_unknown() {
 }
 
 #[test]
+#[cfg_attr(
+    not(feature = "network-tests"),
+    ignore = "requires --features network-tests"
+)]
 fn test_download_url_format_arm64() {
     let result = JavaTool.download_url("21", Arch::Arm64);
     assert!(result.is_ok() || matches!(result, Err(VexError::Network(_))));
 }
 
 #[test]
+#[cfg_attr(
+    not(feature = "network-tests"),
+    ignore = "requires --features network-tests"
+)]
 fn test_download_url_format_x86() {
     let result = JavaTool.download_url("21", Arch::X86_64);
     assert!(result.is_ok() || matches!(result, Err(VexError::Network(_))));
