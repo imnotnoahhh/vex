@@ -1,6 +1,9 @@
 mod model;
 
-use super::{BehaviorSettings, NetworkSettings, Settings, MAX_CACHE_TTL, MIN_CACHE_TTL};
+use super::{
+    BehaviorSettings, NetworkSettings, Settings, StrictMode, StrictSettings, MAX_CACHE_TTL,
+    MIN_CACHE_TTL,
+};
 use crate::error::{Result, VexError};
 use crate::project;
 use std::collections::HashMap;
@@ -27,6 +30,7 @@ pub(super) fn apply_file_config(settings: &mut Settings, file_config: FileConfig
         cache_ttl_secs,
         network,
         behavior,
+        strict,
         mirrors,
     } = file_config;
 
@@ -40,8 +44,15 @@ pub(super) fn apply_file_config(settings: &mut Settings, file_config: FileConfig
         &mut settings.behavior,
         behavior.auto_switch,
         behavior.auto_activate_venv,
+        behavior.capture_user_state,
         behavior.default_shell,
         behavior.non_interactive,
+    );
+
+    apply_strict_overrides(
+        &mut settings.strict,
+        strict.home_hygiene.map(|value| value.into_model()),
+        strict.path_conflicts.map(|value| value.into_model()),
     );
 
     apply_mirror_overrides(&mut settings.mirrors, mirrors);
@@ -60,6 +71,7 @@ pub(super) fn apply_project_config(
         &mut settings.behavior,
         project_config.behavior.auto_switch,
         project_config.behavior.auto_activate_venv,
+        None,
         project_config.behavior.default_shell.clone(),
         project_config.behavior.non_interactive,
     );
@@ -112,6 +124,7 @@ fn apply_behavior_overrides(
     behavior: &mut BehaviorSettings,
     auto_switch: Option<bool>,
     auto_activate_venv: Option<bool>,
+    capture_user_state: Option<bool>,
     default_shell: Option<String>,
     non_interactive: Option<bool>,
 ) {
@@ -121,11 +134,27 @@ fn apply_behavior_overrides(
     if let Some(auto_activate_venv) = auto_activate_venv {
         behavior.auto_activate_venv = auto_activate_venv;
     }
+    if let Some(capture_user_state) = capture_user_state {
+        behavior.capture_user_state = capture_user_state;
+    }
     if let Some(default_shell) = default_shell {
         behavior.default_shell = non_empty(default_shell);
     }
     if let Some(non_interactive) = non_interactive {
         behavior.non_interactive = non_interactive;
+    }
+}
+
+fn apply_strict_overrides(
+    strict: &mut StrictSettings,
+    home_hygiene: Option<StrictMode>,
+    path_conflicts: Option<StrictMode>,
+) {
+    if let Some(home_hygiene) = home_hygiene {
+        strict.home_hygiene = home_hygiene;
+    }
+    if let Some(path_conflicts) = path_conflicts {
+        strict.path_conflicts = path_conflicts;
     }
 }
 

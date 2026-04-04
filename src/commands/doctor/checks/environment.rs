@@ -1,5 +1,7 @@
 use super::super::types::{push_check, CheckStatus, DoctorCheck};
 use super::system;
+use crate::config::{self, StrictMode};
+use crate::home_state::{self, AuditKind};
 use std::path::Path;
 
 pub(super) fn collect_environment_checks(
@@ -138,4 +140,225 @@ pub(super) fn collect_environment_checks(
         *warnings += 1;
     }
     checks.push(duplicate_hook_check);
+
+    collect_home_hygiene_check(warnings, issues, checks);
+    collect_path_conflict_check(vex_bin, warnings, issues, checks);
+    collect_captured_env_check(vex_dir, warnings, issues, checks);
+    collect_manager_conflict_check(warnings, issues, checks);
+}
+
+fn collect_home_hygiene_check(
+    warnings: &mut usize,
+    issues: &mut usize,
+    checks: &mut Vec<DoctorCheck>,
+) {
+    let home = match dirs::home_dir() {
+        Some(home) => home,
+        None => return,
+    };
+    let audits = home_state::audit(&home, Some("all"));
+    if audits.is_empty() {
+        push_check(
+            checks,
+            "home_hygiene",
+            CheckStatus::Ok,
+            "supported home-directory state is already contained in ~/.vex",
+            Vec::new(),
+        );
+        return;
+    }
+
+    let mode = config::strict_home_hygiene().unwrap_or(StrictMode::Warn);
+    let status = strict_status(mode, warnings, issues);
+    let mut details = audits
+        .iter()
+        .map(|audit| match audit.kind {
+            AuditKind::SafeMigration => format!(
+                "{} -> {}",
+                audit.source.display(),
+                audit
+                    .destination
+                    .as_ref()
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_else(|| "~/.vex".to_string())
+            ),
+            AuditKind::Advisory => format!("{} ({})", audit.source.display(), audit.summary),
+        })
+        .collect::<Vec<_>>();
+    details.push("Run 'vex repair migrate-home' to preview safe migrations.".to_string());
+    push_check(
+        checks,
+        "home_hygiene",
+        status,
+        "legacy home-directory state was found outside ~/.vex",
+        details,
+    );
+}
+
+fn collect_path_conflict_check(
+    vex_bin: &Path,
+    warnings: &mut usize,
+    issues: &mut usize,
+    checks: &mut Vec<DoctorCheck>,
+) {
+    let path = std::env::var("PATH").unwrap_or_default();
+    let vex_bin = vex_bin.to_string_lossy().to_string();
+    let mut conflicts = Vec::new();
+    for segment in path.split(':').filter(|segment| !segment.is_empty()) {
+        if segment == vex_bin {
+            break;
+        }
+        if segment.contains(".cargo/bin")
+            || segment.ends_with("/go/bin")
+            || segment.contains(".nvm")
+            || segment.contains(".pyenv")
+        {
+            conflicts.push(segment.to_string());
+        }
+    }
+
+    if conflicts.is_empty() {
+        push_check(
+            checks,
+            "path_conflicts",
+            CheckStatus::Ok,
+            "PATH keeps ~/.vex entries ahead of common legacy manager bins",
+            Vec::new(),
+        );
+        return;
+    }
+
+    let status = strict_status(
+        config::strict_path_conflicts().unwrap_or(StrictMode::Warn),
+        warnings,
+        issues,
+    );
+    let mut details = conflicts;
+    details.push("Keep ~/.vex/bin ahead of legacy manager bins in PATH.".to_string());
+    push_check(
+        checks,
+        "path_conflicts",
+        status,
+        "PATH contains legacy manager bins ahead of ~/.vex/bin",
+        details,
+    );
+}
+
+fn collect_captured_env_check(
+    vex_dir: &Path,
+    warnings: &mut usize,
+    issues: &mut usize,
+    checks: &mut Vec<DoctorCheck>,
+) {
+    let expected_prefix = vex_dir.to_string_lossy().to_string();
+    let mut mismatches = Vec::new();
+    for key in [
+        "CARGO_HOME",
+        "GOPATH",
+        "GOBIN",
+        "GOMODCACHE",
+        "GOCACHE",
+        "NPM_CONFIG_CACHE",
+        "NPM_CONFIG_PREFIX",
+        "COREPACK_HOME",
+        "PNPM_HOME",
+        "YARN_CACHE_FOLDER",
+        "PIP_CACHE_DIR",
+    ] {
+        if let Ok(value) = std::env::var(key) {
+            if !value.starts_with(&expected_prefix) {
+                mismatches.push(format!("{}={}", key, value));
+            }
+        }
+    }
+
+    if mismatches.is_empty() {
+        push_check(
+            checks,
+            "captured_env",
+            CheckStatus::Ok,
+            "captured language home/cache variables point into ~/.vex",
+            Vec::new(),
+        );
+        return;
+    }
+
+    let status = strict_status(
+        config::strict_path_conflicts().unwrap_or(StrictMode::Warn),
+        warnings,
+        issues,
+    );
+    let mut details = mismatches;
+    details.push("Re-open your shell with 'eval \"$(vex env <shell>)\"' and run 'vex repair migrate-home' if needed.".to_string());
+    push_check(
+        checks,
+        "captured_env",
+        status,
+        "some captured language home/cache variables still point outside ~/.vex",
+        details,
+    );
+}
+
+fn collect_manager_conflict_check(
+    warnings: &mut usize,
+    issues: &mut usize,
+    checks: &mut Vec<DoctorCheck>,
+) {
+    let home = match dirs::home_dir() {
+        Some(home) => home,
+        None => return,
+    };
+    let managers = [
+        (".asdf", "asdf"),
+        (".mise", "mise"),
+        (".nvm", "nvm"),
+        (".rustup", "rustup"),
+        (".pyenv", "pyenv"),
+    ];
+    let present = managers
+        .into_iter()
+        .filter_map(|(path, label)| home.join(path).exists().then_some(label.to_string()))
+        .collect::<Vec<_>>();
+
+    if present.is_empty() {
+        push_check(
+            checks,
+            "manager_conflicts",
+            CheckStatus::Ok,
+            "no common conflicting version manager homes were detected",
+            Vec::new(),
+        );
+        return;
+    }
+
+    let status = strict_status(
+        config::strict_path_conflicts().unwrap_or(StrictMode::Warn),
+        warnings,
+        issues,
+    );
+    let mut details = present;
+    details.push(
+        "These tools can coexist with vex, but they may still own files outside ~/.vex."
+            .to_string(),
+    );
+    push_check(
+        checks,
+        "manager_conflicts",
+        status,
+        "other version-manager homes were detected",
+        details,
+    );
+}
+
+fn strict_status(mode: StrictMode, warnings: &mut usize, issues: &mut usize) -> CheckStatus {
+    match mode {
+        StrictMode::Warn => {
+            *warnings += 1;
+            CheckStatus::Warn
+        }
+        StrictMode::Enforce => {
+            *issues += 1;
+            CheckStatus::Error
+        }
+    }
 }

@@ -1,11 +1,8 @@
-mod migrate;
 mod setup;
 
 use crate::error::Result;
 use crate::resolver;
 use crate::templates;
-
-pub use migrate::migrate_global_tool_versions;
 
 pub fn run(
     shell: Option<&str>,

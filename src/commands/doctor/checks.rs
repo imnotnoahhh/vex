@@ -34,8 +34,18 @@ pub(super) fn collect() -> Result<DoctorReport> {
 
     let total_disk_bytes = disk_usage.iter().map(|u| u.total_bytes).sum();
     let reclaimable_bytes = unused_versions.iter().map(|u| u.bytes).sum();
-    let suggestions =
-        summary::build_suggestions(unused_versions.len(), &lifecycle_warnings, issues);
+    let suggestions = summary::build_suggestions(
+        unused_versions.len(),
+        &lifecycle_warnings,
+        issues,
+        checks.iter().any(|check| {
+            check.id == "home_hygiene" && check.status != super::types::CheckStatus::Ok
+        }),
+        checks.iter().any(|check| {
+            (check.id == "path_conflicts" || check.id == "captured_env")
+                && check.status != super::types::CheckStatus::Ok
+        }),
+    );
 
     Ok(DoctorReport {
         root: vex_dir.display().to_string(),

@@ -36,9 +36,11 @@ vex alias
 vex exec
 vex run
 vex doctor
+vex repair
 vex self-update
 vex tui
 vex python
+vex rust
 ```
 
 ## Setup and Bootstrapping
@@ -87,6 +89,7 @@ Usage:
 
 ```bash
 vex env <shell>
+vex env <shell> --exports
 ```
 
 Arguments:
@@ -102,6 +105,11 @@ vex env fish
 vex env nu
 ```
 
+Notes:
+
+- `vex env <shell>` prints the long-lived shell hook you add to your shell config.
+- `vex env <shell> --exports` prints the current directory's resolved export/unset block and is primarily used internally by the shell hook.
+
 ### `vex doctor`
 
 Run health checks for the current installation.
@@ -111,12 +119,35 @@ Usage:
 ```bash
 vex doctor
 vex doctor --json
+vex doctor --verbose
 ```
 
 Options:
 
 - `--json`
   - print machine-readable diagnostics
+- `--verbose`
+  - include extra provenance and captured-environment details in text output
+
+### `vex repair`
+
+Preview or apply safe legacy home-directory migrations into `~/.vex`.
+
+Usage:
+
+```bash
+vex repair migrate-home
+vex repair migrate-home --tool <tool>
+vex repair migrate-home --apply
+```
+
+Examples:
+
+```bash
+vex repair migrate-home
+vex repair migrate-home --tool rust
+vex repair migrate-home --apply
+```
 
 ## Tool Installation and Switching
 
@@ -257,6 +288,30 @@ Example:
 
 ```bash
 vex uninstall node@20.11.0
+```
+
+## Rust Extensions
+
+### `vex rust`
+
+Manage official Rust targets and components for the active Rust toolchain.
+
+Usage:
+
+```bash
+vex rust target list
+vex rust target add <name>...
+vex rust target remove <name>...
+vex rust component list
+vex rust component add <name>...
+vex rust component remove <name>...
+```
+
+Examples:
+
+```bash
+vex rust target add aarch64-apple-ios aarch64-apple-ios-sim
+vex rust component add rust-src
 ```
 
 ### `vex lock`

@@ -5,10 +5,10 @@ fn test_generate_zsh_hook() {
     let hook = generate_hook("zsh").unwrap();
     assert!(hook.contains("add-zsh-hook chpwd"));
     assert!(hook.contains("__vex_use_if_found"));
-    assert!(hook.contains("__vex_activate_venv"));
-    assert!(hook.contains(".tool-versions"));
+    assert!(hook.contains("__vex_apply_exports"));
+    assert!(hook.contains("vex env zsh --exports"));
     assert!(hook.contains("$HOME/.vex/bin"));
-    assert!(hook.contains(".venv/bin/activate"));
+    assert!(hook.contains("VEX_ORIGINAL_PATH"));
 }
 
 #[test]
@@ -16,29 +16,29 @@ fn test_generate_bash_hook() {
     let hook = generate_hook("bash").unwrap();
     assert!(hook.contains("PROMPT_COMMAND"));
     assert!(hook.contains("__vex_use_if_found"));
-    assert!(hook.contains("__vex_activate_venv"));
-    assert!(hook.contains(".tool-versions"));
-    assert!(hook.contains(".venv/bin/activate"));
+    assert!(hook.contains("__vex_apply_exports"));
+    assert!(hook.contains("vex env bash --exports"));
+    assert!(hook.contains("VEX_ORIGINAL_PATH"));
 }
 
 #[test]
 fn test_generate_fish_hook() {
     let hook = generate_hook("fish").unwrap();
     assert!(hook.contains("function __vex_use_if_found"));
-    assert!(hook.contains("__vex_activate_venv"));
+    assert!(hook.contains("__vex_apply_exports"));
     assert!(hook.contains("on-variable PWD"));
-    assert!(hook.contains(".tool-versions"));
+    assert!(hook.contains("vex env fish --exports"));
     assert!(hook.contains("$HOME/.vex/bin"));
-    assert!(hook.contains(".venv/bin/activate.fish"));
+    assert!(hook.contains("VEX_ORIGINAL_PATH"));
 }
 
 #[test]
 fn test_generate_nushell_hook() {
     let hook = generate_hook("nu").unwrap();
     assert!(hook.contains("def --env __vex_use_if_found"));
-    assert!(hook.contains("__vex_activate_venv"));
+    assert!(hook.contains("__vex_apply_exports"));
     assert!(hook.contains("pre_prompt"));
-    assert!(hook.contains(".tool-versions"));
+    assert!(hook.contains("vex env nushell --exports"));
     assert!(hook.contains("$env.PATH"));
 }
 
@@ -124,8 +124,8 @@ fn test_generate_hook_contains_tool_versions() {
     for shell in &["zsh", "bash", "fish", "nu"] {
         let hook = generate_hook(shell).unwrap();
         assert!(
-            hook.contains(".tool-versions"),
-            "Hook for {} should check .tool-versions",
+            hook.contains("vex use --auto"),
+            "Hook for {} should auto-switch on directory changes",
             shell
         );
     }
@@ -136,8 +136,8 @@ fn test_generate_hook_contains_venv_activation() {
     for shell in &["zsh", "bash", "fish", "nu"] {
         let hook = generate_hook(shell).unwrap();
         assert!(
-            hook.contains("venv") || hook.contains("VIRTUAL_ENV"),
-            "Hook for {} should handle Python venv",
+            hook.contains("--exports") || hook.contains("VEX_ORIGINAL_PATH"),
+            "Hook for {} should refresh exported activation env",
             shell
         );
     }
@@ -191,7 +191,7 @@ fn test_generate_fish_hook_structure() {
     let hook = generate_hook("fish").unwrap();
     assert!(hook.contains("function"));
     assert!(hook.contains("on-variable PWD"));
-    assert!(hook.contains("activate.fish"));
+    assert!(hook.contains("eval $exports"));
 }
 
 #[test]

@@ -6,6 +6,8 @@ pub mod manage;
 pub mod process;
 pub mod prune;
 pub mod python;
+pub mod repair;
+pub mod rust;
 pub mod toolchain;
 pub mod tui;
 pub mod updates;

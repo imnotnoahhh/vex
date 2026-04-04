@@ -460,14 +460,12 @@ fs::rename(&temp_link, &final_link)?;
 - fish: `--on-variable PWD`
 - nushell: `pre_prompt` hooks
 
-**Two hooks are injected on every directory change**:
+**Two steps run on every directory change**:
 
-1. `__vex_use_if_found` — traverses up the directory tree looking for `.tool-versions` / `.node-version` / `.go-version` etc., then calls `vex use --auto` to switch tool versions
-2. `__vex_activate_venv` — checks for `.venv/bin/activate` in `$PWD`:
-   - If found and not already active → `source .venv/bin/activate`
-   - If not found but a venv is currently active → `deactivate`
+1. `__vex_use_if_found` — calls `vex use --auto` to align the active symlink state with the current directory
+2. `__vex_apply_exports` — evaluates `vex env <shell> --exports` to refresh `PATH`, `VIRTUAL_ENV`, and captured tool env vars such as `JAVA_HOME`, `GOROOT`, `CARGO_HOME`, `GOPATH`, and `NPM_CONFIG_PREFIX`
 
-This means entering a Python project directory automatically activates its `.venv`, and leaving it deactivates it, with no manual intervention.
+This keeps shell activation and `vex exec`/`vex run` on the same activation model instead of having separate shell-only logic for `.venv` and tool env vars.
 
 ### 9. Caching Strategy
 
@@ -518,7 +516,7 @@ Python is supported via [python-build-standalone](https://github.com/astral-sh/p
 - Binaries: `python3`, `pip3`
 - Checksums verified via the `SHA256SUMS` file published alongside each release
 - Version aliases based on Python's support lifecycle: `bugfix`, `security`, `end-of-life`, `pre-release`
-- Shell hooks extended with `__vex_activate_venv` to auto-activate/deactivate `.venv` on directory change
+- Shell hooks refresh the current export block with `vex env <shell> --exports`, which keeps `.venv` activation and captured tool env vars in sync with `vex exec`/`vex run`
 - `vex python init/freeze/sync` subcommands for venv and lockfile management
 
 ### Cross-Platform Support

@@ -4,6 +4,7 @@ mod render;
 
 use crate::error::Result;
 use crate::output::{print_json, OutputMode};
+use crate::tool_metadata::ToolchainMetadata;
 use serde::Serialize;
 
 use collect::{collect_installed, collect_remote};
@@ -21,6 +22,8 @@ pub enum RemoteFilter {
 pub struct InstalledVersionEntry {
     pub version: String,
     pub is_current: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<ToolchainMetadata>,
 }
 
 #[derive(Debug, Serialize)]
@@ -47,12 +50,12 @@ pub struct RemoteVersionsReport {
     pub versions: Vec<RemoteVersionEntry>,
 }
 
-pub fn list_installed(tool_name: &str, output: OutputMode) -> Result<()> {
+pub fn list_installed(tool_name: &str, output: OutputMode, verbose: bool) -> Result<()> {
     let report = collect_installed(tool_name)?;
     match output {
         OutputMode::Json => print_json(&report),
         OutputMode::Text => {
-            render_installed_text(&report);
+            render_installed_text(&report, verbose);
             Ok(())
         }
     }

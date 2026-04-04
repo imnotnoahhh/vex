@@ -19,9 +19,10 @@ use std::time::Duration;
 
 use env::apply_env_overrides;
 use layers::{apply_file_config, apply_project_config, read_file_config};
+pub use model::StrictMode;
 use model::{
-    BehaviorSettings, NetworkSettings, BIN_DIR, CACHE_DIR, CURRENT_DIR, MAX_CACHE_TTL,
-    MIN_CACHE_TTL, TOOLCHAINS_DIR, VEX_DIR_NAME,
+    BehaviorSettings, NetworkSettings, StrictSettings, BIN_DIR, CACHE_DIR, CURRENT_DIR,
+    MAX_CACHE_TTL, MIN_CACHE_TTL, TOOLCHAINS_DIR, VEX_DIR_NAME,
 };
 pub use model::{Settings, CHECKSUM_BUFFER_SIZE, DOWNLOAD_BUFFER_SIZE, MIN_FREE_SPACE_BYTES};
 #[cfg(test)]
@@ -73,6 +74,14 @@ pub fn default_shell() -> Result<Option<String>> {
 
 pub fn non_interactive() -> Result<bool> {
     Ok(load_settings()?.behavior.non_interactive)
+}
+
+pub fn strict_home_hygiene() -> Result<StrictMode> {
+    Ok(load_settings()?.strict.home_hygiene)
+}
+
+pub fn strict_path_conflicts() -> Result<StrictMode> {
+    Ok(load_settings()?.strict.path_conflicts)
 }
 
 pub fn rewrite_download_url_with_settings(

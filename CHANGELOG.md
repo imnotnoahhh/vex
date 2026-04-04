@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-04-04
+
+### Added
+
+- **Official Rust extension management** — Added `vex rust target list/add/remove` and `vex rust component list/add/remove` so the active Rust toolchain can install official targets such as `aarch64-apple-ios`, `aarch64-apple-ios-sim`, and official components such as `rust-src` directly from Rust upstream.
+- **Explicit home repair workflow** — Added `vex repair migrate-home` with dry-run by default, safe one-to-one migrations into `~/.vex`, and `vex doctor` guidance for legacy paths such as `~/.cargo`, `~/go`, and package-manager caches that can now be consolidated.
+- **Managed provenance and ownership metadata** — Toolchain installs now persist `.vex-metadata.json` with official source URLs, checksums, managed directories, and installed Rust extensions, and verbose `vex list` / `vex current` output can surface that metadata.
+- **Live Rust extension smoke coverage** — Added `scripts/test-rust-extensions-live.sh` plus CI coverage that performs a real Rust upstream install, adds iOS targets and `rust-src`, validates sysroot links and metadata, and confirms managed cleanup after removal.
+
+### Changed
+
+- **Activation is now unified across shells and subprocess execution** — Shell hooks and `vex exec` / `vex run` now consume the same activation plan, keeping PATH order and managed environment variables consistent across interactive shells, task execution, and project `.venv` activation.
+- **Supported tool user state now defaults into `~/.vex`** — Managed env vars now capture Rust, Go, Node, Python, and Java user-home/cache/bin locations under `~/.vex` by default, with new config knobs for `capture_user_state`, `strict.home_hygiene`, and `strict.path_conflicts`.
+- **Shell integration now refreshes exported state explicitly** — Shell hooks now call `vex env <shell> --exports` after `vex use --auto`, which removes duplicated shell-specific env logic and keeps shell refresh behavior aligned with the core activation model.
+- **Home migration is now explicit instead of implicit at startup** — Automatic startup migration of legacy `~/.tool-versions` state has been removed in favor of explicit repair commands and doctor guidance.
+
+### Fixed
+
+- **Rust iOS workflows now work without falling back to `rustup`** — The official Rust toolchain path in vex can now fetch and install supported upstream targets and components, allowing real iOS-target add/remove flows to complete inside a vex-managed toolchain.
+- **Doctor and PATH diagnostics now reflect managed user-bin behavior** — `vex doctor` now checks home hygiene, managed env capture, PATH conflicts, and coexisting managers using the same ownership model as activation and repair.
+- **Release validation now exercises the real Rust extension path** — macOS CI and local strict validation now cover the official Rust extension install/remove flow instead of stopping at fixture-only coverage.
+
 ## [1.5.0] - 2026-03-30
 
 ### Added

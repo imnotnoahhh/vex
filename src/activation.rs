@@ -3,93 +3,78 @@ mod env;
 use crate::config;
 use crate::error::{Result, VexError};
 use crate::project::{self, LoadedProjectConfig};
-use crate::resolver;
-use crate::tools;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use env::{build_environment, push_path_entry, resolve_venv_dir};
+use env::{
+    build_set_env, build_unset_env, collect_exec_path_entries, collect_shared_path_entries,
+    merged_path, original_path, resolve_active_versions, resolve_venv_dir,
+};
 
 #[derive(Debug, Clone)]
 pub struct ActivationPlan {
-    pub env: BTreeMap<String, String>,
+    pub set_env: BTreeMap<String, String>,
+    pub unset_env: Vec<String>,
+    pub shared_path_entries: Vec<PathBuf>,
+    pub exec_path_entries: Vec<PathBuf>,
     pub project: Option<LoadedProjectConfig>,
 }
 
 pub fn build_activation_plan(cwd: &Path) -> Result<ActivationPlan> {
+    let settings = config::load_effective_settings(cwd)?;
     let vex_dir = config::vex_home().ok_or(VexError::HomeDirectoryNotFound)?;
     let toolchains_dir = config::toolchains_dir().ok_or(VexError::HomeDirectoryNotFound)?;
     let project = project::load_nearest_project_config(cwd)?;
-    let versions = resolver::resolve_versions(cwd);
+    let versions = resolve_active_versions(cwd, &vex_dir)?;
     let venv_dir = resolve_venv_dir(cwd, project.as_ref())?;
-    let path_entries = collect_path_entries(&toolchains_dir, &versions, venv_dir.as_deref())?;
-    let env = build_environment(
-        project.as_ref(),
-        venv_dir.as_deref(),
+    let shared_path_entries = collect_shared_path_entries(
         &vex_dir,
-        &path_entries,
-    );
+        &toolchains_dir,
+        &versions,
+        venv_dir.as_deref(),
+        settings.behavior.capture_user_state,
+    )?;
+    let exec_path_entries = collect_exec_path_entries(&toolchains_dir, &versions)?;
+    let set_env = build_set_env(
+        project.as_ref(),
+        &vex_dir,
+        &toolchains_dir,
+        &versions,
+        venv_dir.as_deref(),
+        settings.behavior.capture_user_state,
+    )?;
+    let unset_env = build_unset_env(
+        &versions,
+        venv_dir.is_some(),
+        settings.behavior.capture_user_state,
+    )?;
 
-    Ok(ActivationPlan { env, project })
+    Ok(ActivationPlan {
+        set_env,
+        unset_env,
+        shared_path_entries,
+        exec_path_entries,
+        project,
+    })
 }
 
-fn collect_path_entries(
-    toolchains_dir: &Path,
-    versions: &std::collections::HashMap<String, String>,
-    venv_dir: Option<&Path>,
-) -> Result<Vec<PathBuf>> {
-    let mut path_entries = Vec::new();
-    let mut path_seen = BTreeSet::new();
-
-    if let Some(venv_dir) = venv_dir {
-        push_path_entry(&mut path_entries, &mut path_seen, venv_dir.join("bin"));
-    }
-
-    let mut tool_names = versions.keys().cloned().collect::<Vec<_>>();
-    tool_names.sort();
-
-    for tool_name in tool_names {
-        let version = versions.get(&tool_name).cloned().ok_or_else(|| {
-            VexError::Parse(format!("Missing resolved version for {}", tool_name))
-        })?;
-        append_tool_bin_paths(
-            &mut path_entries,
-            &mut path_seen,
-            toolchains_dir,
-            &tool_name,
-            &version,
-        )?;
-    }
-
-    Ok(path_entries)
+pub fn exec_path(plan: &ActivationPlan) -> String {
+    merged_path(
+        plan.shared_path_entries
+            .iter()
+            .chain(plan.exec_path_entries.iter())
+            .cloned()
+            .collect::<Vec<_>>()
+            .as_slice(),
+        &original_path(),
+    )
 }
 
-fn append_tool_bin_paths(
-    path_entries: &mut Vec<PathBuf>,
-    path_seen: &mut BTreeSet<PathBuf>,
-    toolchains_dir: &Path,
-    tool_name: &str,
-    version: &str,
-) -> Result<()> {
-    let tool = tools::get_tool(tool_name)?;
-    let install_dir = toolchains_dir.join(tool_name).join(version);
-    if !install_dir.exists() {
-        return Err(VexError::VersionNotFound {
-            tool: tool_name.to_string(),
-            version: version.to_string(),
-            suggestions: String::new(),
-        });
-    }
-
-    let mut local_seen = BTreeSet::new();
-    for (_, subpath) in tool.bin_paths() {
-        let bin_dir = install_dir.join(subpath);
-        if bin_dir.exists() && local_seen.insert(bin_dir.clone()) {
-            push_path_entry(path_entries, path_seen, bin_dir);
-        }
-    }
-
-    Ok(())
+pub fn shell_path(plan: &ActivationPlan) -> Result<String> {
+    let vex_dir = config::vex_home().ok_or(VexError::HomeDirectoryNotFound)?;
+    let mut entries = plan.shared_path_entries.clone();
+    entries.insert(usize::from(!entries.is_empty()), vex_dir.join("bin"));
+    Ok(merged_path(&entries, &original_path()))
 }
 
 #[cfg(test)]
