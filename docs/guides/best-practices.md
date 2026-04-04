@@ -7,6 +7,7 @@ The core rule is simple:
 - use version files for tool versions
 - use lockfiles for reproducibility
 - use `.vex.toml` for project behavior
+- keep supported tool home/cache/bin state inside `~/.vex`
 - use the shell hook for interactive work and `vex exec` or CI steps for automation
 
 ## Keep Responsibilities Separate
@@ -208,6 +209,16 @@ CI recommendations:
 - commit `.tool-versions.lock` and run `vex sync --frozen` when reproducibility is important
 - prefer `vex exec` or normal workflow steps over interactive shell-hook assumptions
 - keep version files in the repository so cache keys reflect real tool changes
+- use `vex repair migrate-home` after onboarding to pull supported legacy home state into `~/.vex`
+
+## Rust Projects
+
+For Rust projects that need official extensions, keep them in `vex` instead of falling back to a second toolchain manager:
+
+```bash
+vex rust target add aarch64-apple-ios aarch64-apple-ios-sim
+vex rust component add rust-src
+```
 
 Example:
 

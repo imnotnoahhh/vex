@@ -92,6 +92,8 @@ jobs:
           key: feature-smoke-macos-14
       - run: cargo build
       - run: bash scripts/test-management-features.sh
+      - run: VEX_BIN="$(pwd)/target/debug/vex" bash scripts/test-shell-hooks.sh
+      - run: VEX_BIN="$(pwd)/target/debug/vex" bash scripts/test-rust-extensions-live.sh
 
   setup-action-smoke:
     name: setup-vex Action (${{ matrix.mode }})

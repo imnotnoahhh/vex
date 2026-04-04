@@ -36,6 +36,11 @@ auto_switch = true
 auto_activate_venv = true
 default_shell = "zsh"
 non_interactive = false
+capture_user_state = true
+
+[strict]
+home_hygiene = "warn"
+path_conflicts = "warn"
 
 [mirrors]
 node = "https://mirror.example.com/nodejs"
@@ -67,6 +72,16 @@ rust = "https://mirror.example.com/rust"
 - `auto_activate_venv`
 - `default_shell`
 - `non_interactive`
+- `capture_user_state`
+
+#### `[strict]`
+
+- `home_hygiene`
+  - `warn` reports legacy home-directory state outside `~/.vex`
+  - `enforce` upgrades those findings to issues in `vex doctor`
+- `path_conflicts`
+  - `warn` reports conflicting PATH and captured-env state
+  - `enforce` upgrades those findings to issues in `vex doctor`
 
 #### `[mirrors]`
 
@@ -103,6 +118,7 @@ Supported environment variables:
 - `VEX_AUTO_ACTIVATE_VENV`
 - `VEX_DEFAULT_SHELL`
 - `VEX_NON_INTERACTIVE`
+- `VEX_CAPTURE_USER_STATE`
 - `VEX_MIRROR_<TOOL>`
 
 ## Project Configuration
@@ -234,6 +250,7 @@ What it does:
 - resolves versions from `.tool-versions` and language-specific files
 - prepends the matching toolchain `bin` directories to `PATH`
 - prepends the nearest project `.venv/bin` when auto-activation is enabled
+- injects captured user-state env vars such as `CARGO_HOME`, `GOPATH`, `NPM_CONFIG_PREFIX`, and `PIP_CACHE_DIR` when enabled
 - applies project env vars from `.vex.toml`
 
 ## `vex run`

@@ -164,6 +164,84 @@ fn test_current_json() {
 }
 
 #[test]
+fn test_env_exports_include_captured_user_state() {
+    let home = fresh_temp_dir("vex_test_env_exports_home");
+    let project = fresh_temp_dir("vex_test_env_exports_project");
+    let toolchain_bin = home.join(".vex/toolchains/node/20.11.0/bin");
+    fs::create_dir_all(&toolchain_bin).unwrap();
+    fs::create_dir_all(project.join(".venv/bin")).unwrap();
+    fs::write(project.join(".tool-versions"), "node 20.11.0\n").unwrap();
+
+    let output = vex_bin()
+        .args(["env", "zsh", "--exports"])
+        .env("HOME", &home)
+        .current_dir(&project)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("export VIRTUAL_ENV="));
+    assert!(stdout.contains(".vex/bin"));
+    assert!(stdout.contains(".vex/npm/prefix/bin"));
+    assert!(stdout.contains("NPM_CONFIG_PREFIX"));
+
+    let _ = fs::remove_dir_all(&home);
+    let _ = fs::remove_dir_all(&project);
+}
+
+#[test]
+fn test_repair_migrate_home_dry_run_and_apply() {
+    let home = fresh_temp_dir("vex_test_repair_home");
+    fs::write(home.join(".tool-versions"), "node 20\n").unwrap();
+    fs::create_dir_all(home.join(".cargo/bin")).unwrap();
+
+    let dry_run = vex_bin()
+        .args(["repair", "migrate-home"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(dry_run.status.success(), "{:?}", dry_run);
+    let dry_stdout = String::from_utf8_lossy(&dry_run.stdout);
+    assert!(dry_stdout.contains("Dry run complete"));
+    assert!(dry_stdout.contains(".tool-versions"));
+
+    let apply = vex_bin()
+        .args(["repair", "migrate-home", "--apply"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(apply.status.success(), "{:?}", apply);
+    assert!(home.join(".vex/tool-versions").exists());
+    assert!(home.join(".vex/cargo").exists());
+    assert!(!home.join(".tool-versions").exists());
+
+    let _ = fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_doctor_reports_home_hygiene_and_repair_hint() {
+    let home = fresh_temp_dir("vex_test_doctor_home");
+    fs::create_dir_all(home.join(".vex/bin")).unwrap();
+    fs::create_dir_all(home.join(".cargo")).unwrap();
+
+    let output = vex_bin()
+        .arg("doctor")
+        .env("HOME", &home)
+        .env(
+            "PATH",
+            format!("{}:/usr/bin:/bin", home.join(".vex/bin").display()),
+        )
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("home hygiene"));
+    assert!(stdout.contains("vex repair migrate-home"));
+
+    let _ = fs::remove_dir_all(&home);
+}
+
+#[test]
 fn test_exec_uses_project_toolchain_without_switching_global_state() {
     let home = fresh_temp_dir("vex_test_exec_home");
     let project = fresh_temp_dir("vex_test_exec_project");

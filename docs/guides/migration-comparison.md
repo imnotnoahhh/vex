@@ -29,7 +29,7 @@ Before migrating, these are the `vex` rules worth anchoring on:
 - Project lookup walks up parent directories, so nested directories can inherit a root `.tool-versions` file.
 - A child `.tool-versions` file overrides matching tools from a parent directory while leaving unrelated parent entries in place.
 - Global defaults live in `~/.vex/tool-versions`, not `~/.tool-versions`.
-- If `~/.tool-versions` exists and `~/.vex/tool-versions` does not, `vex` migrates the old global file into `~/.vex/tool-versions` on startup.
+- Legacy global files and supported language home/cache directories can be audited and migrated explicitly with `vex repair migrate-home`.
 - `vex exec` and `vex run` activate the resolved environment for a single process without changing global symlinks.
 - With the shell hook installed, `vex` also auto-activates a project-local `.venv` when you `cd` into that project.
 
@@ -180,7 +180,11 @@ The examples above are common in plugin-based `asdf` setups, but they are not va
    - each tool has one version or supported alias
    - unsupported tools are removed or managed outside `vex`
 
-3. Let `vex` migrate the old global file if needed. If `~/.tool-versions` exists and `~/.vex/tool-versions` does not yet exist, `vex` will move the global file into the `~/.vex` directory for you.
+3. Preview legacy home-state cleanup and migrate the safe paths into `~/.vex` explicitly:
+
+   ```bash
+   vex repair migrate-home
+   ```
 
 4. Install and verify:
 

@@ -55,7 +55,7 @@ vex/
 cargo test
 ```
 
-This runs all unit tests and CLI integration tests. Network-dependent tests stay opt-in behind the `network-tests` feature.
+This runs all unit tests and CLI integration tests. Network-dependent Rust `cargo test` coverage still stays opt-in behind the `network-tests` feature.
 
 ### Network-Dependent Tests
 
@@ -63,7 +63,7 @@ This runs all unit tests and CLI integration tests. Network-dependent tests stay
 cargo test --features network-tests
 ```
 
-These tests require internet access and may be slow. They are opt-in locally and skipped in CI.
+These tests require internet access and may be slow. They are opt-in locally. CI does not enable `cargo test --features network-tests`, but it does run dedicated live-network smoke scripts where release behavior matters.
 
 ### All Tests (Including Network-Dependent)
 
@@ -493,13 +493,13 @@ fn test_checksum_invalid() {
 
 ### Current Coverage Model
 
-As of v1.5.0, validation is intentionally split across several layers:
+As of v1.6.0, validation is intentionally split across several layers:
 
 - **Unit tests** in `src/**/*.rs` for parsing, resolution, downloading, switching, locking, and tool adapters
 - **CLI integration tests** in `tests/cli_test.rs` for core command behavior without full external installs
 - **End-to-end tests** in `tests/e2e_test.rs` for real installation workflows
-- **Shell and feature smoke tests** in `scripts/test-features.sh`, `scripts/test-management-features.sh`, `scripts/test-shell-hooks.sh`, `scripts/test-security.sh`, and `scripts/test-performance.sh`
-- **Strict macOS validation** in `scripts/test_vex_release_strict.py` and `scripts/test_vex_local_build_strict.py` for official-archive diffs, multi-version switching, Python venv flows, and project/global auto-switch behavior
+- **Shell and feature smoke tests** in `scripts/test-features.sh`, `scripts/test-management-features.sh`, `scripts/test-shell-hooks.sh`, `scripts/test-rust-extensions-live.sh`, `scripts/test-security.sh`, and `scripts/test-performance.sh`
+- **Strict macOS validation** in `scripts/test_vex_release_strict.py` for local builds by default, with published-release validation available through release-postflight or an explicit `workflow_dispatch` opt-in, covering official-archive diffs, multi-version switching, Python venv flows, project/global auto-switch behavior, and shell export hook coverage
 
 ### 100% Coverage Modules
 
@@ -541,18 +541,32 @@ For release readiness on macOS, the most important commands are:
 
 ```bash
 bash scripts/test-features.sh
+VEX_TEST_HOME=/tmp/vex-audit-home \
+VEX_STRICT_TMP_ROOT=/tmp/strict-local-build \
+VEX_STRICT_USE_LOCAL_BUILD=1 \
+VEX_STRICT_VEX_BIN="$(pwd)/target/debug/vex" \
 python3 scripts/test_vex_release_strict.py
-python3 scripts/test_vex_local_build_strict.py
+python3 scripts/test_vex_release_strict.py
+VEX_BIN="$(pwd)/target/debug/vex" bash scripts/test-rust-extensions-live.sh
 ```
 
 The strict validation scripts cover:
 - top-level CLI help and subcommand help
 - `vex init`, `vex env`, and shell hook generation
+- `vex repair migrate-home` and captured export refresh coverage
 - fresh installs for Node.js, Go, Java, Rust, and Python
+- Rust manifest parsing and official target/component command coverage through fixtures and CLI tests
 - official archive binary diffing against local installs
 - binary runnability and symlink correctness
 - Python `.venv` init/freeze/sync workflows
 - manual multi-version switching and project/global `cd` auto-switching
+
+The Rust live smoke covers:
+- official Rust toolchain installation from Rust upstream
+- live download and installation of `aarch64-apple-ios` and `aarch64-apple-ios-sim`
+- live download and installation of `rust-src`
+- metadata recording for managed Rust extensions
+- managed cleanup for `vex rust target remove` and `vex rust component remove`
 
 ### Manual macOS Smoke Checklist
 
@@ -577,6 +591,9 @@ HOME="$VEX_TEST_HOME" "$VEX_BIN" install go@latest
 HOME="$VEX_TEST_HOME" "$VEX_BIN" install rust@stable
 HOME="$VEX_TEST_HOME" "$VEX_BIN" install java@21
 HOME="$VEX_TEST_HOME" "$VEX_BIN" install python@3.12
+HOME="$VEX_TEST_HOME" "$VEX_BIN" use rust@stable
+HOME="$VEX_TEST_HOME" "$VEX_BIN" rust target add aarch64-apple-ios aarch64-apple-ios-sim
+HOME="$VEX_TEST_HOME" "$VEX_BIN" rust component add rust-src
 
 HOME="$VEX_TEST_HOME" "$VEX_BIN" current
 node -v
@@ -590,7 +607,7 @@ Notes:
 - Create a temporary shell rc file in the isolated home before `vex doctor` so shell-hook checks do not fail just because the temp home started empty.
 - Export `PATH="$VEX_TEST_HOME/.vex/bin:$PATH"` before `vex doctor` so PATH checks reflect the isolated test environment.
 - Use `go@latest` or an active minor from `vex list-remote go`; do not hardcode stale Go lines in release smoke steps.
-- After the tool installs pass, continue with `.tool-versions`, `vex run`, `vex exec`, and `vex python init/freeze/sync` checks from the strict scripts if you want full manual coverage.
+- After the core tool installs pass, verify `vex rust target list` and `vex rust component list`, then continue with `.tool-versions`, `vex run`, `vex exec`, and `vex python init/freeze/sync` checks from the strict scripts if you want full manual coverage.
 
 ## CI/CD Testing
 
@@ -614,7 +631,8 @@ test:
 - ✅ Code formatting (`cargo fmt`)
 - ✅ Linting (`cargo clippy`)
 - ✅ Security audit (`cargo audit`)
-- ❌ Network-dependent tests (skipped)
+- ✅ Dedicated live-network smoke for Rust official targets/components on macOS
+- ❌ `cargo test --features network-tests` (still skipped by default)
 - ❌ Benchmarks (skipped)
 
 ### Local Pre-Push Checks
@@ -640,6 +658,8 @@ cargo test --features network-tests
 # Check release/homebrew tooling
 bash scripts/check-release-tooling.sh
 bash scripts/test-management-features.sh
+VEX_BIN="$(pwd)/target/debug/vex" bash scripts/test-shell-hooks.sh
+VEX_BIN="$(pwd)/target/debug/vex" bash scripts/test-rust-extensions-live.sh
 ```
 
 Or use the Makefile:

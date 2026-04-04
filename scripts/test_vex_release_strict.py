@@ -42,6 +42,7 @@ USER_AGENT = "vex-macos-strict-test/1.0"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REAL_HOME = Path.home()
 TEST_HOME = Path(os.environ.get("VEX_TEST_HOME", str(REAL_HOME))).expanduser().resolve()
+GITHUB_API_TOKEN = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
 LOCAL_VEX_BIN_STR = shutil.which("vex")
 LOCAL_VEX_BIN = Path(LOCAL_VEX_BIN_STR).expanduser().resolve() if LOCAL_VEX_BIN_STR else None
 VEX_BIN: Optional[Path] = None
@@ -113,8 +114,10 @@ EXPECTED_TOP_LEVEL_COMMANDS = {
     "exec": "Run a command inside the resolved vex-managed environment without switching global state",
     "run": "Run a named task from .vex.toml inside the resolved vex-managed environment",
     "doctor": "Check vex installation health",
+    "repair": "Repair or migrate supported home-directory state into ~/.vex",
     "self-update": "Update vex itself to the latest release",
     "python": "Python virtual environment management",
+    "rust": "Official Rust toolchain extensions",
     "help": "Print this message or the help of the given subcommand(s)",
 }
 
@@ -139,15 +142,17 @@ COMMAND_HELP_CHECKS = {
     "exec": ["Usage: vex exec", "--", "<COMMAND>..."],
     "run": ["Usage: vex run", "<TASK>"],
     "doctor": ["Usage: vex doctor"],
+    "repair": ["Usage: vex repair", "migrate-home"],
     "self-update": ["Usage: vex self-update"],
     "python": ["Usage: vex python <SUBCMD>", "init", "freeze", "sync"],
+    "rust": ["Usage: vex rust", "target", "component"],
 }
 
 ENV_HOOK_CHECKS = {
-    "zsh": ["# vex shell integration", "add-zsh-hook chpwd", "__vex_use_if_found", "__vex_activate_venv"],
-    "bash": ["# vex shell integration", "PROMPT_COMMAND", "__vex_use_if_found", "__vex_activate_venv"],
-    "fish": ["# vex shell integration", "function __vex_use_if_found", "on-variable PWD", "__vex_activate_venv"],
-    "nu": ["# vex shell integration", "def --env __vex_use_if_found", "pre_prompt", "__vex_activate_venv"],
+    "zsh": ["# vex shell integration", "add-zsh-hook chpwd", "__vex_use_if_found", "__vex_apply_exports", "VEX_ORIGINAL_PATH"],
+    "bash": ["# vex shell integration", "PROMPT_COMMAND", "__vex_use_if_found", "__vex_apply_exports", "VEX_ORIGINAL_PATH"],
+    "fish": ["# vex shell integration", "function __vex_use_if_found", "on-variable PWD", "__vex_apply_exports", "VEX_ORIGINAL_PATH"],
+    "nu": ["# vex shell integration", "def --env __vex_use_if_found", "pre_prompt", "__vex_apply_exports", "VEX_ORIGINAL_PATH"],
 }
 
 
@@ -256,6 +261,20 @@ class Reporter:
 
 
 REPORT = Reporter()
+
+
+def build_request_headers(url: str, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    headers = {"User-Agent": USER_AGENT}
+    if extra:
+        headers.update(extra)
+    if (
+        GITHUB_API_TOKEN
+        and url.startswith("https://api.github.com/")
+        and "Authorization" not in headers
+    ):
+        headers["Authorization"] = f"Bearer {GITHUB_API_TOKEN}"
+        headers.setdefault("X-GitHub-Api-Version", "2022-11-28")
+    return headers
 
 
 def main() -> int:
@@ -427,9 +446,7 @@ def run_cmd_live(
 
 
 def fetch_text(url: str, *, headers: Optional[Dict[str, str]] = None) -> str:
-    req_headers = {"User-Agent": USER_AGENT}
-    if headers:
-        req_headers.update(headers)
+    req_headers = build_request_headers(url, headers)
     last_error: Optional[Exception] = None
     for attempt in range(1, 4):
         request = urllib.request.Request(url, headers=req_headers)
@@ -456,9 +473,7 @@ def fetch_text(url: str, *, headers: Optional[Dict[str, str]] = None) -> str:
 
 
 def fetch_json(url: str, *, headers: Optional[Dict[str, str]] = None):
-    req_headers = {"User-Agent": USER_AGENT}
-    if headers:
-        req_headers.update(headers)
+    req_headers = build_request_headers(url, headers)
     last_error: Optional[Exception] = None
     for attempt in range(1, 4):
         try:
@@ -480,9 +495,7 @@ def fetch_json(url: str, *, headers: Optional[Dict[str, str]] = None):
 
 
 def fetch_url_and_final_location(url: str, *, headers: Optional[Dict[str, str]] = None) -> Tuple[str, str]:
-    req_headers = {"User-Agent": USER_AGENT}
-    if headers:
-        req_headers.update(headers)
+    req_headers = build_request_headers(url, headers)
     last_error: Optional[Exception] = None
     for attempt in range(1, 4):
         request = urllib.request.Request(url, headers=req_headers)
@@ -536,7 +549,7 @@ def extract_archive_bins_from_stream(stream, pattern: re.Pattern[str]) -> Dict[s
 def extract_archive_bins(url: str, pattern: re.Pattern[str]) -> Dict[str, str]:
     last_error: Optional[Exception] = None
     for attempt in range(1, 4):
-        request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        request = urllib.request.Request(url, headers=build_request_headers(url))
         try:
             with urllib.request.urlopen(request, timeout=120) as response:
                 return extract_archive_bins_from_stream(response, pattern)
@@ -1370,7 +1383,11 @@ def choose_alt_java_version(plan: ToolPlan) -> Optional[str]:
 
 
 def official_url_exists(url: str) -> bool:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT}, method="HEAD")
+    request = urllib.request.Request(
+        url,
+        headers=build_request_headers(url),
+        method="HEAD",
+    )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             return 200 <= response.status < 400

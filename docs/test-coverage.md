@@ -8,6 +8,7 @@
 - 安全 team config 来源解析（本地文件、HTTPS、Git）
 - 安装失败后的清理与切换失败后的回滚
 - 仓库内 `imnotnoahhh/vex` GitHub Action 所依赖的脚本和 CI smoke path
+- `vex repair migrate-home`、captured user-state 导出、以及 Rust 官方 targets/components live smoke
 
 ## 验证入口
 
@@ -40,14 +41,38 @@
 - 在隔离 HOME 中做全量 macOS 验证
 - 适合 release 前确认“线上发布物”是否健康
 
+说明：
+- 仓库里的 `Strict macOS` workflow 默认只验证当前分支的 local build
+- “已发布 release 二进制”的这条严格校验改为显式触发，避免在未发布分支上拿最新已发布版本和新分支预期做错误对比
+- 已发布 release 的自动校验仍由 `release-postflight` 负责
+
 ### 4. 本地构建严格验证
 
-脚本：`scripts/test_vex_local_build_strict.py`
+脚本：`scripts/test_vex_release_strict.py`（通过环境变量切到本地构建）
 
 用途：
 - 使用本地 `target/debug/vex`
-- 复用和 release 严格版相同的验证逻辑
+- 复用和 release 严格版相同的验证逻辑与报告格式
 - 适合验证修复后的本地代码是否已经通过端到端检查
+
+推荐环境变量：
+
+```bash
+VEX_TEST_HOME=/tmp/vex-audit-home \
+VEX_STRICT_TMP_ROOT=/tmp/strict-local-build \
+VEX_STRICT_USE_LOCAL_BUILD=1 \
+VEX_STRICT_VEX_BIN="$(pwd)/target/debug/vex"
+```
+
+### 5. Rust 官方扩展 live smoke
+
+脚本：`scripts/test-rust-extensions-live.sh`
+
+用途：
+- 真实下载 Rust 官方 stable toolchain
+- 真实下载并安装 `aarch64-apple-ios`、`aarch64-apple-ios-sim`、`rust-src`
+- 验证 `.vex-metadata.json`、sysroot 链接、移除后的清理行为
+- 适合在 CI 和手动验收时确认 Rust 扩展链路没有只停留在 fixture 级别
 
 ## 当前严格验证覆盖面
 
@@ -66,6 +91,7 @@
 - 项目与全局切换：`.tool-versions`、`vex global`、shell hook `cd` 自动切换
 - Python 自动激活：进入项目自动激活 `.venv`，离开项目自动退出
 - 健康检查：`vex doctor`
+- Rust 官方扩展：`vex rust target add/remove`、`vex rust component add/remove`
 - 模板与 team-config 相关 CLI：由单元测试与 CLI integration tests 覆盖
 
 ## 当前发现并验证的二进制数量
@@ -88,6 +114,8 @@
 ```bash
 bash scripts/test-features.sh
 bash scripts/test-management-features.sh
+VEX_BIN="$(pwd)/target/debug/vex" bash scripts/test-shell-hooks.sh
+VEX_BIN="$(pwd)/target/debug/vex" bash scripts/test-rust-extensions-live.sh
 ```
 
 ### 验证最新发布的 release
@@ -99,13 +127,21 @@ python3 scripts/test_vex_release_strict.py
 ### 验证本地修复后的构建
 
 ```bash
-python3 scripts/test_vex_local_build_strict.py
+VEX_TEST_HOME=/tmp/vex-audit-home \
+VEX_STRICT_TMP_ROOT=/tmp/strict-local-build \
+VEX_STRICT_USE_LOCAL_BUILD=1 \
+VEX_STRICT_VEX_BIN="$(pwd)/target/debug/vex" \
+python3 scripts/test_vex_release_strict.py
 ```
 
 也可以指定隔离 HOME：
 
 ```bash
-VEX_TEST_HOME=/tmp/vex-audit-home python3 scripts/test_vex_local_build_strict.py
+VEX_TEST_HOME=/tmp/vex-audit-home \
+VEX_STRICT_TMP_ROOT=/tmp/strict-local-build \
+VEX_STRICT_USE_LOCAL_BUILD=1 \
+VEX_STRICT_VEX_BIN="$(pwd)/target/debug/vex" \
+python3 scripts/test_vex_release_strict.py
 ```
 
 ## 如何解读 warning
@@ -127,5 +163,5 @@ VEX_TEST_HOME=/tmp/vex-audit-home python3 scripts/test_vex_local_build_strict.py
 - 快速功能脚本的覆盖目标发生明显变化
 - 新增模板、team config 语义、或 GitHub Action 行为变化
 
-**Last Updated**: 2026-03-23
+**Last Updated**: 2026-04-04
 **Status**: ✅ Comprehensive coverage

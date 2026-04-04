@@ -7,12 +7,12 @@ use crate::output::{print_json, OutputMode};
 
 use types::DoctorReport;
 
-pub fn run(output: OutputMode) -> Result<()> {
+pub fn run(output: OutputMode, verbose: bool) -> Result<()> {
     let report = collect()?;
     match output {
         OutputMode::Json => print_json(&report),
         OutputMode::Text => {
-            render::render_text(&report);
+            render::render_text(&report, verbose);
             Ok(())
         }
     }

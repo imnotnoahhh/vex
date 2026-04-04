@@ -38,4 +38,8 @@ pub(crate) struct DoctorArgs {
     /// Output machine-readable JSON
     #[arg(long)]
     pub(crate) json: bool,
+
+    /// Show extended metadata and audit details
+    #[arg(long)]
+    pub(crate) verbose: bool,
 }

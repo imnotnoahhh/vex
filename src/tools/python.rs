@@ -12,7 +12,7 @@ mod releases;
 mod tests;
 
 use crate::error::{Result, VexError};
-use crate::tools::{Arch, Tool, Version};
+use crate::tools::{Arch, Tool, ToolEnvironment, Version};
 use aliases::resolve_alias_from_versions;
 use install::rewire_placeholder_binaries;
 use lifecycle::{fallback_python_lifecycle_statuses, fetch_python_lifecycle_statuses};
@@ -20,6 +20,7 @@ use releases::{
     asset_filename, collect_available_versions, fetch_latest_release_tag, fetch_sha256sums,
     find_matching_checksum, lifecycle_status_for,
 };
+use std::collections::BTreeMap;
 use tracing::warn;
 
 /// Python tool (python-build-standalone prebuilt CPython)
@@ -120,5 +121,26 @@ impl Tool for PythonTool {
     /// 2to3, idle3, pydoc3, python3-config as zero-byte placeholders.
     fn post_install(&self, install_dir: &std::path::Path, _arch: Arch) -> Result<()> {
         rewire_placeholder_binaries(install_dir)
+    }
+
+    fn managed_environment(
+        &self,
+        vex_dir: &std::path::Path,
+        _install_dir: Option<&std::path::Path>,
+    ) -> ToolEnvironment {
+        let pip_cache = vex_dir.join("pip/cache");
+        ToolEnvironment {
+            managed_env: BTreeMap::from([(
+                "PIP_CACHE_DIR".to_string(),
+                pip_cache.display().to_string(),
+            )]),
+            managed_user_bin_dirs: Vec::new(),
+            owned_home_dirs: vec![pip_cache.display().to_string()],
+            project_owned_dirs: vec![".venv".to_string()],
+        }
+    }
+
+    fn managed_env_keys(&self) -> Vec<&'static str> {
+        vec!["PIP_CACHE_DIR"]
     }
 }
