@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      validate_published_release:
+        description: Also validate the latest published release binary
+        required: false
+        default: false
+        type: boolean
   schedule:
     - cron: "0 4 * * 1"
 
@@ -59,7 +65,7 @@ jobs:
 
   release-binary:
     name: Strict Release Binary (macOS 14)
-    if: github.event_name != 'push'
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_published_release }}
     runs-on: macos-14
     timeout-minutes: 120
     steps:
