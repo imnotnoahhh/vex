@@ -14,6 +14,7 @@ This checks:
 - vex installation and directory structure
 - PATH configuration
 - Shell hook setup
+- home-directory hygiene and captured language env vars
 - Installed tools and symlinks
 - Binary executability
 - Network connectivity
@@ -141,6 +142,37 @@ cat .tool-versions
    # Incorrect (no @ symbol)
    node@20.11.0  # ✗ Wrong
    ```
+
+#### Legacy language state is still outside `~/.vex`
+
+**Symptoms**:
+
+- `vex doctor` warns about home hygiene
+- you still have `~/.cargo`, `~/go`, `~/.npm`, or old pip caches
+
+**Solutions**:
+
+```bash
+vex repair migrate-home
+vex repair migrate-home --apply
+```
+
+`vex repair` only moves the paths that have a direct, safe mapping into `~/.vex`. Tools such as `rustup`, `nvm`, and `pyenv` are reported for manual cleanup instead of being moved automatically.
+
+#### Rust target or component is missing
+
+**Symptoms**:
+
+- `cargo build --target ...` fails for iOS or another non-host target
+- tooling expects `rust-src`
+
+**Solutions**:
+
+```bash
+vex rust target list
+vex rust target add aarch64-apple-ios aarch64-apple-ios-sim
+vex rust component add rust-src
+```
 
 #### which shows old path after switching
 

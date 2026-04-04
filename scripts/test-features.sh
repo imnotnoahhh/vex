@@ -566,7 +566,7 @@ check_not "uninstalled version not in list" "vex list node" "20.8.0"
 
 # Test env command
 check "env outputs shell hook" "vex env zsh" "__vex_use_if_found"
-check "env outputs activation hook" "vex env zsh" "__vex_activate_venv"
+check "env outputs export refresh hook" "vex env zsh" "__vex_apply_exports"
 
 # Test local command
 LOCAL_TEST_DIR=$(mktemp -d)

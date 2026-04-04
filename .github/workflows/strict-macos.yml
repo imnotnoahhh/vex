@@ -37,6 +37,18 @@ jobs:
           VEX_STRICT_USE_LOCAL_BUILD: "1"
           VEX_STRICT_VEX_BIN: ${{ github.workspace }}/target/debug/vex
         run: python3 scripts/test_vex_release_strict.py
+      - name: Run Rust extension live smoke against local build
+        env:
+          VEX_TEST_HOME: /tmp/vex-rust-live-home
+          VEX_BIN: ${{ github.workspace }}/target/debug/vex
+        run: bash scripts/test-rust-extensions-live.sh
+      - name: Smoke export and repair commands against local build
+        env:
+          VEX_TEST_HOME: /tmp/vex-audit-home
+          VEX_STRICT_VEX_BIN: ${{ github.workspace }}/target/debug/vex
+        run: |
+          HOME="$VEX_TEST_HOME" "$VEX_STRICT_VEX_BIN" env zsh --exports > "${{ runner.temp }}/strict-local-build/env-exports.txt"
+          HOME="$VEX_TEST_HOME" "$VEX_STRICT_VEX_BIN" repair migrate-home
       - name: Upload strict local build artifacts
         if: always()
         uses: actions/upload-artifact@v7
@@ -61,6 +73,16 @@ jobs:
           VEX_TEST_HOME: /tmp/vex-release-audit-home
           VEX_STRICT_TMP_ROOT: ${{ runner.temp }}/strict-release-binary
         run: python3 scripts/test_vex_release_strict.py
+      - name: Run Rust extension live smoke against release binary
+        env:
+          VEX_TEST_HOME: /tmp/vex-release-rust-live-home
+          VEX_BIN: ${{ runner.temp }}/strict-release-binary/vex-release/vex
+        run: |
+          if [ ! -x "$VEX_BIN" ]; then
+            echo "Could not locate extracted vex release binary for Rust extension smoke" >&2
+            exit 1
+          fi
+          bash scripts/test-rust-extensions-live.sh
       - name: Upload strict release artifacts
         if: always()
         uses: actions/upload-artifact@v7

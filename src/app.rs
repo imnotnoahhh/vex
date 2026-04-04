@@ -5,7 +5,6 @@ use crate::{commands, output, shell, updater};
 use clap::Parser;
 
 pub fn run() -> Result<()> {
-    commands::init::migrate_global_tool_versions();
     let cli = Cli::parse();
     dispatch(cli.command)
 }
@@ -61,6 +60,7 @@ fn dispatch(command: Commands) -> Result<()> {
             commands::versions::list_installed(
                 &args.tool,
                 output::OutputMode::from_json_flag(args.json),
+                args.verbose,
             )?;
         }
         Commands::ListRemote(args) => {
@@ -73,15 +73,21 @@ fn dispatch(command: Commands) -> Result<()> {
             )?;
         }
         Commands::Current(args) => {
-            commands::current::show(output::OutputMode::from_json_flag(args.json))?;
+            commands::current::show(output::OutputMode::from_json_flag(args.json), args.verbose)?;
         }
         Commands::Uninstall(args) => {
             commands::manage::uninstall_spec(&args.spec)?;
         }
-        Commands::Env(args) => match shell::generate_hook(&args.shell) {
-            Ok(hook) => print!("{}", hook),
-            Err(err) => return Err(error::VexError::Parse(err)),
-        },
+        Commands::Env(args) => {
+            if args.exports {
+                commands::process::print_exports(&args.shell)?;
+            } else {
+                match shell::generate_hook(&args.shell) {
+                    Ok(hook) => print!("{}", hook),
+                    Err(err) => return Err(error::VexError::Parse(err)),
+                }
+            }
+        }
         Commands::Local(args) => {
             commands::manage::set_project_version(&args.spec)?;
         }
@@ -111,8 +117,9 @@ fn dispatch(command: Commands) -> Result<()> {
             exit_on_failure(commands::process::run_task(&args.task, &args.args)?)
         }
         Commands::Doctor(args) => {
-            commands::doctor::run(output::OutputMode::from_json_flag(args.json))?;
+            commands::doctor::run(output::OutputMode::from_json_flag(args.json), args.verbose)?;
         }
+        Commands::Repair(args) => commands::repair::run(&args)?,
         Commands::SelfUpdate => {
             updater::self_update()?;
         }
@@ -120,6 +127,7 @@ fn dispatch(command: Commands) -> Result<()> {
             commands::tui::run()?;
         }
         Commands::Python(args) => commands::python::run_subcommand(&args.subcmd)?,
+        Commands::Rust(args) => commands::rust::run(&args)?,
     }
 
     Ok(())

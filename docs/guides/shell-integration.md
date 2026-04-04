@@ -10,11 +10,9 @@ Shell integration allows vex to automatically switch tool versions when you `cd`
 
 When you `cd` into a directory, vex:
 
-1. Traverses up the directory tree looking for version files
-2. Finds `.tool-versions` (or `.node-version`, `.go-version`, etc.)
-3. Checks if the required versions are installed
-4. Switches to those versions automatically (if installed)
-5. Silently skips if versions are not installed
+1. Runs `vex use --auto`
+2. Refreshes the exported activation environment with `vex env <shell> --exports`
+3. Updates `PATH`, `VIRTUAL_ENV`, and supported captured language env vars for that directory
 
 ## Supported Shells
 
@@ -49,6 +47,8 @@ vex uses zsh's `chpwd` hook, which runs every time you change directories:
 autoload -U add-zsh-hook
 add-zsh-hook chpwd __vex_use_if_found
 ```
+
+The generated function calls `vex use --auto` and then evaluates the current directory's export block from `vex env zsh --exports`.
 
 ### bash
 
@@ -128,6 +128,17 @@ vex uses nushell's `pre_prompt` hooks:
 $env.config.hooks.pre_prompt = ($env.config.hooks.pre_prompt | append {||
     __vex_use_if_found
 })
+```
+
+## Inspecting the Current Export Block
+
+If you want to see the exact env changes vex would apply for the current directory:
+
+```bash
+vex env zsh --exports
+vex env bash --exports
+vex env fish --exports
+vex env nu --exports
 ```
 
 ## Verifying Shell Integration

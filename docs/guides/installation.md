@@ -31,7 +31,7 @@ This script will:
 #### Install Specific Version
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.5.0
+curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.6.0
 ```
 
 #### Audit the Script First
@@ -150,7 +150,7 @@ After installation, verify vex is working:
 
 ```bash
 vex --version
-# vex 1.5.0
+# vex 1.6.0
 
 which vex
 # /Users/yourname/.local/bin/vex
@@ -173,6 +173,12 @@ This creates:
 ├── cache/        # Download cache
 ├── locks/        # Installation locks
 └── config.toml   # Configuration
+```
+
+After your first setup, you can also preview safe migrations from legacy home-directory state into `~/.vex`:
+
+```bash
+vex repair migrate-home
 ```
 
 To preview project starters without writing files:
@@ -210,6 +216,8 @@ Then restart your shell or run:
 ```bash
 source ~/.config/fish/config.fish
 ```
+
+The generated hook keeps `~/.vex/bin` on `PATH`, runs `vex use --auto` on directory changes, and refreshes the current directory's export block with `vex env <shell> --exports`.
 
 ### nushell
 

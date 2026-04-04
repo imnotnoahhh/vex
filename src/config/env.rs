@@ -33,6 +33,9 @@ pub(super) fn apply_env_overrides(settings: &mut Settings) {
     if let Some(value) = env_bool("VEX_AUTO_ACTIVATE_VENV") {
         settings.behavior.auto_activate_venv = value;
     }
+    if let Some(value) = env_bool("VEX_CAPTURE_USER_STATE") {
+        settings.behavior.capture_user_state = value;
+    }
     if let Some(value) = env_string("VEX_DEFAULT_SHELL") {
         settings.behavior.default_shell = Some(value);
     }

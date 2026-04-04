@@ -1,7 +1,7 @@
 use super::{InstalledVersionsReport, RemoteVersionsReport};
 use owo_colors::OwoColorize;
 
-pub(super) fn render_installed_text(report: &InstalledVersionsReport) {
+pub(super) fn render_installed_text(report: &InstalledVersionsReport, verbose: bool) {
     if report.versions.is_empty() {
         println!("No versions of {} installed.", report.tool);
         return;
@@ -16,6 +16,28 @@ pub(super) fn render_installed_text(report: &InstalledVersionsReport) {
             println!("  {} (current)", version.version);
         } else {
             println!("  {}", version.version);
+        }
+
+        if verbose {
+            if let Some(metadata) = &version.metadata {
+                let source = metadata
+                    .provenance
+                    .source_url
+                    .as_deref()
+                    .unwrap_or("unknown");
+                println!("    source: {}", source);
+                if !metadata.extensions.is_empty() {
+                    println!(
+                        "    extensions: {}",
+                        metadata
+                            .extensions
+                            .iter()
+                            .map(|extension| extension.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+                }
+            }
         }
     }
 

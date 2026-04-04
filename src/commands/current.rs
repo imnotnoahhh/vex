@@ -5,6 +5,7 @@ use crate::config;
 use crate::error::{Result, VexError};
 use crate::output::{print_json, OutputMode};
 use crate::resolver;
+use crate::tool_metadata::{self, ToolchainMetadata};
 use render::render_text;
 use serde::Serialize;
 use source::resolve_source;
@@ -16,6 +17,8 @@ pub struct CurrentEntry {
     pub version: String,
     pub source: String,
     pub source_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<ToolchainMetadata>,
 }
 
 #[derive(Debug, Serialize)]
@@ -24,13 +27,13 @@ pub struct CurrentReport {
     pub tools: Vec<CurrentEntry>,
 }
 
-pub fn show(output: OutputMode) -> Result<()> {
+pub fn show(output: OutputMode, verbose: bool) -> Result<()> {
     let report = collect_current()?;
 
     match output {
         OutputMode::Json => print_json(&report),
         OutputMode::Text => {
-            render_text(&report);
+            render_text(&report, verbose);
             Ok(())
         }
     }
@@ -65,6 +68,11 @@ pub fn collect_current() -> Result<CurrentReport> {
             continue;
         };
         let version_str = version.to_string_lossy().to_string();
+        let install_dir = if target.is_absolute() {
+            target.clone()
+        } else {
+            current_dir.join(&target)
+        };
         let (source, source_path) = resolve_source(
             &pwd,
             &tool_name,
@@ -79,6 +87,7 @@ pub fn collect_current() -> Result<CurrentReport> {
             version: version_str,
             source,
             source_path,
+            metadata: tool_metadata::read_metadata(&install_dir)?,
         });
     }
 

@@ -1,3 +1,4 @@
+use crate::config::model::StrictMode;
 use crate::project;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -9,6 +10,8 @@ pub(in crate::config) struct FileConfig {
     pub(super) network: NetworkFileConfig,
     #[serde(default)]
     pub(super) behavior: BehaviorFileConfig,
+    #[serde(default)]
+    pub(super) strict: StrictFileConfig,
     #[serde(default)]
     pub(super) mirrors: HashMap<String, String>,
 }
@@ -28,8 +31,31 @@ pub(super) struct NetworkFileConfig {
 pub(super) struct BehaviorFileConfig {
     pub(super) auto_switch: Option<bool>,
     pub(super) auto_activate_venv: Option<bool>,
+    pub(super) capture_user_state: Option<bool>,
     pub(super) default_shell: Option<String>,
     pub(super) non_interactive: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub(super) struct StrictFileConfig {
+    pub(super) home_hygiene: Option<StrictModeDef>,
+    pub(super) path_conflicts: Option<StrictModeDef>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum StrictModeDef {
+    Warn,
+    Enforce,
+}
+
+impl StrictModeDef {
+    pub(super) fn into_model(self) -> StrictMode {
+        match self {
+            Self::Warn => StrictMode::Warn,
+            Self::Enforce => StrictMode::Enforce,
+        }
+    }
 }
 
 pub(super) struct NetworkOverrides {

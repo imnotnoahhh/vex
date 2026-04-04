@@ -58,6 +58,14 @@ pub fn run_task(task: &str, args: &[String]) -> Result<i32> {
     Ok(status.code().unwrap_or(1))
 }
 
+pub fn print_exports(shell: &str) -> Result<()> {
+    let cwd = resolver::current_dir();
+    let plan = activation::build_activation_plan(&cwd)?;
+    let exports = crate::shell::generate_exports(shell, &plan).map_err(VexError::Parse)?;
+    print!("{}", exports);
+    Ok(())
+}
+
 fn spawn_direct_command(
     plan: &ActivationPlan,
     cwd: &std::path::Path,
@@ -72,9 +80,15 @@ fn spawn_direct_command(
 }
 
 fn apply_activation_environment(process: &mut Command, plan: &ActivationPlan) {
-    for (key, value) in &plan.env {
+    for key in &plan.unset_env {
+        process.env_remove(key);
+    }
+
+    for (key, value) in &plan.set_env {
         process.env(key, value);
     }
+
+    process.env("PATH", activation::exec_path(plan));
 }
 
 fn resolve_shell(project: Option<&project::LoadedProjectConfig>) -> Result<String> {

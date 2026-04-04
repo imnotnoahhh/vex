@@ -7,6 +7,7 @@ use crate::error::{Result, VexError};
 use crate::lock::InstallLock;
 use crate::paths::vex_dir;
 use crate::resolver;
+use crate::tool_metadata;
 use crate::tools::{Arch, Tool};
 use crate::ui;
 use flate2::read::GzDecoder;
@@ -60,11 +61,9 @@ pub(super) fn install(tool: &dyn Tool, version: &str) -> Result<()> {
     guard.add(archive_path.clone());
     guard.add(extract_dir.clone());
 
-    let download_url = config::rewrite_download_url_with_settings(
-        &settings,
-        tool.name(),
-        &tool.download_url(version, arch)?,
-    )?;
+    let upstream_url = tool.download_url(version, arch)?;
+    let download_url =
+        config::rewrite_download_url_with_settings(&settings, tool.name(), &upstream_url)?;
     download_with_retry_in_current_context(
         &download_url,
         &archive_path,
@@ -112,6 +111,21 @@ pub(super) fn install(tool: &dyn Tool, version: &str) -> Result<()> {
         let checksum_file = final_dir.join(".vex-checksum");
         let _ = fs::write(&checksum_file, checksum);
     }
+
+    let mirror_url = if download_url != upstream_url {
+        Some(download_url.as_str())
+    } else {
+        None
+    };
+    let _ = tool_metadata::write_base_metadata(
+        tool,
+        version,
+        &final_dir,
+        &vex,
+        &upstream_url,
+        mirror_url,
+        verified_checksum.as_deref(),
+    );
 
     guard.disarm();
     let _ = fs::remove_file(&archive_path);
