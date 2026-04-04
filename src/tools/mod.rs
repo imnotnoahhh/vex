@@ -4,6 +4,9 @@
 //! Provides architecture detection, version alias resolution, and fuzzy version matching.
 
 use crate::error::{Result, VexError};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::path::Path;
 
 pub mod go;
 pub mod java;
@@ -41,6 +44,14 @@ pub struct Version {
     pub version: String,
     /// LTS codename (e.g., Node.js "Iron", Java "LTS")
     pub lts: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ToolEnvironment {
+    pub managed_env: BTreeMap<String, String>,
+    pub managed_user_bin_dirs: Vec<String>,
+    pub owned_home_dirs: Vec<String>,
+    pub project_owned_dirs: Vec<String>,
 }
 
 /// Tool trait, all language tools must implement this interface
@@ -82,6 +93,16 @@ pub trait Tool: Send + Sync {
     /// Post-install hook for tool-specific setup (e.g., Rust sysroot linking), defaults to no-op
     fn post_install(&self, _install_dir: &std::path::Path, _arch: Arch) -> Result<()> {
         Ok(())
+    }
+
+    /// Return managed user-state directories and environment variables for this tool.
+    fn managed_environment(&self, _vex_dir: &Path, _install_dir: Option<&Path>) -> ToolEnvironment {
+        ToolEnvironment::default()
+    }
+
+    /// Return the environment keys this tool may set when active.
+    fn managed_env_keys(&self) -> Vec<&'static str> {
+        Vec::new()
     }
 }
 

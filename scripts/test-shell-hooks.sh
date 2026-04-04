@@ -89,7 +89,7 @@ zsh_hook="$TMP_ROOT/zsh-hook.txt"
 if grep -Fq '# vex shell integration' "$zsh_hook" \
     && grep -Fq 'add-zsh-hook chpwd' "$zsh_hook" \
     && grep -Fq '__vex_use_if_found' "$zsh_hook" \
-    && grep -Fq '__vex_activate_venv' "$zsh_hook"; then
+    && grep -Fq '__vex_apply_exports' "$zsh_hook"; then
     pass "env zsh renders the current zsh hook"
 else
     fail "env zsh did not render the expected zsh hook"
@@ -100,7 +100,7 @@ bash_hook="$TMP_ROOT/bash-hook.txt"
 if grep -Fq '# vex shell integration' "$bash_hook" \
     && grep -Fq 'PROMPT_COMMAND' "$bash_hook" \
     && grep -Fq '__vex_prompt_command' "$bash_hook" \
-    && grep -Fq '__vex_activate_venv' "$bash_hook"; then
+    && grep -Fq '__vex_apply_exports' "$bash_hook"; then
     pass "env bash renders the current bash hook"
 else
     fail "env bash did not render the expected bash hook"
@@ -111,7 +111,7 @@ fish_hook="$TMP_ROOT/fish-hook.txt"
 if grep -Fq '# vex shell integration' "$fish_hook" \
     && grep -Fq 'function __vex_use_if_found' "$fish_hook" \
     && grep -Fq 'on-variable PWD' "$fish_hook" \
-    && grep -Fq '__vex_activate_venv' "$fish_hook"; then
+    && grep -Fq '__vex_apply_exports' "$fish_hook"; then
     pass "env fish renders the current fish hook"
 else
     fail "env fish did not render the expected fish hook"
@@ -122,7 +122,7 @@ nu_hook="$TMP_ROOT/nu-hook.txt"
 if grep -Fq '# vex shell integration' "$nu_hook" \
     && grep -Fq 'def --env __vex_use_if_found' "$nu_hook" \
     && grep -Fq 'pre_prompt' "$nu_hook" \
-    && grep -Fq '__vex_activate_venv' "$nu_hook"; then
+    && grep -Fq '__vex_apply_exports' "$nu_hook"; then
     pass "env nu renders the current nushell hook"
 else
     fail "env nu did not render the expected nushell hook"

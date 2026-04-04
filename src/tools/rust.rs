@@ -5,20 +5,21 @@
 //! `post_install` handles linking rust-std to sysroot and dynamic library path fixes.
 //! Version-specific checksum verification uses Rust's `.sha256` sidecar files.
 
-mod dist;
-mod install;
-mod manifest;
+pub(crate) mod dist;
+pub(crate) mod install;
+pub(crate) mod manifest;
 #[cfg(test)]
 mod tests;
 
 use crate::error::Result;
 use crate::http;
-use crate::tools::{Arch, Tool, Version};
+use crate::tools::{Arch, Tool, ToolEnvironment, Version};
 use dist::{
     checksum_url as dist_checksum_url, download_url as dist_download_url, parse_sha256_sidecar,
 };
 use install::link_runtime_components;
 use manifest::fetch_stable_version;
+use std::collections::BTreeMap;
 
 /// Rust tool (official stable toolchain)
 pub struct RustTool;
@@ -102,5 +103,26 @@ impl Tool for RustTool {
 
     fn post_install(&self, install_dir: &std::path::Path, arch: Arch) -> Result<()> {
         link_runtime_components(install_dir, arch)
+    }
+
+    fn managed_environment(
+        &self,
+        vex_dir: &std::path::Path,
+        _install_dir: Option<&std::path::Path>,
+    ) -> ToolEnvironment {
+        let cargo_home = vex_dir.join("cargo");
+        ToolEnvironment {
+            managed_env: BTreeMap::from([(
+                "CARGO_HOME".to_string(),
+                cargo_home.display().to_string(),
+            )]),
+            managed_user_bin_dirs: vec![cargo_home.join("bin").display().to_string()],
+            owned_home_dirs: vec![cargo_home.display().to_string()],
+            project_owned_dirs: vec!["target".to_string()],
+        }
+    }
+
+    fn managed_env_keys(&self) -> Vec<&'static str> {
+        vec!["CARGO_HOME"]
     }
 }

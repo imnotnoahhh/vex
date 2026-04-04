@@ -4,6 +4,10 @@ use clap::Args;
 pub(crate) struct EnvArgs {
     /// Shell type (zsh, bash, fish, or nu)
     pub(crate) shell: String,
+
+    /// Output current managed exports for the active directory instead of the shell hook
+    #[arg(long)]
+    pub(crate) exports: bool,
 }
 
 #[derive(Args)]

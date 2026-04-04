@@ -4,6 +4,8 @@ mod listing;
 mod manage;
 mod process;
 mod python;
+pub(crate) mod repair;
+pub(crate) mod rust;
 mod toolchain;
 
 pub(crate) use alias::AliasCommands;
@@ -80,6 +82,9 @@ pub(crate) enum Commands {
     /// Check vex installation health
     Doctor(manage::DoctorArgs),
 
+    /// Repair or migrate supported home-directory state into ~/.vex
+    Repair(repair::RepairArgs),
+
     /// Update vex itself to the latest release
     SelfUpdate,
 
@@ -99,4 +104,7 @@ pub(crate) enum Commands {
     ///   5. vex python freeze          (lock packages to requirements.lock)
     ///   6. vex python sync            (restore from requirements.lock on another machine)
     Python(python::PythonArgs),
+
+    /// Official Rust toolchain extensions
+    Rust(rust::RustArgs),
 }

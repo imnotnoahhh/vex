@@ -4,6 +4,8 @@ pub(super) fn build_suggestions(
     unused_version_count: usize,
     lifecycle_warnings: &[LifecycleWarning],
     issues: usize,
+    has_home_hygiene_issue: bool,
+    has_path_capture_issue: bool,
 ) -> Vec<String> {
     let mut suggestions = Vec::new();
 
@@ -29,6 +31,16 @@ pub(super) fn build_suggestions(
 
     if issues > 0 {
         suggestions.push("Run 'vex init' to fix structural issues".to_string());
+    }
+
+    if has_home_hygiene_issue {
+        suggestions.push(
+            "Run 'vex repair migrate-home' to preview safe home-directory migrations".to_string(),
+        );
+    }
+
+    if has_path_capture_issue {
+        suggestions.push("Reload your shell hook with 'eval \"$(vex env <shell>)\"' to refresh captured env vars and PATH".to_string());
     }
 
     suggestions

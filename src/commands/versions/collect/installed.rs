@@ -2,6 +2,7 @@ use super::state::current_version_for_tool;
 use crate::commands::versions::{InstalledVersionEntry, InstalledVersionsReport};
 use crate::config;
 use crate::error::{Result, VexError};
+use crate::tool_metadata;
 use std::fs;
 
 pub(super) fn collect_installed_versions(tool_name: &str) -> Result<InstalledVersionsReport> {
@@ -38,6 +39,9 @@ pub(super) fn collect_installed_versions(tool_name: &str) -> Result<InstalledVer
             .into_iter()
             .map(|version| InstalledVersionEntry {
                 is_current: current_version.as_ref() == Some(&version),
+                metadata: tool_metadata::read_metadata(&toolchains_dir.join(&version))
+                    .ok()
+                    .flatten(),
                 version,
             })
             .collect(),

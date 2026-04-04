@@ -8,6 +8,10 @@ pub(crate) struct ListArgs {
     /// Output machine-readable JSON
     #[arg(long)]
     pub(crate) json: bool,
+
+    /// Show extended metadata details in text output
+    #[arg(long)]
+    pub(crate) verbose: bool,
 }
 
 #[derive(Args)]
@@ -37,4 +41,8 @@ pub(crate) struct CurrentArgs {
     /// Output machine-readable JSON
     #[arg(long)]
     pub(crate) json: bool,
+
+    /// Show extended metadata details in text output
+    #[arg(long)]
+    pub(crate) verbose: bool,
 }

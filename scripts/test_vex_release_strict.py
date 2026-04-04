@@ -113,8 +113,10 @@ EXPECTED_TOP_LEVEL_COMMANDS = {
     "exec": "Run a command inside the resolved vex-managed environment without switching global state",
     "run": "Run a named task from .vex.toml inside the resolved vex-managed environment",
     "doctor": "Check vex installation health",
+    "repair": "Repair or migrate supported home-directory state into ~/.vex",
     "self-update": "Update vex itself to the latest release",
     "python": "Python virtual environment management",
+    "rust": "Official Rust toolchain extensions",
     "help": "Print this message or the help of the given subcommand(s)",
 }
 
@@ -139,15 +141,17 @@ COMMAND_HELP_CHECKS = {
     "exec": ["Usage: vex exec", "--", "<COMMAND>..."],
     "run": ["Usage: vex run", "<TASK>"],
     "doctor": ["Usage: vex doctor"],
+    "repair": ["Usage: vex repair", "migrate-home"],
     "self-update": ["Usage: vex self-update"],
     "python": ["Usage: vex python <SUBCMD>", "init", "freeze", "sync"],
+    "rust": ["Usage: vex rust", "target", "component"],
 }
 
 ENV_HOOK_CHECKS = {
-    "zsh": ["# vex shell integration", "add-zsh-hook chpwd", "__vex_use_if_found", "__vex_activate_venv"],
-    "bash": ["# vex shell integration", "PROMPT_COMMAND", "__vex_use_if_found", "__vex_activate_venv"],
-    "fish": ["# vex shell integration", "function __vex_use_if_found", "on-variable PWD", "__vex_activate_venv"],
-    "nu": ["# vex shell integration", "def --env __vex_use_if_found", "pre_prompt", "__vex_activate_venv"],
+    "zsh": ["# vex shell integration", "add-zsh-hook chpwd", "__vex_use_if_found", "__vex_apply_exports", "VEX_ORIGINAL_PATH"],
+    "bash": ["# vex shell integration", "PROMPT_COMMAND", "__vex_use_if_found", "__vex_apply_exports", "VEX_ORIGINAL_PATH"],
+    "fish": ["# vex shell integration", "function __vex_use_if_found", "on-variable PWD", "__vex_apply_exports", "VEX_ORIGINAL_PATH"],
+    "nu": ["# vex shell integration", "def --env __vex_use_if_found", "pre_prompt", "__vex_apply_exports", "VEX_ORIGINAL_PATH"],
 }
 
 

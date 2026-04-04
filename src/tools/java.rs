@@ -7,11 +7,12 @@ mod api;
 mod resolve;
 
 use crate::error::{Result, VexError};
-use crate::tools::{Arch, Tool, Version};
+use crate::tools::{Arch, Tool, ToolEnvironment, Version};
 use api::{fetch_available_releases, fetch_temurin_releases};
 use resolve::{build_remote_versions, resolve_alias_version};
 #[cfg(test)]
 mod tests;
+use std::collections::BTreeMap;
 
 /// Java (Eclipse Temurin JDK) tool
 pub struct JavaTool;
@@ -96,5 +97,29 @@ impl Tool for JavaTool {
     fn resolve_alias(&self, alias: &str) -> Result<Option<String>> {
         let versions = self.list_remote()?;
         resolve_alias_version(self, alias, &versions)
+    }
+
+    fn managed_environment(
+        &self,
+        _vex_dir: &std::path::Path,
+        install_dir: Option<&std::path::Path>,
+    ) -> ToolEnvironment {
+        let Some(install_dir) = install_dir else {
+            return ToolEnvironment::default();
+        };
+
+        ToolEnvironment {
+            managed_env: BTreeMap::from([(
+                "JAVA_HOME".to_string(),
+                install_dir.join("Contents/Home").display().to_string(),
+            )]),
+            managed_user_bin_dirs: Vec::new(),
+            owned_home_dirs: Vec::new(),
+            project_owned_dirs: Vec::new(),
+        }
+    }
+
+    fn managed_env_keys(&self) -> Vec<&'static str> {
+        vec!["JAVA_HOME"]
     }
 }

@@ -67,8 +67,21 @@ pub struct NetworkSettings {
 pub struct BehaviorSettings {
     pub auto_switch: bool,
     pub auto_activate_venv: bool,
+    pub capture_user_state: bool,
     pub default_shell: Option<String>,
     pub non_interactive: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StrictMode {
+    Warn,
+    Enforce,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StrictSettings {
+    pub home_hygiene: StrictMode,
+    pub path_conflicts: StrictMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,6 +89,7 @@ pub struct Settings {
     pub cache_ttl: Duration,
     pub network: NetworkSettings,
     pub behavior: BehaviorSettings,
+    pub strict: StrictSettings,
     pub mirrors: HashMap<String, String>,
 }
 
@@ -95,8 +109,13 @@ impl Default for Settings {
             behavior: BehaviorSettings {
                 auto_switch: true,
                 auto_activate_venv: true,
+                capture_user_state: true,
                 default_shell: None,
                 non_interactive: false,
+            },
+            strict: StrictSettings {
+                home_hygiene: StrictMode::Warn,
+                path_conflicts: StrictMode::Warn,
             },
             mirrors: HashMap::new(),
         }
