@@ -70,6 +70,7 @@ jobs:
           key: strict-release-binary-macos-14
       - name: Run strict release validation
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           VEX_TEST_HOME: /tmp/vex-release-audit-home
           VEX_STRICT_TMP_ROOT: ${{ runner.temp }}/strict-release-binary
         run: python3 scripts/test_vex_release_strict.py
