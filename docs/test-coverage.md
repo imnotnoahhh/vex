@@ -41,6 +41,11 @@
 - 在隔离 HOME 中做全量 macOS 验证
 - 适合 release 前确认“线上发布物”是否健康
 
+说明：
+- 仓库里的 `Strict macOS` workflow 默认只验证当前分支的 local build
+- “已发布 release 二进制”的这条严格校验改为显式触发，避免在未发布分支上拿最新已发布版本和新分支预期做错误对比
+- 已发布 release 的自动校验仍由 `release-postflight` 负责
+
 ### 4. 本地构建严格验证
 
 脚本：`scripts/test_vex_release_strict.py`（通过环境变量切到本地构建）
