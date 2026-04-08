@@ -1595,10 +1595,16 @@ def validate_node_relink(plan: ToolPlan) -> None:
         [str(VEX_BIN), "exec", "--", "sh", "-c", f"command -v {relinked_name}"],
         timeout=30,
     ).output.strip()
+    resolved_relink_path = None
+    if relink_resolution:
+        try:
+            resolved_relink_path = Path(relink_resolution).resolve()
+        except OSError:
+            resolved_relink_path = None
     REPORT.expect(
-        relink_resolution == str(relink_link),
-        "relinked node binaries resolve via ~/.vex/bin inside vex exec",
-        f"relinked node binary resolved to {relink_resolution}, expected {relink_link}",
+        resolved_relink_path == relink_target.resolve(),
+        "relinked node binaries resolve to the active node toolchain inside vex exec",
+        f"relinked node binary resolved to {relink_resolution}, expected a path targeting {relink_target}",
     )
 
     relink_run = run_cmd([str(VEX_BIN), "exec", "--", relinked_name], timeout=30)
