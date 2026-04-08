@@ -6,7 +6,9 @@ pub(super) fn generate_fish_hook() -> String {
 if not set -q VEX_ORIGINAL_PATH
     set -gx VEX_ORIGINAL_PATH $PATH
 end
-set -gx PATH $HOME/.vex/bin $PATH
+set -gx PATH $HOME/.vex/npm/prefix/bin $HOME/.vex/bin $PATH
+set -gx NPM_CONFIG_PREFIX $HOME/.vex/npm/prefix
+set -gx CARGO_HOME $HOME/.vex/cargo
 
 function __vex_apply_exports
     set -l exports (vex env fish --exports 2>/dev/null)

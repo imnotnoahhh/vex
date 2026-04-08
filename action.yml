@@ -45,6 +45,7 @@ runs:
         path: |
           ~/.vex/cache
           ~/.vex/toolchains
+          ~/.vex/npm
         key: vex-${{ runner.os }}-${{ runner.arch }}-${{ inputs.version }}-${{ hashFiles('**/.tool-versions', '**/.tool-versions.lock') }}
         restore-keys: |
           vex-${{ runner.os }}-${{ runner.arch }}-${{ inputs.version }}-
@@ -63,6 +64,7 @@ runs:
           bash "${{ github.action_path }}/scripts/install-ci-release.sh" --version "$INPUT_VERSION"
         fi
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        echo "$HOME/.vex/npm/prefix/bin" >> "$GITHUB_PATH"
         echo "$HOME/.vex/bin" >> "$GITHUB_PATH"
         "$HOME/.local/bin/vex" --version
 

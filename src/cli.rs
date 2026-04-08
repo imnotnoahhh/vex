@@ -35,6 +35,9 @@ pub(crate) enum Commands {
     /// Switch to a different version
     Use(toolchain::UseArgs),
 
+    /// Rebuild managed binary links for the active toolchain
+    Relink(manage::RelinkArgs),
+
     /// List installed versions
     List(listing::ListArgs),
 

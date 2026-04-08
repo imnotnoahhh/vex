@@ -26,7 +26,7 @@ MAJOR.MINOR.PATCH
 
 - `1.5.0` → `1.6.0`: New feature (backward compatible)
 - `1.6.0` → `1.6.1`: Bug fix
-- `1.6.0` → `2.0.0`: Breaking change
+- `1.6.1` → `2.0.0`: Breaking change
 
 ### Pre-1.0 Versioning
 
@@ -94,7 +94,7 @@ Update version in the following files:
 - [ ] `Cargo.toml`
   ```toml
   [package]
-  version = "1.6.0"
+  version = "1.6.1"
   ```
 
 - [ ] `Cargo.lock` (run `cargo build` to update)
@@ -113,13 +113,13 @@ Update version in the following files:
 ```markdown
 ## [Unreleased]
 
-## [1.6.0] - 2026-04-04
+## [1.6.1] - 2026-04-06
 
 ### Fixed
-- Release-prep docs and examples aligned with the 1.6.0 workflow
+- Node managed npm prefix and relink behavior for newly installed global CLIs
 
 ### Changed
-- Release metadata, changelog, and verification steps refreshed for the 1.6.0 cut
+- Documentation refresh and CI/cache updates for managed npm globals
 ```
 
 ### 4. Update Documentation
@@ -145,13 +145,13 @@ Create a release preparation commit:
 
 ```bash
 git add Cargo.toml Cargo.lock CHANGELOG.md README.md
-git commit -m "chore: prepare v1.6.0 release"
+git commit -m "chore: prepare v1.6.1 release"
 ```
 
 ### 6. Create Pull Request
 
 - [ ] Open PR to `main` branch
-- [ ] Title: `chore: prepare v1.6.0 release`
+- [ ] Title: `chore: prepare v1.6.1 release`
 - [ ] Description: Link to CHANGELOG section
 - [ ] Wait for CI to pass
 - [ ] Get approval from maintainer
@@ -169,10 +169,10 @@ git checkout main
 git pull origin main
 
 # Create annotated tag
-git tag -a v1.6.0 -m "Release v1.6.0"
+git tag -a v1.6.1 -m "Release v1.6.1"
 
 # Push tag to GitHub
-git push origin v1.6.0
+git push origin v1.6.1
 ```
 
 ### 2. GitHub Release
@@ -188,8 +188,8 @@ GitHub Actions will automatically:
 
 1. Go to https://github.com/imnotnoahhh/vex/releases
 2. Click "Draft a new release"
-3. Choose tag: `v1.6.0`
-4. Release title: `v1.6.0`
+3. Choose tag: `v1.6.1`
+4. Release title: `v1.6.1`
 5. Description: Copy from CHANGELOG.md
 6. Attach binaries (if not automated):
    - `vex-aarch64-apple-darwin.tar.gz`
@@ -202,7 +202,7 @@ GitHub Actions will automatically:
 - [ ] Download and test binaries
   ```bash
   # Download
-  curl -LO https://github.com/imnotnoahhh/vex/releases/download/v1.6.0/vex-aarch64-apple-darwin.tar.gz
+  curl -LO https://github.com/imnotnoahhh/vex/releases/download/v1.6.1/vex-aarch64-apple-darwin.tar.gz
 
   # Extract
   tar -xzf vex-aarch64-apple-darwin.tar.gz
@@ -213,7 +213,7 @@ GitHub Actions will automatically:
 
 - [ ] Test installation script
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.6.0
+  curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.6.1
   ```
 
 ## CI/CD Pipeline

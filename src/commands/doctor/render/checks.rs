@@ -34,6 +34,8 @@ fn check_display_name(id: &str) -> &'static str {
         "directory_structure" => "directory structure",
         "path" => "PATH configuration",
         "path_priority" => "PATH priority",
+        "tool_manager_conflicts" => "tool manager conflicts",
+        "npm_global_bin_path" => "npm global bin path",
         "shell_hook" => "shell hook",
         "config" => "config file",
         "global_tool_versions" => "global tool-versions",

@@ -6,7 +6,9 @@ pub(super) fn hook_prelude(shell: &str) -> String {
 if [ -z "${{VEX_ORIGINAL_PATH+x}}" ]; then
     export VEX_ORIGINAL_PATH="$PATH"
 fi
-export PATH="$HOME/.vex/bin:$PATH"
+export PATH="$HOME/.vex/npm/prefix/bin:$HOME/.vex/bin:$PATH"
+export NPM_CONFIG_PREFIX="$HOME/.vex/npm/prefix"
+export CARGO_HOME="$HOME/.vex/cargo"
 
 __vex_apply_exports() {{
     local exports

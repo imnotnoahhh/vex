@@ -11,9 +11,12 @@ mod tests;
 use crate::error::Result;
 use crate::http;
 use crate::tools::{Arch, Tool, ToolEnvironment, Version};
+use crate::{config, error::VexError};
 use api::{fetch_releases, resolve_alias_from_versions, version_from_release};
 use dist::{checksum_url as dist_checksum_url, download_url as dist_download_url, find_checksum};
 use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
 
 /// Node.js tool (nodejs.org official distribution)
 pub struct NodeTool;
@@ -129,5 +132,11 @@ impl Tool for NodeTool {
             "PNPM_HOME",
             "YARN_CACHE_FOLDER",
         ]
+    }
+
+    fn post_install(&self, _install_dir: &Path, _arch: Arch) -> Result<()> {
+        let npm_bin_dir = config::npm_bin_dir().ok_or(VexError::HomeDirectoryNotFound)?;
+        fs::create_dir_all(&npm_bin_dir)?;
+        Ok(())
     }
 }

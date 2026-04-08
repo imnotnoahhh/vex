@@ -87,6 +87,8 @@ Found a typo or want to improve the docs? Contributions are welcome!
 Recent user-facing additions that should stay in sync across these docs:
 
 - `vex init --template`, `--list-templates`, and `--add-only`
+- managed npm globals in `~/.vex/npm/prefix` plus the `NPM_CONFIG_PREFIX` shell/export behavior
+- `vex relink node` for rebuilding Node global binary links without reinstalling or switching versions
 - full CLI reference coverage in `command-reference.md`
 - safe remote team config sources via `vex install --from` / `vex sync --from`
 - the macOS-only `imnotnoahhh/vex` GitHub Action and cache behavior

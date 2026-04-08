@@ -27,7 +27,9 @@ use model::{
 pub use model::{Settings, CHECKSUM_BUFFER_SIZE, DOWNLOAD_BUFFER_SIZE, MIN_FREE_SPACE_BYTES};
 #[cfg(test)]
 pub use model::{CONNECT_TIMEOUT, MAX_CONCURRENT_DOWNLOADS, READ_TIMEOUT, RETRY_BASE_DELAY};
-pub use paths::{bin_dir, cache_dir, config_path, current_dir, toolchains_dir, vex_home};
+pub use paths::{
+    bin_dir, cache_dir, config_path, current_dir, npm_bin_dir, toolchains_dir, vex_home,
+};
 
 pub fn load_settings() -> Result<Settings> {
     load_settings_internal(config_path().as_deref(), true)
