@@ -17,6 +17,10 @@ pub(super) fn collect_path_priority_check(vex_bin: &Path) -> DoctorCheck {
     shell::collect_path_priority_check(vex_bin)
 }
 
+pub(super) fn collect_tool_manager_conflict_check(vex_bin: &Path) -> DoctorCheck {
+    shell::collect_tool_manager_conflict_check(vex_bin)
+}
+
 pub(super) fn collect_config_check(vex_dir: &Path) -> DoctorCheck {
     config::collect_config_check(vex_dir)
 }

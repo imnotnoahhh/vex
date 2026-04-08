@@ -12,6 +12,14 @@ pub(super) fn perform_switch(tool: &dyn Tool, base_dir: &Path, toolchain_dir: &P
     update_bin_links(tool, base_dir, toolchain_dir)
 }
 
+pub(super) fn rebuild_bin_links(
+    tool: &dyn Tool,
+    base_dir: &Path,
+    toolchain_dir: &Path,
+) -> Result<()> {
+    update_bin_links(tool, base_dir, toolchain_dir)
+}
+
 fn update_current_symlink(tool: &dyn Tool, base_dir: &Path, toolchain_dir: &Path) -> Result<()> {
     let current_dir = base_dir.join("current");
     fs::create_dir_all(&current_dir)?;

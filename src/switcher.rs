@@ -11,6 +11,7 @@ use crate::error::{Result, VexError};
 use crate::paths::vex_dir;
 use crate::tools::Tool;
 use owo_colors::OwoColorize;
+use std::fs;
 use std::path::Path;
 use tracing::{debug, info, warn};
 
@@ -25,6 +26,10 @@ use rollback::{attempt_rollback, current_version};
 pub fn switch_version(tool: &dyn Tool, version: &str) -> Result<()> {
     info!("Switching version: {}@{}", tool.name(), version);
     switch_version_in(tool, version, &vex_dir()?)
+}
+
+pub fn relink_current_tool(tool: &dyn Tool) -> Result<()> {
+    relink_current_tool_in(tool, &vex_dir()?)
 }
 
 fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<()> {
@@ -60,6 +65,20 @@ fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<
             Err(err)
         }
     }
+}
+
+fn relink_current_tool_in(tool: &dyn Tool, base_dir: &Path) -> Result<()> {
+    let current_link = base_dir.join("current").join(tool.name());
+    if !current_link.exists() {
+        return Err(VexError::Parse(format!(
+            "No active {} version found. Run 'vex use {}@<version>' first.",
+            tool.name(),
+            tool.name()
+        )));
+    }
+
+    let toolchain_dir = fs::read_link(&current_link)?;
+    links::rebuild_bin_links(tool, base_dir, &toolchain_dir)
 }
 
 #[cfg(test)]

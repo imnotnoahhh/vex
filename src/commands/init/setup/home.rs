@@ -7,7 +7,14 @@ pub(super) fn initialize_vex_home(vex_dir: &Path, dry_run: bool) -> Result<()> {
         return Ok(());
     }
 
-    for subdir in ["cache", "locks", "toolchains", "current", "bin"] {
+    for subdir in [
+        "cache",
+        "locks",
+        "toolchains",
+        "current",
+        "bin",
+        "npm/prefix/bin",
+    ] {
         fs::create_dir_all(vex_dir.join(subdir))?;
     }
 

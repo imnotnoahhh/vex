@@ -15,3 +15,7 @@ pub(super) fn collect_duplicate_hook_check(shell: &str) -> DoctorCheck {
 pub(super) fn collect_path_priority_check(vex_bin: &Path) -> DoctorCheck {
     path_priority::collect_path_priority_check(vex_bin)
 }
+
+pub(super) fn collect_tool_manager_conflict_check(vex_bin: &Path) -> DoctorCheck {
+    path_priority::collect_tool_manager_conflict_check(vex_bin)
+}

@@ -56,6 +56,9 @@ fn dispatch(command: Commands) -> Result<()> {
                 ));
             }
         }
+        Commands::Relink(args) => {
+            commands::manage::relink_tool(&args.tool)?;
+        }
         Commands::List(args) => {
             commands::versions::list_installed(
                 &args.tool,

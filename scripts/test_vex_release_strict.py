@@ -97,6 +97,7 @@ EXPECTED_TOP_LEVEL_COMMANDS = {
     "init": "Initialize vex directory structure",
     "install": "Install a tool version (or all from .tool-versions)",
     "use": "Switch to a different version",
+    "relink": "Rebuild managed binary links for the active toolchain",
     "list": "List installed versions",
     "list-remote": "List available remote versions",
     "current": "Show current active versions",
@@ -125,6 +126,7 @@ COMMAND_HELP_CHECKS = {
     "init": ["Usage: vex init", "--shell", "--dry-run"],
     "install": ["Usage: vex install", "--no-switch", "--force"],
     "use": ["Usage: vex use", "--auto"],
+    "relink": ["Usage: vex relink", "<TOOL>"],
     "list": ["Usage: vex list", "<TOOL>"],
     "list-remote": ["Usage: vex list-remote", "--filter", "--no-cache"],
     "current": ["Usage: vex current"],
@@ -154,6 +156,8 @@ ENV_HOOK_CHECKS = {
     "fish": ["# vex shell integration", "function __vex_use_if_found", "on-variable PWD", "__vex_apply_exports", "VEX_ORIGINAL_PATH"],
     "nu": ["# vex shell integration", "def --env __vex_use_if_found", "pre_prompt", "__vex_apply_exports", "VEX_ORIGINAL_PATH"],
 }
+
+ENV_HOOK_COMMON_CHECKS = ["NPM_CONFIG_PREFIX", ".vex/npm/prefix/bin"]
 
 
 class TestFailure(RuntimeError):
@@ -390,11 +394,13 @@ def env_for_subprocess(
     active_home = home or TEST_HOME
     active_vex = vex_bin or VEX_BIN
     env["HOME"] = str(active_home)
-    path_parts = [str(active_home / ".vex" / "bin")]
+    npm_prefix = active_home / ".vex" / "npm" / "prefix"
+    path_parts = [str(npm_prefix / "bin"), str(active_home / ".vex" / "bin")]
     if active_vex is not None:
         path_parts.append(str(active_vex.parent))
     current_path = env.get("PATH", "")
     env["PATH"] = ":".join([part for part in [*path_parts, current_path] if part])
+    env["NPM_CONFIG_PREFIX"] = str(npm_prefix)
     env["CARGO_HOME"] = str(active_home / ".vex" / "cargo")
     return env
 
@@ -867,6 +873,11 @@ def validate_init_and_shells(vex_release: VexReleasePlan) -> None:
             f"vex env {shell_name} emits the expected shell hook",
             f"vex env {shell_name} output missing expected hook fragments: {env_output.output.strip()}",
         )
+        REPORT.expect(
+            all(snippet in env_output.output for snippet in ENV_HOOK_COMMON_CHECKS),
+            f"vex env {shell_name} exports managed npm globals",
+            f"vex env {shell_name} is missing managed npm global exports: {env_output.output.strip()}",
+        )
 
     unsupported_env = run_cmd([str(VEX_BIN), "env", "powershell"], timeout=30, allow_nonzero=True)
     REPORT.expect(
@@ -907,6 +918,7 @@ def validate_init_and_shells(vex_release: VexReleasePlan) -> None:
         vex_home / "toolchains",
         vex_home / "current",
         vex_home / "bin",
+        vex_home / "npm" / "prefix" / "bin",
         vex_home / "config.toml",
     ]:
         REPORT.expect(path.exists(), f"{path.relative_to(TEST_HOME)} created by vex init", f"missing init artifact {path}")
@@ -1185,6 +1197,24 @@ def resolve_java_fallback_lts(releases: Dict[str, object], arch: str) -> Tuple[s
     raise TestFailure(f"Adoptium returned no LTS releases in metadata: {releases}")
 
 
+def resolve_rust_archived_versions(target: str, stable_version: str) -> List[str]:
+    REPORT.info("Rust: fetching archived stable installer index")
+    archive = fetch_text("https://forge.rust-lang.org/infra/archive-stable-version-installers.html")
+    matches = list(re.finditer(r"Stable \(([0-9]+\.[0-9]+\.[0-9]+)\)", archive))
+    versions: List[str] = []
+
+    for index, match in enumerate(matches):
+        block_end = matches[index + 1].start() if index + 1 < len(matches) else len(archive)
+        block = archive[match.start():block_end]
+        if target in block:
+            versions.append(match.group(1))
+
+    if stable_version not in versions:
+        versions.append(stable_version)
+
+    return sorted(set(versions), key=semver_key, reverse=True)
+
+
 def resolve_rust(spec: str) -> ToolPlan:
     REPORT.info("Rust: fetching stable channel manifest")
     manifest = fetch_text("https://static.rust-lang.org/dist/channel-rust-stable.toml")
@@ -1192,8 +1222,9 @@ def resolve_rust(spec: str) -> ToolPlan:
     if not match:
         raise TestFailure("could not parse stable Rust version from official manifest")
     stable_version = match.group(1).split()[0]
-    resolved = stable_version if spec in {"latest", "stable"} else spec
     target = "aarch64-apple-darwin" if os.uname().machine in {"arm64", "aarch64"} else "x86_64-apple-darwin"
+    versions = resolve_rust_archived_versions(target, stable_version)
+    resolved = stable_version if spec in {"latest", "stable"} else resolve_prefix_version(spec, versions)
     download_url = f"https://static.rust-lang.org/dist/rust-{resolved}-{target}.tar.gz"
     return ToolPlan(
         name="rust",
@@ -1204,7 +1235,7 @@ def resolve_rust(spec: str) -> ToolPlan:
         upstream_bins={},
         install_spec=f"rust@{resolved}",
         bin_regex=RUST_BIN_RE,
-        meta={"stable_version": stable_version},
+        meta={"stable_version": stable_version, "versions": versions},
     )
 
 
@@ -1345,11 +1376,11 @@ def pick_preferred_alt_version(tool_name: str, resolved_version: str, versions: 
 
 
 def choose_alt_rust_version(plan: ToolPlan) -> Optional[str]:
-    # Rust's list_remote() only returns the current stable version, not historical versions.
-    # vex cannot install arbitrary historical Rust versions because they're not in the version list.
-    # For testing purposes, we skip the alternate version test for Rust since we can't reliably
-    # find a version that both exists upstream AND is in vex's version list.
-    REPORT.warn("Rust: skipping alternate version test (vex only lists current stable)")
+    # If Rust archive discovery returns only the active release for the current macOS target,
+    # keep strict validation non-fatal and report that no second stable release was available.
+    REPORT.warn(
+        "Rust: skipping alternate version test (no additional archived stable release discovered for this architecture)"
+    )
     return None
 
 
@@ -1478,6 +1509,104 @@ def validate_tool(plan: ToolPlan) -> None:
         )
 
     probe_binaries(plan)
+    if plan.name == "node":
+        validate_node_managed_environment(plan)
+        validate_node_relink(plan)
+
+
+def validate_node_managed_environment(plan: ToolPlan) -> None:
+    npm_prefix = TEST_HOME / ".vex" / "npm" / "prefix"
+    npm_bin = npm_prefix / "bin"
+    REPORT.expect(
+        npm_bin.is_dir(),
+        "managed npm global bin directory exists",
+        f"managed npm global bin directory missing: {npm_bin}",
+    )
+
+    npm_prefix_output = run_cmd(
+        [str(VEX_BIN), "exec", "--", "npm", "config", "get", "prefix"],
+        timeout=120,
+    ).output.strip()
+    REPORT.expect(
+        npm_prefix_output == str(npm_prefix),
+        "npm resolves its global prefix to ~/.vex/npm/prefix",
+        f"npm global prefix mismatch: expected {npm_prefix}, got {npm_prefix_output}",
+    )
+
+    managed_cmd = npm_bin / "strict-managed-npm-global"
+    write_text(
+        managed_cmd,
+        "#!/bin/sh\necho strict-managed-npm-global\n",
+    )
+    managed_cmd.chmod(0o755)
+
+    managed_resolution = run_cmd(
+        [str(VEX_BIN), "exec", "--", "sh", "-c", f"command -v {managed_cmd.name}"],
+        timeout=30,
+    ).output.strip()
+    REPORT.expect(
+        managed_resolution == str(managed_cmd),
+        "managed npm global bin is ahead of the activated PATH",
+        f"managed npm global binary resolved to {managed_resolution}, expected {managed_cmd}",
+    )
+
+    managed_run = run_cmd([str(VEX_BIN), "exec", "--", managed_cmd.name], timeout=30)
+    REPORT.expect(
+        "strict-managed-npm-global" in managed_run.output,
+        "managed npm global binaries run inside vex exec",
+        f"managed npm global binary did not run correctly: {managed_run.output.strip()}",
+    )
+
+
+def validate_node_relink(plan: ToolPlan) -> None:
+    relinked_name = "strict-node-relink-check"
+    relink_target = plan.toolchain_root / "bin" / relinked_name
+    relink_link = TEST_HOME / ".vex" / "bin" / relinked_name
+    if relink_link.exists() or relink_link.is_symlink():
+        relink_link.unlink()
+    write_text(
+        relink_target,
+        "#!/bin/sh\necho strict-node-relink-check\n",
+    )
+    relink_target.chmod(0o755)
+
+    before_relink = shutil.which(relinked_name, path=env_for_subprocess()["PATH"])
+    REPORT.expect(
+        before_relink is None,
+        "new node-adjacent binaries are absent before vex relink node",
+        f"unexpectedly resolved {relinked_name} before relink: {before_relink}",
+    )
+
+    run_cmd([str(VEX_BIN), "relink", "node"], timeout=120)
+
+    REPORT.expect(
+        relink_link.is_symlink(),
+        "vex relink node creates ~/.vex/bin links for new node-adjacent binaries",
+        f"vex relink node did not create {relink_link}",
+    )
+    if relink_link.is_symlink():
+        REPORT.expect(
+            relink_link.resolve() == relink_target.resolve(),
+            "vex relink node points new links at the active node toolchain",
+            f"{relink_link} points to {relink_link.resolve()}, expected {relink_target.resolve()}",
+        )
+
+    relink_resolution = run_cmd(
+        [str(VEX_BIN), "exec", "--", "sh", "-c", f"command -v {relinked_name}"],
+        timeout=30,
+    ).output.strip()
+    REPORT.expect(
+        relink_resolution == str(relink_link),
+        "relinked node binaries resolve via ~/.vex/bin inside vex exec",
+        f"relinked node binary resolved to {relink_resolution}, expected {relink_link}",
+    )
+
+    relink_run = run_cmd([str(VEX_BIN), "exec", "--", relinked_name], timeout=30)
+    REPORT.expect(
+        "strict-node-relink-check" in relink_run.output,
+        "relinked node binaries run after vex relink node",
+        f"relinked node binary did not run correctly: {relink_run.output.strip()}",
+    )
 
 
 def compare_bin_maps(title: str, *, expected: Dict[str, str], actual: Dict[str, str]) -> None:
@@ -1961,6 +2090,8 @@ def validate_doctor() -> None:
     REPORT.expect("Checking vex directory" in output, "doctor checks vex directory", f"doctor output missing directory check: {output.strip()}")
     REPORT.expect("Checking symlinks integrity" in output, "doctor checks symlinks", f"doctor output missing symlink check: {output.strip()}")
     REPORT.expect("Checking binary runnability" in output, "doctor checks binary runnability", f"doctor output missing runnability check: {output.strip()}")
+    REPORT.expect("Checking tool manager conflicts" in output, "doctor checks active tool manager conflicts", f"doctor output missing tool manager conflict check: {output.strip()}")
+    REPORT.expect("Checking npm global bin path" in output, "doctor checks managed npm global bin path", f"doctor output missing npm global bin path check: {output.strip()}")
     REPORT.expect("Error:" not in output, "doctor has no fatal error banner", f"doctor reported an error: {output.strip()}")
 
 

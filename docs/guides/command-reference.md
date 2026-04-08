@@ -21,6 +21,7 @@ vex init
 vex install
 vex sync
 vex use
+vex relink
 vex list
 vex list-remote
 vex current
@@ -113,6 +114,8 @@ Notes:
 ### `vex doctor`
 
 Run health checks for the current installation.
+
+The report includes core PATH/symlink checks, managed npm global bin checks, and active PATH conflicts from other tool managers that can shadow vex.
 
 Usage:
 
@@ -240,6 +243,28 @@ Examples:
 vex use node@22
 vex use python@3.12
 vex use --auto
+```
+
+### `vex relink`
+
+Rebuild managed binary links for the active toolchain.
+
+Usage:
+
+```bash
+vex relink <tool>
+```
+
+Notes:
+
+- currently only `node` is supported
+- use this after `npm install -g <package>` adds a new executable to the active Node toolchain
+- it only rebuilds links under `~/.vex/bin`; it does not install packages or change shell configuration
+
+Examples:
+
+```bash
+vex relink node
 ```
 
 ### `vex local`

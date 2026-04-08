@@ -43,6 +43,15 @@ pub fn install_specs(specs: &[String], no_switch: bool, force: bool, offline: bo
             }
         };
 
+        if !force {
+            if let Some(installed) =
+                requested_versions::resolve_installed_version(&vex, &tool_name, &version)?
+            {
+                results.push((tool_name.clone(), installed, Ok(false)));
+                continue;
+            }
+        }
+
         let resolved = match requested_versions::resolve_for_install(tool.as_ref(), &version) {
             Ok(version) => version,
             Err(error) => {

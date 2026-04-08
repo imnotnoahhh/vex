@@ -26,6 +26,16 @@ pub fn bin_dir() -> Option<PathBuf> {
     vex_home().map(|path| path.join(BIN_DIR))
 }
 
+/// Get the managed npm global prefix directory path.
+pub fn npm_prefix_dir() -> Option<PathBuf> {
+    vex_home().map(|path| path.join("npm").join("prefix"))
+}
+
+/// Get the managed npm global bin directory path.
+pub fn npm_bin_dir() -> Option<PathBuf> {
+    npm_prefix_dir().map(|path| path.join("bin"))
+}
+
 /// Get cache directory path.
 pub fn cache_dir() -> Option<PathBuf> {
     vex_home().map(|path| path.join(CACHE_DIR))
@@ -62,6 +72,11 @@ mod tests {
             assert_eq!(toolchains_dir(), Some(home.join(TOOLCHAINS_DIR)));
             assert_eq!(current_dir(), Some(home.join(CURRENT_DIR)));
             assert_eq!(bin_dir(), Some(home.join(BIN_DIR)));
+            assert_eq!(npm_prefix_dir(), Some(home.join("npm").join("prefix")));
+            assert_eq!(
+                npm_bin_dir(),
+                Some(home.join("npm").join("prefix").join("bin"))
+            );
             assert_eq!(cache_dir(), Some(home.join(CACHE_DIR)));
             assert_eq!(config_path(), Some(home.join("config.toml")));
         }
