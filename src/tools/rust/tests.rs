@@ -1,5 +1,6 @@
 use super::*;
 use crate::tools::Tool;
+use crate::versioning::version_sort_key;
 
 #[test]
 fn test_name() {
@@ -98,8 +99,9 @@ fn test_parse_sha256_sidecar_hash_only() {
 )]
 fn test_list_remote() {
     let versions = RustTool.list_remote().unwrap();
-    assert!(!versions.is_empty());
+    assert!(versions.len() > 1);
     assert!(versions[0].version.contains('.'));
+    assert!(version_sort_key(&versions[0].version) >= version_sort_key(&versions[1].version));
 }
 
 #[test]

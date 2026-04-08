@@ -101,6 +101,57 @@ pub(super) fn collect_environment_checks(
     }
     checks.push(path_priority_check);
 
+    let tool_manager_conflict_check = system::collect_tool_manager_conflict_check(vex_bin);
+    if tool_manager_conflict_check.status == CheckStatus::Warn {
+        *warnings += 1;
+    }
+    checks.push(tool_manager_conflict_check);
+
+    if vex_dir.join("toolchains/node").exists() || vex_dir.join("current/node").exists() {
+        let npm_bin_dir = vex_dir.join("npm").join("prefix").join("bin");
+        let npm_bin_str = npm_bin_dir.to_string_lossy().to_string();
+        let npm_path_check = if !npm_bin_dir.exists() {
+            *warnings += 1;
+            DoctorCheck {
+                id: "npm_global_bin_path".to_string(),
+                status: CheckStatus::Warn,
+                summary: "managed npm global bin directory is missing".to_string(),
+                details: vec![
+                    "Run 'vex init' to recreate ~/.vex/npm/prefix/bin, or reinstall Node with 'vex install node@<version> --force'".to_string(),
+                ],
+            }
+        } else {
+            match std::env::var("PATH") {
+                Ok(path_var) if path_var.split(':').any(|entry| entry == npm_bin_str) => {
+                    DoctorCheck {
+                        id: "npm_global_bin_path".to_string(),
+                        status: CheckStatus::Ok,
+                        summary: "managed npm global bin dir is present in PATH".to_string(),
+                        details: Vec::new(),
+                    }
+                }
+                Ok(_) => {
+                    *warnings += 1;
+                    DoctorCheck {
+                        id: "npm_global_bin_path".to_string(),
+                        status: CheckStatus::Warn,
+                        summary: "managed npm global bin dir is not present in PATH".to_string(),
+                        details: vec![
+                            "Re-run 'vex init --shell auto', or add ~/.vex/npm/prefix/bin before ~/.vex/bin in your shell PATH".to_string(),
+                        ],
+                    }
+                }
+                Err(_) => DoctorCheck {
+                    id: "npm_global_bin_path".to_string(),
+                    status: CheckStatus::Ok,
+                    summary: "managed npm global bin dir could not be inspected".to_string(),
+                    details: Vec::new(),
+                },
+            }
+        };
+        checks.push(npm_path_check);
+    }
+
     let shell = std::env::var("SHELL").unwrap_or_default();
     let shell_check = system::collect_shell_hook_check(&shell);
     if shell_check.status == CheckStatus::Warn {

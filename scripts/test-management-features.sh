@@ -43,7 +43,7 @@ fail() {
 }
 
 run_local() {
-    HOME="$LOCAL_HOME" PATH="$LOCAL_HOME/.vex/bin:$BASE_PATH" "$VEX_BIN" "$@"
+    HOME="$LOCAL_HOME" PATH="$LOCAL_HOME/.vex/npm/prefix/bin:$LOCAL_HOME/.vex/bin:$BASE_PATH" "$VEX_BIN" "$@"
 }
 
 run_local_in() {
@@ -51,12 +51,12 @@ run_local_in() {
     shift
     (
         cd "$cwd"
-        HOME="$LOCAL_HOME" PATH="$LOCAL_HOME/.vex/bin:$BASE_PATH" "$VEX_BIN" "$@"
+        HOME="$LOCAL_HOME" PATH="$LOCAL_HOME/.vex/npm/prefix/bin:$LOCAL_HOME/.vex/bin:$BASE_PATH" "$VEX_BIN" "$@"
     )
 }
 
 run_network() {
-    HOME="$NETWORK_HOME" PATH="$NETWORK_HOME/.vex/bin:$BASE_PATH" "$VEX_BIN" "$@"
+    HOME="$NETWORK_HOME" PATH="$NETWORK_HOME/.vex/npm/prefix/bin:$NETWORK_HOME/.vex/bin:$BASE_PATH" "$VEX_BIN" "$@"
 }
 
 run_network_in() {
@@ -64,7 +64,7 @@ run_network_in() {
     shift
     (
         cd "$cwd"
-        HOME="$NETWORK_HOME" PATH="$NETWORK_HOME/.vex/bin:$BASE_PATH" "$VEX_BIN" "$@"
+        HOME="$NETWORK_HOME" PATH="$NETWORK_HOME/.vex/npm/prefix/bin:$NETWORK_HOME/.vex/bin:$BASE_PATH" "$VEX_BIN" "$@"
     )
 }
 
@@ -231,6 +231,12 @@ else
     fail "alias delete did not remove the stored alias"
 fi
 
+if [ -d "$LOCAL_HOME/.vex/npm/prefix/bin" ]; then
+    pass "init creates the managed npm global bin directory"
+else
+    fail "init did not create ~/.vex/npm/prefix/bin"
+fi
+
 mkdir -p "$LOCAL_HOME/.vex/toolchains/node/20.20.1/bin"
 mkdir -p "$LOCAL_HOME/.vex/toolchains/node/25.8.0/bin"
 mkdir -p "$LOCAL_HOME/.vex/toolchains/go/9.9.9/bin"
@@ -285,6 +291,16 @@ if [ "$(basename "$(readlink "$LOCAL_HOME/.vex/current/node")")" = "20.20.1" ]; 
     pass "exec does not mutate the globally active version"
 else
     fail "exec unexpectedly changed ~/.vex/current/node"
+fi
+
+write_fake_node "$LOCAL_HOME/.vex/toolchains/node/20.20.1/bin/openclaw" "20.20.1"
+relink_output="$TMP_ROOT/relink.txt"
+run_local relink node > "$relink_output"
+if [ -L "$LOCAL_HOME/.vex/bin/openclaw" ] \
+    && [ "$(readlink "$LOCAL_HOME/.vex/bin/openclaw")" = "$LOCAL_HOME/.vex/toolchains/node/20.20.1/bin/openclaw" ]; then
+    pass "relink rebuilds Node binary links after a new global CLI appears"
+else
+    fail "relink did not rebuild the expected Node binary symlink"
 fi
 
 run_output="$TMP_ROOT/run.txt"

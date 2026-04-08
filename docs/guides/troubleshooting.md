@@ -213,11 +213,44 @@ find ~/.vex -type l ! -exec test -e {} \; -print
    find ~/.vex/current -type l ! -exec test -e {} \; -delete
    ```
 
-2. **Reinstall version**:
+2. **If this is a newly installed npm global CLI, rebuild Node links explicitly**:
+   ```bash
+   vex relink node
+   ```
+
+3. **Reinstall version**:
    ```bash
    vex uninstall node@20.11.0
    vex install node@20.11.0
    ```
+
+#### npm install -g succeeded but command is still not found
+
+**Symptoms**: `npm install -g <tool>` completes, but the new command is not available from your shell.
+
+**Diagnosis**:
+
+```bash
+echo "$NPM_CONFIG_PREFIX"
+echo "$PATH" | tr ':' '\n' | grep "$HOME/.vex/npm/prefix/bin"
+vex doctor
+```
+
+**Solutions**:
+
+1. **Rebuild Node links**:
+   ```bash
+   vex relink node
+   ```
+
+2. **Refresh shell integration if the managed npm bin path is missing**:
+   ```bash
+   vex init --shell auto
+   ```
+
+3. **Move competing tool-manager paths behind vex when doctor reports conflicts**:
+   - `vex` will warn about active `pyenv`, `nvm`, `fnm`, `volta`, `asdf`, or cargo env paths only when they appear before `~/.vex/bin`
+   - `vex` does not auto-migrate those tools; it only reports that they are actively shadowing managed binaries
 
 #### Partial install or switch left the repo in a bad state
 
