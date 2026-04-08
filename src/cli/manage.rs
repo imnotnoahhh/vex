@@ -43,3 +43,9 @@ pub(crate) struct DoctorArgs {
     #[arg(long)]
     pub(crate) verbose: bool,
 }
+
+#[derive(Args)]
+pub(crate) struct RelinkArgs {
+    /// Tool name to relink. Currently only `node` is supported.
+    pub(crate) tool: String,
+}

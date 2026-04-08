@@ -493,7 +493,7 @@ fn test_checksum_invalid() {
 
 ### Current Coverage Model
 
-As of v1.6.0, validation is intentionally split across several layers:
+As of v1.6.1, validation is intentionally split across several layers:
 
 - **Unit tests** in `src/**/*.rs` for parsing, resolution, downloading, switching, locking, and tool adapters
 - **CLI integration tests** in `tests/cli_test.rs` for core command behavior without full external installs

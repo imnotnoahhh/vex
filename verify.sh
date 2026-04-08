@@ -11,7 +11,7 @@ echo "🔍 Linting..."
 cargo clippy --all-targets --all-features -- -D warnings
 
 echo "📝 Checking format..."
-cargo fmt --all -- --check
+cargo fmt --all --check
 
 echo "🔒 Security audit..."
 cargo audit || echo "⚠️  Security audit found issues (non-blocking)"

@@ -1,10 +1,12 @@
 //! Rust tool implementation
 //!
-//! Parses `channel-rust-stable.toml` to get stable version information.
+//! Uses the current stable channel manifest plus the official archived installer index
+//! to discover installable stable Rust releases.
 //! Installs complete toolchain (rustc, cargo, clippy, rustfmt, rust-analyzer, etc., 11 binaries),
 //! `post_install` handles linking rust-std to sysroot and dynamic library path fixes.
 //! Version-specific checksum verification uses Rust's `.sha256` sidecar files.
 
+mod archive;
 pub(crate) mod dist;
 pub(crate) mod install;
 pub(crate) mod manifest;
@@ -14,11 +16,14 @@ mod tests;
 use crate::error::Result;
 use crate::http;
 use crate::tools::{Arch, Tool, ToolEnvironment, Version};
+use crate::versioning::version_sort_key;
+use archive::fetch_archived_versions;
 use dist::{
     checksum_url as dist_checksum_url, download_url as dist_download_url, parse_sha256_sidecar,
 };
 use install::link_runtime_components;
 use manifest::fetch_stable_version;
+use std::cmp::Reverse;
 use std::collections::BTreeMap;
 
 /// Rust tool (official stable toolchain)
@@ -30,8 +35,21 @@ impl Tool for RustTool {
     }
 
     fn list_remote(&self) -> Result<Vec<Version>> {
-        let version = fetch_stable_version()?;
-        Ok(vec![Version { version, lts: None }])
+        let stable_version = fetch_stable_version()?;
+        let arch = Arch::detect()?;
+        let mut versions = fetch_archived_versions(dist::target_triple(arch))?;
+
+        if !versions.iter().any(|version| version == &stable_version) {
+            versions.push(stable_version);
+        }
+
+        versions.sort_by_key(|version| Reverse(version_sort_key(version)));
+        versions.dedup();
+
+        Ok(versions
+            .into_iter()
+            .map(|version| Version { version, lts: None })
+            .collect())
     }
 
     fn download_url(&self, version: &str, arch: Arch) -> Result<String> {
@@ -93,10 +111,7 @@ impl Tool for RustTool {
 
     fn resolve_alias(&self, alias: &str) -> Result<Option<String>> {
         match alias {
-            "latest" | "stable" => {
-                let versions = self.list_remote()?;
-                Ok(versions.first().map(|version| version.version.clone()))
-            }
+            "latest" | "stable" => Ok(Some(fetch_stable_version()?)),
             _ => Ok(None),
         }
     }

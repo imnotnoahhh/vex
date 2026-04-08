@@ -31,6 +31,34 @@ fn is_active(tool: &str) -> bool {
     vex_home().join("current").join(tool).exists()
 }
 
+fn find_installed_version(tool: &str, requested_prefix: &str) -> Option<String> {
+    let tool_dir = vex_home().join("toolchains").join(tool);
+    let Ok(entries) = fs::read_dir(tool_dir) else {
+        return None;
+    };
+
+    let mut matches = entries
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            let version = entry.file_name().to_string_lossy().to_string();
+            if version == requested_prefix || version.starts_with(&format!("{}.", requested_prefix))
+            {
+                Some(version)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    matches.sort_by_key(|version| {
+        version
+            .split('.')
+            .map(|segment| segment.parse::<u32>().unwrap_or(0))
+            .collect::<Vec<_>>()
+    });
+    matches.pop()
+}
+
 fn seed_remote_cache(home: &std::path::Path, tool: &str, versions: &[&str]) {
     let cache_dir = home.join(".vex/cache");
     fs::create_dir_all(&cache_dir).unwrap();
@@ -126,12 +154,12 @@ fn test_e2e_node_install_use_uninstall() {
     ignore = "requires --features network-tests"
 )]
 fn test_e2e_go_install_use_uninstall() {
-    let test_version = "1.22.0";
+    let requested_version = "1.26";
 
     // 1. 安装
-    println!("Testing Go {} installation...", test_version);
+    println!("Testing Go {} installation...", requested_version);
     let output = vex_bin()
-        .args(["install", &format!("go@{}", test_version)])
+        .args(["install", &format!("go@{}", requested_version)])
         .output()
         .unwrap();
 
@@ -142,20 +170,31 @@ fn test_e2e_go_install_use_uninstall() {
         }
     }
 
-    assert!(
-        is_installed("go", test_version),
-        "Go {} should be installed",
-        test_version
-    );
+    let installed_version = find_installed_version("go", requested_version)
+        .unwrap_or_else(|| panic!("Go {}.x should be installed", requested_version));
+
+    assert!(is_installed("go", &installed_version));
 
     // 2. 切换版本
-    println!("Testing Go {} activation...", test_version);
+    println!("Testing Go {} activation...", installed_version);
     let output = vex_bin()
-        .args(["use", &format!("go@{}", test_version)])
+        .args(["use", &format!("go@{}", requested_version)])
         .output()
         .unwrap();
     assert!(output.status.success(), "Use command should succeed");
     assert!(is_active("go"), "Go should be active");
+
+    let current_link = vex_home().join("current").join("go");
+    let active_target = fs::read_link(&current_link).unwrap();
+    assert!(
+        active_target
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .starts_with(requested_version),
+        "Current go symlink should point to a {}.x release",
+        requested_version
+    );
 
     // 3. 验证 bin 链接
     let go_bin = vex_home().join("bin").join("go");
@@ -164,17 +203,13 @@ fn test_e2e_go_install_use_uninstall() {
     assert!(gofmt_bin.exists(), "gofmt binary symlink should exist");
 
     // 4. 卸载
-    println!("Testing Go {} uninstallation...", test_version);
+    println!("Testing Go {} uninstallation...", installed_version);
     let output = vex_bin()
-        .args(["uninstall", &format!("go@{}", test_version)])
+        .args(["uninstall", &format!("go@{}", installed_version)])
         .output()
         .unwrap();
     assert!(output.status.success(), "Uninstall should succeed");
-    assert!(
-        !is_installed("go", test_version),
-        "Go {} should be uninstalled",
-        test_version
-    );
+    assert!(!is_installed("go", &installed_version));
 }
 
 // --- 版本别名测试 ---

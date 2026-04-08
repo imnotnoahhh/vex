@@ -19,10 +19,20 @@ fn test_activation_plan_uses_project_venv_and_toolchain_bins() {
     let path = exec_path(&plan);
     assert!(path.starts_with(project.path().join(".venv/bin").to_string_lossy().as_ref()));
     assert!(path.contains(toolchain_bin.to_string_lossy().as_ref()));
+    assert!(path.contains(
+        home.path()
+            .join(".vex/npm/prefix/bin")
+            .to_string_lossy()
+            .as_ref()
+    ));
     let expected_venv = project.path().join(".venv").display().to_string();
     assert_eq!(
         plan.set_env.get("VIRTUAL_ENV").cloned(),
         Some(expected_venv)
+    );
+    assert_eq!(
+        plan.set_env.get("NPM_CONFIG_PREFIX").cloned(),
+        Some(home.path().join(".vex/npm/prefix").display().to_string())
     );
 
     if let Some(value) = old_home {

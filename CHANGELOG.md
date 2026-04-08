@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-04-08
+
+### Added
+
+- **Explicit Node relink workflow** — Added `vex relink node` to rebuild `~/.vex/bin` from the currently active Node toolchain after new executables appear in `bin/`, such as npm-installed global CLIs.
+
+### Changed
+
+- **Managed npm globals are now part of the default environment** — `vex init`, shell hooks, `vex exec`, `vex run`, and the GitHub Action now create or expose `~/.vex/npm/prefix/bin` and export `NPM_CONFIG_PREFIX=$HOME/.vex/npm/prefix` so npm global installs have a stable managed location.
+- **Doctor warnings are now scope-aware** — `vex doctor` now checks the managed npm global bin path plus active PATH conflicts from tool managers such as pyenv, nvm/fnm/volta/asdf, or cargo env setups, without implying that vex will migrate those managers automatically.
+- **Rust historical stable discovery is now user-visible** — `vex list-remote rust` now includes supported archived stable releases for the current macOS architecture, and `vex install rust@1.93.1`-style installs resolve against Rust's official archived installer index instead of only the current stable manifest.
+
+### Fixed
+
+- **Node global CLIs no longer require reinstall-or-switch to become visible** — When npm adds a new executable after Node is already active, `vex relink node` can now rebuild the symlinks immediately instead of waiting for another `vex use` or reinstall cycle.
+
 ## [1.6.0] - 2026-04-04
 
 ### Added

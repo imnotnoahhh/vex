@@ -64,6 +64,7 @@ fn test_init() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("vex init --shell auto"));
+    assert!(home.join(".vex/npm/prefix/bin").exists());
 
     let _ = std::fs::remove_dir_all(&home);
 }
@@ -369,6 +370,59 @@ show = "node"
 
     let _ = fs::remove_dir_all(&home);
     let _ = fs::remove_dir_all(&project);
+}
+
+#[test]
+fn test_relink_node_rebuilds_missing_dynamic_binary_link() {
+    let home = fresh_temp_dir("vex_test_relink_home");
+    let node_bin = home.join(".vex/toolchains/node/24.0.0/bin");
+    fs::create_dir_all(home.join(".vex/current")).unwrap();
+    fs::create_dir_all(home.join(".vex/bin")).unwrap();
+    fs::create_dir_all(&node_bin).unwrap();
+
+    for name in &["node", "npm", "npx"] {
+        write_executable_script(&node_bin.join(name), "#!/bin/sh\nprintf 'ok'\n");
+    }
+
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(
+        home.join(".vex/toolchains/node/24.0.0"),
+        home.join(".vex/current/node"),
+    )
+    .unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(
+        home.join(".vex/toolchains/node/24.0.0/bin/node"),
+        home.join(".vex/bin/node"),
+    )
+    .unwrap();
+
+    write_executable_script(&node_bin.join("openclaw"), "#!/bin/sh\nprintf 'openclaw'\n");
+
+    let output = vex_bin()
+        .args(["relink", "node"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    assert!(home.join(".vex/bin/openclaw").exists());
+
+    let _ = fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_relink_rejects_unsupported_tool() {
+    let home = fresh_temp_dir("vex_test_relink_unsupported");
+    let output = vex_bin()
+        .args(["relink", "python"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("supports node only"));
+
+    let _ = fs::remove_dir_all(&home);
 }
 
 #[test]

@@ -7,6 +7,9 @@ if ('VEX_ORIGINAL_PATH' not-in ($env | columns)) {
     $env.VEX_ORIGINAL_PATH = ($env.PATH | str join ':')
 }
 $env.PATH = ($env.PATH | prepend $"($env.HOME)/.vex/bin")
+$env.PATH = ($env.PATH | prepend $"($env.HOME)/.vex/npm/prefix/bin")
+$env.NPM_CONFIG_PREFIX = $"($env.HOME)/.vex/npm/prefix"
+$env.CARGO_HOME = $"($env.HOME)/.vex/cargo"
 
 def --env __vex_apply_exports [] {
     let exports_path = ($env.HOME | path join ".vex" "state" "env.nu")

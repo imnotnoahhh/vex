@@ -420,3 +420,46 @@ fn test_switch_rolls_back_when_bin_link_update_fails() {
 
     let _ = fs::remove_dir_all(&base);
 }
+
+#[test]
+fn test_relink_current_tool_rebuilds_dynamic_node_binaries() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let base = make_temp_dir("relink_dynamic_node_bins");
+    let tc = base.join("toolchains/node/24.0.0/bin");
+    fs::create_dir_all(&tc).unwrap();
+
+    for name in &["node", "npm", "npx"] {
+        let path = tc.join(name);
+        fs::write(&path, "fake").unwrap();
+        let mut perms = fs::metadata(&path).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&path, perms).unwrap();
+    }
+
+    switch_version_in(&NodeTool, "24.0.0", &base).unwrap();
+
+    let openclaw = tc.join("openclaw");
+    fs::write(&openclaw, "fake").unwrap();
+    let mut perms = fs::metadata(&openclaw).unwrap().permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&openclaw, perms).unwrap();
+
+    relink_current_tool_in(&NodeTool, &base).unwrap();
+
+    assert!(base.join("bin/openclaw").exists());
+    let target = fs::read_link(base.join("bin/openclaw")).unwrap();
+    assert!(target.ends_with("toolchains/node/24.0.0/bin/openclaw"));
+
+    let _ = fs::remove_dir_all(&base);
+}
+
+#[test]
+fn test_relink_current_tool_requires_active_version() {
+    let base = make_temp_dir("relink_requires_current");
+    let err = relink_current_tool_in(&NodeTool, &base)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("No active node version found"));
+    let _ = fs::remove_dir_all(&base);
+}
