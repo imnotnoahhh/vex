@@ -59,7 +59,7 @@ uuid = { version = "1", features = ["v4"] }
 libc = "0.2"
 
 # 并行处理
-rayon = "1.10"
+rayon = "1.12"
 
 # 日志框架
 tracing = "0.1"
