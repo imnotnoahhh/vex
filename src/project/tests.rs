@@ -61,6 +61,30 @@ fn test_load_nearest_project_config_rejects_unsafe_env_key() {
 }
 
 #[test]
+fn test_load_nearest_project_config_rejects_whitespace_env_key() {
+    let temp = TempDir::new().unwrap();
+    let project = temp.path().join("project");
+    fs::create_dir_all(&project).unwrap();
+    fs::write(
+        project.join(".vex.toml"),
+        r#"
+[env]
+" FOO" = "x"
+FOO = "y"
+"#,
+    )
+    .unwrap();
+
+    let error = load_nearest_project_config(&project).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("Invalid environment variable name"),
+        "unexpected error: {error}"
+    );
+}
+
+#[test]
 fn test_load_nearest_project_config_accepts_valid_env_keys() {
     let temp = TempDir::new().unwrap();
     let project = temp.path().join("project");

@@ -2,7 +2,7 @@ use crate::commands::current;
 use crate::config;
 use crate::error::{Result, VexError};
 use crate::output::{print_json, OutputMode};
-use crate::tools::python;
+use crate::tools::python::{self, PYTHON_BUILD_STANDALONE_INTERNAL_ALIAS};
 use crate::ui;
 use owo_colors::OwoColorize;
 use serde::Serialize;
@@ -326,7 +326,7 @@ fn is_user_python_cli(name: &str) -> bool {
         || name.starts_with("Activate.")
         || name == "python"
         || name.starts_with("python3")
-        || name == "\u{1d70b}thon"
+        || name == PYTHON_BUILD_STANDALONE_INTERNAL_ALIAS
         || name == "pip"
         || name.starts_with("pip3"))
 }
@@ -358,7 +358,9 @@ fn matches_filter(filter: Option<&str>, tool: &str, name: &str) -> bool {
     let filter = filter.to_ascii_lowercase();
     match filter.as_str() {
         "all" => true,
-        "maven" => tool == "java" && (name.is_empty() || name.contains("maven") || name == "mvn"),
+        "maven" | "mvn" => {
+            tool == "java" && (name.is_empty() || name.contains("maven") || name == "mvn")
+        }
         "gradle" => tool == "java" && (name.is_empty() || name.contains("gradle")),
         _ => filter == tool || (!name.is_empty() && filter == name),
     }
@@ -475,6 +477,12 @@ mod tests {
             .iter()
             .any(|entry| entry.name == "gradle-caches"));
 
+        let mvn_report = collect(Some("mvn")).unwrap();
+        assert!(mvn_report
+            .entries
+            .iter()
+            .any(|entry| entry.name == "maven-local-repository"));
+
         if let Some(home) = old_home {
             std::env::set_var("HOME", home);
         } else {
@@ -494,7 +502,7 @@ mod tests {
         write_executable(&bin_dir.join("kaggle"));
         write_executable(&bin_dir.join("pip"));
         write_executable(&bin_dir.join("python3.14"));
-        write_executable(&bin_dir.join("\u{1d70b}thon"));
+        write_executable(&bin_dir.join(PYTHON_BUILD_STANDALONE_INTERNAL_ALIAS));
 
         let report = collect(Some("python")).unwrap();
         assert!(report
