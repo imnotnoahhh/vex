@@ -129,7 +129,7 @@ fn dispatch(command: Commands) -> Result<()> {
         Commands::Tui => {
             commands::tui::run()?;
         }
-        Commands::Python(args) => commands::python::run_subcommand(&args.subcmd)?,
+        Commands::Python(args) => commands::python::run_subcommand(&args.subcmd, &args.args)?,
         Commands::Rust(args) => commands::rust::run(&args)?,
     }
 

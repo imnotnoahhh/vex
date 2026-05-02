@@ -70,6 +70,10 @@ pub(super) fn collect_shared_path_entries(
 
     if capture_user_state {
         for (tool_name, version) in versions {
+            if tool_name == "python" && venv_dir.is_some() {
+                continue;
+            }
+
             let tool = tools::get_tool(tool_name)?;
             let install_dir = checked_install_dir(toolchains_dir, tool_name, version)?;
             let environment = tool.managed_environment(vex_dir, Some(&install_dir));

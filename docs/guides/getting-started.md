@@ -219,7 +219,19 @@ vex install python@3.12   # or: python@latest, python@stable
 vex global python@3.12    # set as global default
 ```
 
-### Step 2 — Set up a project
+### Step 2 — Install optional global Python CLIs
+
+Global Python CLIs live in the active version's base environment, similar to a small `conda base` for user tools:
+
+```bash
+vex use python@3.12
+vex python base pip install kaggle
+kaggle --version
+```
+
+When no project `.venv` is active, the shell hook exposes `~/.vex/python/base/<version>/bin`. When a project `.venv` is active, that base `bin` path is hidden so base packages do not leak into the project.
+
+### Step 3 — Set up a project
 
 ```bash
 cd my-project
@@ -228,7 +240,7 @@ vex python init
 
 This creates `.venv` in the current directory using the active vex-managed Python, and records the version in `.tool-versions`.
 
-### Step 3 — Install packages and lock them
+### Step 4 — Install packages and lock them
 
 ```bash
 source .venv/bin/activate   # or let the shell hook do it automatically on next cd
@@ -236,14 +248,14 @@ pip install requests flask
 vex python freeze            # writes requirements.lock
 ```
 
-### Step 4 — Commit
+### Step 5 — Commit
 
 ```bash
 git add .tool-versions requirements.lock
 git commit -m "pin python and dependencies"
 ```
 
-### Step 5 — Restore on another machine
+### Step 6 — Restore on another machine
 
 ```bash
 vex install python@3.12

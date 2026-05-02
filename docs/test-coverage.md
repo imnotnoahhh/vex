@@ -86,10 +86,10 @@ VEX_STRICT_VEX_BIN="$(pwd)/target/debug/vex"
 - 官方归档比对：将本地安装结果与官方 macOS 归档中的二进制清单做比对
 - symlink 校验：`~/.vex/current/*` 与 `~/.vex/bin/*`
 - 可执行性校验：按工具特征探测 `--version` / `--help` / `-version` 等
-- Python 工作流：`vex python init / freeze / sync`
+- Python 工作流：`vex python init / freeze / sync`，以及 Python base 环境路径隔离
 - 多版本切换：手动切到备用版本，再切回目标版本
 - 项目与全局切换：`.tool-versions`、`vex global`、shell hook `cd` 自动切换
-- Python 自动激活：进入项目自动激活 `.venv`，离开项目自动退出
+- Python 自动激活：进入项目自动激活 `.venv`，离开项目自动退出，并隐藏 Python base `bin`
 - 健康检查：`vex doctor`
 - Rust 官方扩展：`vex rust target add/remove`、`vex rust component add/remove`
 - 模板与 team-config 相关 CLI：由单元测试与 CLI integration tests 覆盖

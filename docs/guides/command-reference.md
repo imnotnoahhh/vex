@@ -610,10 +610,27 @@ Supported values:
   - run `pip freeze` and write `requirements.lock`
 - `sync`
   - create `.venv` if needed and restore dependencies from `requirements.lock`
+- `base`
+  - manage the active Python base environment for user-level Python CLIs
+
+`vex python base` accepts these nested forms:
+
+- `vex python base`
+  - create the active version's base environment if needed
+- `vex python base path`
+  - print the active version's base environment path
+- `vex python base pip <args...>`
+  - run `pip` inside the active version's base environment
+- `vex python base freeze`
+  - write the base environment package set to `~/.vex/python/base/<version>/requirements.lock`
+- `vex python base sync`
+  - restore the base environment from that lockfile
 
 Usage:
 
 ```bash
+vex python base
+vex python base pip install kaggle
 vex python init
 vex python freeze
 vex python sync
@@ -623,12 +640,17 @@ Recommended workflow:
 
 ```bash
 vex install python@3.12
+vex use python@3.12
+vex python base pip install kaggle
+
 cd my-project
 vex python init
 pip install requests flask
 vex python freeze
 vex python sync
 ```
+
+The Python base environment is for global CLI tools. Project `.venv` environments stay separate: when the shell hook activates `.venv`, the base environment's `bin` directory is hidden from `PATH` so base-installed tools and packages do not leak into the project.
 
 ## Interactive and Self-Management Commands
 
