@@ -13,7 +13,7 @@ body:
     attributes:
       label: vex 版本
       description: "运行 `vex --version` 获取"
-      placeholder: "0.1.0"
+      placeholder: "vex 1.7.0"
     validations:
       required: true
   - type: dropdown

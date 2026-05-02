@@ -30,7 +30,7 @@ bash scripts/render-homebrew-formula.sh \
   /tmp/vex.rb
 ```
 
-Use the plain semantic version for `<semver>` (for example, `1.6.1` without the leading `v`).
+Use the plain semantic version for `<semver>` (for example, `1.7.0` without the leading `v`).
 
 The generated formula:
 
