@@ -1,5 +1,6 @@
 use super::RemoteFilter;
 use crate::tools::Version;
+use std::cmp::Reverse;
 use std::collections::HashMap;
 
 pub(super) fn apply_filter(
@@ -56,7 +57,7 @@ fn newest_patch_per_major(versions: Vec<Version>) -> Vec<Version> {
                 .max_by_key(|version| version_sort_key(&version.version))
         })
         .collect();
-    result.sort_by(|a, b| version_sort_key(&b.version).cmp(&version_sort_key(&a.version)));
+    result.sort_by_key(|version| Reverse(version_sort_key(&version.version)));
     result
 }
 

@@ -472,6 +472,36 @@ fn test_use_nonexistent_version() {
 }
 
 #[test]
+fn test_use_prefers_latest_installed_partial_match() {
+    let home = fresh_temp_dir("vex_test_use_installed_partial");
+    let latest_installed_bin = home.join(".vex/toolchains/node/20.20.1/bin");
+    let older_installed_bin = home.join(".vex/toolchains/node/20.9.0/bin");
+    fs::create_dir_all(&latest_installed_bin).unwrap();
+    fs::create_dir_all(&older_installed_bin).unwrap();
+    write_executable_script(
+        &latest_installed_bin.join("node"),
+        "#!/bin/sh\nprintf '20.20.1'\n",
+    );
+    write_executable_script(
+        &older_installed_bin.join("node"),
+        "#!/bin/sh\nprintf '20.9.0'\n",
+    );
+    seed_remote_cache(&home, "node", &["20.20.2", "20.20.1", "20.9.0"]);
+
+    let output = vex_bin()
+        .args(["use", "node@20"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{:?}", output);
+    let current = std::fs::read_link(home.join(".vex/current/node")).unwrap();
+    assert_eq!(current, home.join(".vex/toolchains/node/20.20.1"));
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
 fn test_uninstall_without_version() {
     let output = vex_bin().args(["uninstall", "node"]).output().unwrap();
     assert!(!output.status.success());
