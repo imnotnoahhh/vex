@@ -144,6 +144,7 @@ vex globals
 vex globals --verbose
 vex globals go --json
 vex globals maven
+vex globals mvn
 vex globals gradle
 ```
 
@@ -157,6 +158,8 @@ The inventory includes:
 - Maven and Gradle build-tool state under `~/.m2` and `~/.gradle`
 
 Each entry includes its path, source kind, and the active vex version source when a matching toolchain is active.
+
+Supported filters are `all`, `node`, `python`, `go`, `rust`, `java`, `maven`, `mvn`, and `gradle`.
 
 ### `vex repair`
 
@@ -424,6 +427,8 @@ Options:
   - use only cached remote data
 - `--json`
   - print machine-readable output
+
+For Python, the `latest` and `major` filters prefer bugfix/security releases over feature or prerelease assets when both are present.
 
 Examples:
 
