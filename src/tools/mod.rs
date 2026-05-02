@@ -106,6 +106,11 @@ pub trait Tool: Send + Sync {
         true
     }
 
+    /// Return whether an executable discovered by dynamic binary linking should be exposed.
+    fn should_link_dynamic_binary(&self, _name: &str) -> bool {
+        true
+    }
+
     /// Return managed user-state directories and environment variables for this tool.
     fn managed_environment(&self, _vex_dir: &Path, _install_dir: Option<&Path>) -> ToolEnvironment {
         ToolEnvironment::default()

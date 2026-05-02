@@ -138,7 +138,11 @@ impl Tool for PythonTool {
     }
 
     fn link_dynamic_binaries(&self) -> bool {
-        false
+        true
+    }
+
+    fn should_link_dynamic_binary(&self, name: &str) -> bool {
+        name != "\u{1d70b}thon"
     }
 
     fn managed_environment(
