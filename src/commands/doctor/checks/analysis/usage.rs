@@ -1,6 +1,7 @@
 use crate::commands::doctor::types::{ToolDiskUsage, UnusedVersion};
 use crate::error::Result;
 use crate::fs_utils::path_size;
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -47,7 +48,7 @@ pub(super) fn collect_disk_usage(vex_dir: &Path) -> Result<Vec<ToolDiskUsage>> {
         }
     }
 
-    usage.sort_by(|left, right| right.total_bytes.cmp(&left.total_bytes));
+    usage.sort_by_key(|entry| Reverse(entry.total_bytes));
     Ok(usage)
 }
 
@@ -94,6 +95,6 @@ pub(super) fn collect_unused_versions(
         }
     }
 
-    unused.sort_by(|left, right| right.bytes.cmp(&left.bytes));
+    unused.sort_by_key(|entry| Reverse(entry.bytes));
     Ok(unused)
 }

@@ -4,7 +4,12 @@ set -euo pipefail
 echo "🍺 Checking Homebrew formula renderer..."
 
 tmp_formula="$(mktemp /tmp/vex-formula.XXXXXX.rb)"
-trap 'rm -f "$tmp_formula"' EXIT
+tmp_action="$(mktemp -d /tmp/vex-action.XXXXXX)"
+cleanup() {
+  rm -f "$tmp_formula"
+  rm -rf "$tmp_action"
+}
+trap cleanup EXIT
 
 bash scripts/render-homebrew-formula.sh \
   "1.2.0" \
@@ -53,3 +58,46 @@ grep -q 'scripts/render-homebrew-formula.sh' .github/workflows/release-postfligh
 grep -q 'uses: ./.github/workflows/release-postflight.yml' .github/workflows/release.yml
 
 echo "✅ Release postflight workflow passed"
+echo ""
+echo "⚙️ Checking setup action tool activation..."
+
+fake_home="$tmp_action/home"
+fake_bin="$tmp_action/bin"
+fake_log="$tmp_action/vex.log"
+mkdir -p \
+  "$fake_home/.vex/toolchains/node/20.20.1" \
+  "$fake_home/.vex/toolchains/node/20.9.0" \
+  "$fake_bin"
+
+cat > "$fake_bin/vex" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$VEX_FAKE_LOG"
+
+case "$1" in
+  init)
+    mkdir -p "$HOME/.vex"
+    ;;
+  install)
+    ;;
+  use)
+    if [ "${2:-}" != "node@20.20.1" ]; then
+      echo "unexpected activation spec: ${2:-}" >&2
+      exit 1
+    fi
+    ;;
+  *)
+    echo "unexpected vex command: $*" >&2
+    exit 1
+    ;;
+esac
+EOF
+chmod +x "$fake_bin/vex"
+
+HOME="$fake_home" PATH="$fake_bin:$PATH" VEX_FAKE_LOG="$fake_log" \
+  bash scripts/setup-action-tools.sh --tools "node@20"
+
+grep -q '^install --no-switch node@20$' "$fake_log"
+grep -q '^use node@20.20.1$' "$fake_log"
+
+echo "✅ Setup action tool activation passed"

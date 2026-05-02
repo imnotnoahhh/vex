@@ -3,6 +3,8 @@ mod uninstall;
 
 use crate::advisories;
 use crate::error::{Result, VexError};
+use crate::paths::vex_dir;
+use crate::requested_versions;
 use crate::spec::parse_spec;
 use crate::switcher;
 use crate::tools;
@@ -37,7 +39,12 @@ pub fn use_spec(spec: &str) -> Result<()> {
     }
 
     let tool = tools::get_tool(&tool_name)?;
-    let resolved = tools::resolve_fuzzy_version(tool.as_ref(), &version)?;
+    let vex = vex_dir()?;
+    let resolved = match requested_versions::resolve_installed_version(&vex, &tool_name, &version)?
+    {
+        Some(installed) => installed,
+        None => tools::resolve_fuzzy_version(tool.as_ref(), &version)?,
+    };
     switcher::switch_version(tool.as_ref(), &resolved)?;
 
     let advisory = advisories::get_advisory(&tool_name, &resolved);
