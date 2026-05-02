@@ -78,6 +78,13 @@ fn dispatch(command: Commands) -> Result<()> {
         Commands::Current(args) => {
             commands::current::show(output::OutputMode::from_json_flag(args.json), args.verbose)?;
         }
+        Commands::Globals(args) => {
+            commands::globals::show(
+                args.tool.as_deref(),
+                output::OutputMode::from_json_flag(args.json),
+                args.verbose,
+            )?;
+        }
         Commands::Uninstall(args) => {
             commands::manage::uninstall_spec(&args.spec)?;
         }

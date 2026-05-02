@@ -47,6 +47,9 @@ pub(crate) enum Commands {
     /// Show current active versions
     Current(listing::CurrentArgs),
 
+    /// List global CLIs and Java build-tool state managed or detected by vex
+    Globals(listing::GlobalsArgs),
+
     /// Uninstall a version
     Uninstall(manage::UninstallArgs),
 

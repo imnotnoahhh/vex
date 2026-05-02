@@ -165,6 +165,49 @@ fn test_current_json() {
 }
 
 #[test]
+fn test_globals_help() {
+    let output = vex_bin().args(["globals", "--help"]).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("List global CLIs"));
+    assert!(stdout.contains("node, python, go, rust, java, maven, or gradle"));
+}
+
+#[test]
+fn test_globals_json_reports_go_cli_version_source() {
+    let home = fresh_temp_dir("vex_test_globals_go");
+    let vex = home.join(".vex");
+    let go_bin = vex.join("go/bin");
+    let toolchain = vex.join("toolchains/go/1.26.2");
+    fs::create_dir_all(&go_bin).unwrap();
+    fs::create_dir_all(&toolchain).unwrap();
+    fs::create_dir_all(vex.join("current")).unwrap();
+    write_executable_script(&go_bin.join("gopls"), "#!/bin/sh\n");
+    std::os::unix::fs::symlink(&toolchain, vex.join("current/go")).unwrap();
+    fs::write(vex.join("tool-versions"), "go 1.26.2\n").unwrap();
+
+    let output = vex_bin()
+        .args(["globals", "go", "--json"])
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let parsed: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let entries = parsed.get("entries").unwrap().as_array().unwrap();
+    let gopls = entries
+        .iter()
+        .find(|entry| entry.get("name").and_then(Value::as_str) == Some("gopls"))
+        .expect("gopls should be reported");
+    assert_eq!(gopls.get("tool").and_then(Value::as_str), Some("go"));
+    assert_eq!(
+        gopls.get("version_source").and_then(Value::as_str),
+        Some("Global default")
+    );
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
 fn test_env_exports_include_captured_user_state() {
     let home = fresh_temp_dir("vex_test_env_exports_home");
     let project = fresh_temp_dir("vex_test_env_exports_project");
@@ -1047,6 +1090,7 @@ fn test_doctor_json() {
     let parsed: Value = serde_json::from_str(&stdout).unwrap();
     assert!(parsed.get("root").is_some());
     assert!(parsed.get("checks").unwrap().is_array());
+    assert!(parsed.get("global_clis").unwrap().is_array());
 
     let _ = std::fs::remove_dir_all(&home);
 }

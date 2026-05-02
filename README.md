@@ -51,13 +51,14 @@
 - **Lockfile support** — `vex lock` generates reproducible `.tool-versions.lock` with checksums
 - **Team config sync** — `vex install --from` / `vex sync --from` support local files, `vex-config.toml`, HTTPS team configs, and Git repositories with a safe `[tools]` schema
 - **Managed npm globals** — Shell hooks and `vex exec`/`run` export `NPM_CONFIG_PREFIX=$HOME/.vex/npm/prefix`, keep `~/.vex/npm/prefix/bin` on PATH, and prefer project `node_modules/.bin` when present
+- **Global CLI inventory** — `vex globals` shows npm globals, Python base CLIs, Go `GOBIN`, Cargo-installed tools, and Maven/Gradle build-tool state with version-source hints
 - **Auto-export env vars** — Automatic `JAVA_HOME`, `GOROOT`, `CARGO_HOME`, captured user-state env vars, Python base CLI paths, and project `.venv` activation in shell hooks
 - **Official Rust extensions** — `vex rust target/component` manages official Rust toolchain extensions such as `rust-src` and iOS std targets
 - **Contained user-state capture** — supported language homes, caches, and user bins default into `~/.vex`
 - **Explicit home repair** — `vex repair migrate-home` previews and applies safe migrations from legacy home-directory paths
 - **One-command upgrade** — `vex upgrade node` installs and switches to the latest version
 - **Managed context upgrades** — `vex outdated` inspects the current project/global/active scope, and `vex upgrade --all` upgrades that whole managed set
-- **Explicit relink for Node globals** — `vex relink node` rebuilds `~/.vex/bin` after npm adds new executables to the active Node toolchain
+- **Explicit relink for Node toolchain bins** — `vex relink node` rebuilds `~/.vex/bin` when executables appear inside the active Node toolchain
 - **Transient execution** — `vex exec -- <command>` runs tools in the resolved vex environment without changing global symlinks
 - **Project task runner** — `.vex.toml` can define project env vars and named commands for `vex run <task>`
 - **Official GitHub Action** — `uses: imnotnoahhh/vex@v1` installs `vex` plus cached toolchains and managed npm globals on macOS GitHub Actions runners
@@ -71,9 +72,9 @@
 - **Parallel extraction** — fast archive extraction using parallel file processing
 - **Security hardening** — TOCTOU protection, ownership validation, path traversal protection, atomic operations
 - **Self-update** — `vex self-update` upgrades vex itself to the latest GitHub release
-- **Health check** — `vex doctor` validates installation, PATH, shell hooks, managed npm/Python global bins, and active manager conflicts with actionable fixes
+- **Health check** — `vex doctor` validates installation, PATH, shell hooks, managed global bins, Maven/Gradle state, and active manager conflicts with actionable fixes
 - **Disk space check** — prevents installation when less than 500 MB free space available
-- **Machine-readable output** — `--json` for `current`, `list`, `list-remote`, and `doctor`
+- **Machine-readable output** — `--json` for `current`, `globals`, `list`, `list-remote`, and `doctor`
 - **Homebrew support** — optional official tap for brew users, while direct install remains the recommended path
 - **Multi-shell support** — zsh, bash, fish, and nushell integration for auto-switching
 - **macOS native** — supports both Apple Silicon and Intel macOS environments
@@ -213,7 +214,7 @@ vex exec -- node -v
 # Run a named task from .vex.toml
 vex run test
 
-# Rebuild Node binary links after npm installs a new global CLI
+# Rebuild Node binary links after toolchain executables change
 vex relink node
 
 # Preview or apply safe home-directory migrations into ~/.vex
@@ -253,7 +254,7 @@ For the full CLI reference, including command groups and option details, see [do
 | `vex install --from <source>` | Install from a version file, `vex-config.toml`, HTTPS URL, or Git repo | `vex install --from git@github.com:company/vex-config.git` |
 | `vex use <tool@version>` | Switch to installed version | `vex use node@22` |
 | `vex use --auto` | Auto-switch from version files | `vex use --auto` |
-| `vex relink node` | Rebuild `~/.vex/bin` from the active Node toolchain after new npm global executables appear | `vex relink node` |
+| `vex relink node` | Rebuild `~/.vex/bin` from the active Node toolchain | `vex relink node` |
 | `vex local <tool@version>` | Pin version in `.tool-versions` | `vex local node@20.11.0` |
 | `vex global <tool@version>` | Pin version in `~/.vex/tool-versions` | `vex global go@1.23` |
 | `vex list <tool>` | List installed versions | `vex list node` |
@@ -284,6 +285,8 @@ For the full CLI reference, including command groups and option details, see [do
 | `vex run <task> [args...]` | Run a named task from `.vex.toml` | `vex run test -- --nocapture` |
 | `vex current` | Show active versions | `vex current` |
 | `vex current --json` | Show active versions as JSON | `vex current --json` |
+| `vex globals` | Show global CLIs and Java build-tool state | `vex globals --verbose` |
+| `vex globals go --json` | Show global CLI inventory for one tool/ecosystem as JSON | `vex globals go --json` |
 | `vex uninstall <tool@version>` | Uninstall a version | `vex uninstall node@20.11.0` |
 | `vex doctor` | Run health check and diagnostics | `vex doctor` |
 | `vex doctor --json` | Run health check and emit JSON | `vex doctor --json` |

@@ -91,6 +91,7 @@ VEX_STRICT_VEX_BIN="$(pwd)/target/debug/vex"
 - 项目与全局切换：`.tool-versions`、`vex global`、shell hook `cd` 自动切换
 - Python 自动激活：进入项目自动激活 `.venv`，离开项目自动退出，并隐藏 Python base `bin`
 - 健康检查：`vex doctor`
+- 全局 CLI 盘点：`vex globals` 覆盖 Go、Rust、Python、Node 与 Java Maven/Gradle 状态
 - Rust 官方扩展：`vex rust target add/remove`、`vex rust component add/remove`
 - 模板与 team-config 相关 CLI：由单元测试与 CLI integration tests 覆盖
 
