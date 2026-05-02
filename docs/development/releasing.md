@@ -116,7 +116,7 @@ Update version in the following files:
 ## [1.6.1] - 2026-04-06
 
 ### Fixed
-- Node managed npm prefix and relink behavior for newly installed global CLIs
+- Node managed npm prefix visibility and global CLI inventory
 
 ### Changed
 - Documentation refresh and CI/cache updates for managed npm globals

@@ -25,6 +25,7 @@ vex relink
 vex list
 vex list-remote
 vex current
+vex globals
 vex uninstall
 vex env
 vex local
@@ -115,7 +116,7 @@ Notes:
 
 Run health checks for the current installation.
 
-The report includes core PATH/symlink checks, managed npm global bin checks, and active PATH conflicts from other tool managers that can shadow vex.
+The report includes core PATH/symlink checks, managed global CLI inventory, Maven/Gradle state, and active PATH conflicts from other tool managers that can shadow vex.
 
 Usage:
 
@@ -131,6 +132,31 @@ Options:
   - print machine-readable diagnostics
 - `--verbose`
   - include extra provenance and captured-environment details in text output
+
+### `vex globals`
+
+List global CLIs and build-tool state that can affect command resolution.
+
+Usage:
+
+```bash
+vex globals
+vex globals --verbose
+vex globals go --json
+vex globals maven
+vex globals gradle
+```
+
+The inventory includes:
+
+- npm globals from `~/.vex/npm/prefix/bin`
+- Python base CLIs from `~/.vex/python/base/<version>/bin`
+- Go tools from `~/.vex/go/bin`
+- Cargo-installed tools from `~/.vex/cargo/bin`
+- external `mvn` and `gradle` CLIs found on PATH
+- Maven and Gradle build-tool state under `~/.m2` and `~/.gradle`
+
+Each entry includes its path, source kind, and the active vex version source when a matching toolchain is active.
 
 ### `vex repair`
 
@@ -258,7 +284,8 @@ vex relink <tool>
 Notes:
 
 - currently only `node` is supported
-- use this after `npm install -g <package>` adds a new executable to the managed npm prefix
+- use this only when an executable appears inside the active Node toolchain's `bin`
+- npm globals installed into `~/.vex/npm/prefix/bin` are already on PATH and do not need relinking
 - it only rebuilds links under `~/.vex/bin`; it does not install packages or change shell configuration
 - project-local `node_modules/.bin` is preferred automatically when Node is active, so local CLIs win over npm globals in shell hooks, `vex exec`, and `vex run`
 

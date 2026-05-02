@@ -1,6 +1,7 @@
 pub mod aliases;
 pub mod current;
 pub mod doctor;
+pub mod globals;
 pub mod init;
 pub mod manage;
 pub mod process;

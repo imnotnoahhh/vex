@@ -217,6 +217,14 @@ Install project tools into `node_modules` and commit the package-manager lockfil
 
 That means direct commands such as `vite`, `eslint`, and `tsc` resolve to the project-installed versions first. Use `npm install -g` for user-level CLIs only; those go into `~/.vex/npm/prefix/bin`.
 
+Use `vex globals --verbose` when debugging command resolution. It shows the global CLI path, source kind, and active version source for npm, Python base, Go, Cargo, Maven, and Gradle entries.
+
+## Java Build Tools
+
+`vex` manages the active JDK and `JAVA_HOME`; Maven and Gradle remain project or system tools. Prefer `mvnw` and `gradlew` inside projects so the build tool version is pinned with the repository.
+
+`vex globals java` and `vex doctor` report external `mvn`/`gradle` binaries plus `~/.m2` and `~/.gradle` state so you can see when Java build-tool state lives outside `~/.vex`.
+
 ## Rust Projects
 
 For Rust projects that need official extensions, keep them in `vex` instead of falling back to a second toolchain manager:

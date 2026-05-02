@@ -213,7 +213,7 @@ find ~/.vex -type l ! -exec test -e {} \; -print
    find ~/.vex/current -type l ! -exec test -e {} \; -delete
    ```
 
-2. **If this is a newly installed npm global CLI, rebuild Node links explicitly**:
+2. **If the broken link points into the active Node toolchain, rebuild Node links explicitly**:
    ```bash
    vex relink node
    ```
@@ -238,9 +238,9 @@ vex doctor
 
 **Solutions**:
 
-1. **Rebuild Node links**:
+1. **Inspect the managed global CLI path**:
    ```bash
-   vex relink node
+   vex globals node --verbose
    ```
 
 2. **Refresh shell integration if the managed npm bin path is missing**:
@@ -248,7 +248,12 @@ vex doctor
    vex init --shell auto
    ```
 
-3. **Move competing tool-manager paths behind vex when doctor reports conflicts**:
+3. **Reopen the shell or reload shell hooks after refreshing integration**:
+   ```bash
+   exec $SHELL
+   ```
+
+4. **Move competing tool-manager paths behind vex when doctor reports conflicts**:
    - `vex` will warn about active `pyenv`, `nvm`, `fnm`, `volta`, `asdf`, or cargo env paths only when they appear before `~/.vex/bin`
    - `vex` does not auto-migrate those tools; it only reports that they are actively shadowing managed binaries
 

@@ -4,9 +4,48 @@ use crate::ui;
 use owo_colors::OwoColorize;
 
 pub(super) fn render_sections(report: &DoctorReport) {
+    render_global_clis(report);
     render_disk_usage(report);
     render_unused_versions(report);
     render_lifecycle_warnings(report);
+}
+
+fn render_global_clis(report: &DoctorReport) {
+    if report.global_clis.is_empty() {
+        return;
+    }
+
+    ui::header("Global CLIs and Build Tool State");
+    let mut table = ui::Table::new();
+    for entry in report.global_clis.iter().take(20) {
+        let version_context = entry
+            .tool_version
+            .as_ref()
+            .map(|version| {
+                format!(
+                    "{} ({})",
+                    version,
+                    entry.version_source.as_deref().unwrap_or("unknown source")
+                )
+            })
+            .unwrap_or_else(|| "n/a".to_string());
+        table = table.row(vec![
+            entry.tool.yellow().to_string(),
+            entry.name.cyan().to_string(),
+            entry.source.clone(),
+            version_context.dimmed().to_string(),
+        ]);
+    }
+    table.render();
+    println!();
+    if report.global_clis.len() > 20 {
+        println!(
+            "  {} (showing 20 of {}; run 'vex globals --verbose' for the full inventory)",
+            "...".dimmed(),
+            report.global_clis.len()
+        );
+        println!();
+    }
 }
 
 fn render_disk_usage(report: &DoctorReport) {

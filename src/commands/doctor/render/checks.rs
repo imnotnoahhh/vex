@@ -45,6 +45,7 @@ fn check_display_name(id: &str) -> &'static str {
         "home_hygiene" => "home hygiene",
         "path_conflicts" => "PATH conflicts",
         "captured_env" => "captured environment",
+        "global_cli_inventory" => "global CLI inventory",
         "manager_conflicts" => "manager conflicts",
         "installed_tools" => "installed tools",
         "symlinks" => "symlinks integrity",
