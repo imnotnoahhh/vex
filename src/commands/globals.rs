@@ -326,6 +326,7 @@ fn is_user_python_cli(name: &str) -> bool {
         || name.starts_with("Activate.")
         || name == "python"
         || name.starts_with("python3")
+        || name == "\u{1d70b}thon"
         || name == "pip"
         || name.starts_with("pip3"))
 }
@@ -473,6 +474,36 @@ mod tests {
             .entries
             .iter()
             .any(|entry| entry.name == "gradle-caches"));
+
+        if let Some(home) = old_home {
+            std::env::set_var("HOME", home);
+        } else {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[test]
+    fn collect_python_base_reports_user_clis_only() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let home = TempDir::new().unwrap();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", home.path());
+
+        let bin_dir = home.path().join(".vex/python/base/3.14.4/bin");
+        fs::create_dir_all(&bin_dir).unwrap();
+        write_executable(&bin_dir.join("kaggle"));
+        write_executable(&bin_dir.join("pip"));
+        write_executable(&bin_dir.join("python3.14"));
+        write_executable(&bin_dir.join("\u{1d70b}thon"));
+
+        let report = collect(Some("python")).unwrap();
+        assert!(report
+            .entries
+            .iter()
+            .any(|entry| entry.tool == "python" && entry.name == "kaggle"));
+        assert!(!report.entries.iter().any(|entry| entry.name == "pip"
+            || entry.name == "python3.14"
+            || entry.name == "\u{1d70b}thon"));
 
         if let Some(home) = old_home {
             std::env::set_var("HOME", home);

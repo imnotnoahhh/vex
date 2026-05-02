@@ -170,7 +170,15 @@ fn test_globals_help() {
     assert!(output.status.success(), "{:?}", output);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("List global CLIs"));
-    assert!(stdout.contains("node, python, go, rust, java, maven, or gradle"));
+    assert!(stdout.contains("node, python, go, rust, java, maven, mvn, or gradle"));
+}
+
+#[test]
+fn test_globals_rejects_invalid_filter() {
+    let output = vex_bin().args(["globals", "unknown"]).output().unwrap();
+    assert!(!output.status.success(), "{:?}", output);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("invalid value 'unknown'"));
 }
 
 #[test]

@@ -49,7 +49,8 @@ pub(crate) struct CurrentArgs {
 
 #[derive(Args)]
 pub(crate) struct GlobalsArgs {
-    /// Optional tool/ecosystem filter: node, python, go, rust, java, maven, or gradle
+    /// Optional tool/ecosystem filter: all, node, python, go, rust, java, maven, mvn, or gradle
+    #[arg(value_parser = ["all", "node", "python", "go", "rust", "java", "maven", "mvn", "gradle"])]
     pub(crate) tool: Option<String>,
 
     /// Output machine-readable JSON

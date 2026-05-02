@@ -20,7 +20,14 @@ pub(super) fn apply_filter(
                     .collect()
             }
         }
+        RemoteFilter::Major if tool_name == "python" => {
+            newest_patch_per_major(preferred_python_versions(versions))
+        }
         RemoteFilter::Major => newest_patch_per_major(versions),
+        RemoteFilter::Latest if tool_name == "python" => preferred_python_versions(versions)
+            .into_iter()
+            .take(1)
+            .collect(),
         RemoteFilter::Latest => versions.into_iter().take(1).collect(),
     }
 }
@@ -59,6 +66,19 @@ fn newest_patch_per_major(versions: Vec<Version>) -> Vec<Version> {
         .collect();
     result.sort_by_key(|version| Reverse(version_sort_key(&version.version)));
     result
+}
+
+fn preferred_python_versions(versions: Vec<Version>) -> Vec<Version> {
+    let stable = versions
+        .iter()
+        .filter(|version| matches!(version.lts.as_deref(), Some("bugfix" | "security")))
+        .cloned()
+        .collect::<Vec<_>>();
+    if stable.is_empty() {
+        versions
+    } else {
+        stable
+    }
 }
 
 fn extract_major_version(version: &str) -> String {

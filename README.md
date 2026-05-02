@@ -39,6 +39,7 @@
 - **Symlink-based switching** — version changes take effect instantly, no shim overhead
 - **Multi-language** — manage Node.js, Go, Java (Eclipse Temurin), Rust, and Python from one tool
 - **Python base + venv integration** — managed per-version base environments for global Python CLIs, plus `vex python init/freeze/sync` for project `.venv` isolation
+- **Python stable latest behavior** — `vex list-remote python --filter latest` prefers bugfix/security releases over feature or prerelease assets
 - **Shell auto-configuration** — `vex init --shell auto` detects and configures your shell automatically (zsh, bash, fish, nushell)
 - **Project templates** — `vex init --list-templates` and `vex init --template <name>` bootstrap official starters for Node, Go, Java, Rust, and Python
 - **Safe add-only templating** — `vex init --template <name> --add-only` only merges `.tool-versions` and `.gitignore`, then creates missing starter files
@@ -92,7 +93,7 @@ Automatically downloads the correct prebuilt binary for your macOS architecture 
 curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash
 
 # Specific tag
-curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.6.2
+curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.7.0
 ```
 
 For auditability, review the script before running:

@@ -23,6 +23,8 @@ LOCAL_HOME="$TMP_ROOT/local-home"
 NETWORK_HOME="$TMP_ROOT/network-home"
 PROJECT_DIR="$TMP_ROOT/project"
 DOCTOR_PROJECT="$TMP_ROOT/doctor-project"
+GLOBALS_HOME="$TMP_ROOT/globals-home"
+GLOBALS_PROJECT="$TMP_ROOT/globals-project"
 
 PASS=0
 FAIL=0
@@ -104,13 +106,20 @@ EOF
     chmod +x "$path"
 }
 
+write_executable_script() {
+    local path="$1"
+    local body="$2"
+    printf '%s\n' "$body" > "$path"
+    chmod +x "$path"
+}
+
 echo ""
 echo "============================================================"
 echo "vex management feature smoke test"
 echo "JSON + outdated + upgrade --all + prune/gc + doctor + .vex.toml + exec/run"
 echo "============================================================"
 
-mkdir -p "$LOCAL_HOME" "$NETWORK_HOME" "$PROJECT_DIR" "$DOCTOR_PROJECT"
+mkdir -p "$LOCAL_HOME" "$NETWORK_HOME" "$PROJECT_DIR" "$DOCTOR_PROJECT" "$GLOBALS_HOME" "$GLOBALS_PROJECT"
 
 run_local init --shell zsh >/dev/null
 
@@ -276,6 +285,53 @@ installed_json="$TMP_ROOT/list-node.json"
 run_local list node --json > "$installed_json"
 require_python_json "$installed_json" "list node --json includes both installed versions" \
     "versions = {entry['version'] for entry in payload['versions']}; assert {'20.20.1', '25.8.0'} <= versions; assert payload['current_version'] == '20.20.1'"
+
+echo ""
+echo "[ global CLI inventory workflows ]"
+
+mkdir -p \
+    "$GLOBALS_HOME/.vex/npm/prefix/bin" \
+    "$GLOBALS_HOME/.vex/go/bin" \
+    "$GLOBALS_HOME/.vex/cargo/bin" \
+    "$GLOBALS_HOME/.vex/toolchains/go/1.25.4" \
+    "$GLOBALS_HOME/.vex/current" \
+    "$GLOBALS_HOME/.m2/repository" \
+    "$GLOBALS_HOME/.gradle/caches" \
+    "$GLOBALS_HOME/.gradle/wrapper" \
+    "$TMP_ROOT/build-tools"
+
+write_executable_script "$GLOBALS_HOME/.vex/npm/prefix/bin/vite" '#!/bin/sh
+echo npm-global-vite'
+write_executable_script "$GLOBALS_HOME/.vex/go/bin/gopls" '#!/bin/sh
+echo gopls'
+write_executable_script "$GLOBALS_HOME/.vex/cargo/bin/cargo-audit" '#!/bin/sh
+echo cargo-audit'
+write_executable_script "$TMP_ROOT/build-tools/mvn" '#!/bin/sh
+echo Apache Maven fake'
+write_executable_script "$TMP_ROOT/build-tools/gradle" '#!/bin/sh
+echo Gradle fake'
+ln -s "$GLOBALS_HOME/.vex/toolchains/go/1.25.4" "$GLOBALS_HOME/.vex/current/go"
+cat > "$GLOBALS_HOME/.vex/tool-versions" <<'EOF'
+go 1.25.4
+EOF
+
+globals_json="$TMP_ROOT/globals.json"
+HOME="$GLOBALS_HOME" PATH="$TMP_ROOT/build-tools:$GLOBALS_HOME/.vex/npm/prefix/bin:$GLOBALS_HOME/.vex/bin:$BASE_PATH" \
+    "$VEX_BIN" globals --json > "$globals_json"
+require_python_json "$globals_json" "globals --json reports npm, Go, Cargo, Maven, and Gradle state" \
+    "entries = payload['entries']; names = {(entry['tool'], entry['name']) for entry in entries}; assert ('node', 'vite') in names; assert ('go', 'gopls') in names; assert ('rust', 'cargo-audit') in names; assert ('java', 'mvn') in names; assert ('java', 'gradle') in names; assert ('java', 'maven-local-repository') in names; assert ('java', 'gradle-caches') in names; gopls = next(entry for entry in entries if entry['tool'] == 'go' and entry['name'] == 'gopls'); assert gopls['tool_version'] == '1.25.4'; assert gopls['version_source'] == 'Global default'"
+
+globals_go_json="$TMP_ROOT/globals-go.json"
+HOME="$GLOBALS_HOME" PATH="$TMP_ROOT/build-tools:$GLOBALS_HOME/.vex/npm/prefix/bin:$GLOBALS_HOME/.vex/bin:$BASE_PATH" \
+    "$VEX_BIN" globals go --json > "$globals_go_json"
+require_python_json "$globals_go_json" "globals go --json filters to Go global CLIs" \
+    "entries = payload['entries']; assert entries and all(entry['tool'] == 'go' for entry in entries); assert any(entry['name'] == 'gopls' for entry in entries)"
+
+globals_doctor_json="$TMP_ROOT/globals-doctor.json"
+HOME="$GLOBALS_HOME" PATH="$TMP_ROOT/build-tools:$GLOBALS_HOME/.vex/npm/prefix/bin:$GLOBALS_HOME/.vex/bin:$BASE_PATH" \
+    "$VEX_BIN" doctor --json > "$globals_doctor_json"
+require_python_json "$globals_doctor_json" "doctor --json includes global CLI inventory details" \
+    "assert payload['global_clis']; check = next(item for item in payload['checks'] if item['id'] == 'global_cli_inventory'); assert check['status'] == 'ok'; details = '\\n'.join(check['details']); assert 'go:' in details and 'node:' in details and 'java:' in details"
 
 exec_output="$TMP_ROOT/exec.txt"
 run_local_in "$PROJECT_DIR" exec -- node > "$exec_output"
