@@ -276,6 +276,15 @@ Do not commit:
 
 With the shell hook installed, `vex` auto-activates `.venv` when you enter the project and deactivates it when you leave.
 
+Use the Python base environment for user-level CLI tools that are not project dependencies:
+
+```bash
+vex use python@3.12
+vex python base pip install kaggle
+```
+
+That installs into `~/.vex/python/base/<version>`, not into the interpreter toolchain. When no project `.venv` is active, the shell hook exposes the base `bin` directory so commands such as `kaggle` are available. When a project `.venv` is active, `vex` hides the base `bin` directory so global Python CLIs and packages do not affect project dependency resolution.
+
 ## Keep PATH Ownership Simple
 
 Version managers are easiest to operate when only one of them owns the front of `PATH`.

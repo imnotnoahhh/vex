@@ -5,6 +5,7 @@
 //! support lifecycle (bugfix, security, end-of-life).
 
 mod aliases;
+mod base;
 mod install;
 mod lifecycle;
 mod releases;
@@ -22,6 +23,10 @@ use releases::{
 };
 use std::collections::BTreeMap;
 use tracing::warn;
+
+pub use base::{
+    base_bin_dir, base_env_dir, base_pip_bin, ensure_base_environment, is_base_env_healthy,
+};
 
 /// Python tool (python-build-standalone prebuilt CPython)
 pub struct PythonTool;
@@ -123,19 +128,44 @@ impl Tool for PythonTool {
         rewire_placeholder_binaries(install_dir)
     }
 
+    fn post_switch(
+        &self,
+        vex_dir: &std::path::Path,
+        install_dir: &std::path::Path,
+        version: &str,
+    ) -> Result<()> {
+        ensure_base_environment(vex_dir, version, install_dir).map(|_| ())
+    }
+
+    fn link_dynamic_binaries(&self) -> bool {
+        false
+    }
+
     fn managed_environment(
         &self,
         vex_dir: &std::path::Path,
-        _install_dir: Option<&std::path::Path>,
+        install_dir: Option<&std::path::Path>,
     ) -> ToolEnvironment {
         let pip_cache = vex_dir.join("pip/cache");
+        let managed_user_bin_dirs = install_dir
+            .and_then(|path| path.file_name())
+            .map(|version| {
+                vec![base_bin_dir(vex_dir, &version.to_string_lossy())
+                    .display()
+                    .to_string()]
+            })
+            .unwrap_or_default();
+
         ToolEnvironment {
             managed_env: BTreeMap::from([(
                 "PIP_CACHE_DIR".to_string(),
                 pip_cache.display().to_string(),
             )]),
-            managed_user_bin_dirs: Vec::new(),
-            owned_home_dirs: vec![pip_cache.display().to_string()],
+            managed_user_bin_dirs,
+            owned_home_dirs: vec![
+                pip_cache.display().to_string(),
+                base::base_root(vex_dir).display().to_string(),
+            ],
             project_owned_dirs: vec![".venv".to_string()],
         }
     }

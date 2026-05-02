@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Python base environments for global Python CLIs** - Each active Python version now has a managed base virtual environment under `~/.vex/python/base/<version>`. Use `vex python base pip install <package>` for tools such as `kaggle` that should be available outside project virtual environments.
+- **Python base workflow commands** - Added `vex python base`, `vex python base path`, `vex python base pip <args...>`, `vex python base freeze`, and `vex python base sync` for inspecting, installing into, locking, and restoring the active Python base environment.
+
+### Changed
+
+- **Python PATH isolation now matches project intent** - Shell activation exposes the Python base environment when no project `.venv` is active, but hides it inside project `.venv` environments so base-installed CLIs and packages do not leak into project dependency resolution.
+- **Python no longer links dynamic toolchain executables into `~/.vex/bin`** - Python keeps its declared interpreter tools linked, while pip-installed console scripts belong in the managed base environment instead of the immutable interpreter toolchain.
+- **Doctor checks Python base health** - `vex doctor` now reports missing or incomplete Python base environments and warns if a base `bin` path is active inside a project virtual environment.
+
 ## [1.6.2] - 2026-05-02
 
 ### Security

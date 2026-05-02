@@ -38,7 +38,7 @@
 
 - **Symlink-based switching** — version changes take effect instantly, no shim overhead
 - **Multi-language** — manage Node.js, Go, Java (Eclipse Temurin), Rust, and Python from one tool
-- **Python venv integration** — `vex python init/freeze/sync` for venv and lockfile management; shell hook auto-activates `.venv` on `cd`
+- **Python base + venv integration** — managed per-version base environments for global Python CLIs, plus `vex python init/freeze/sync` for project `.venv` isolation
 - **Shell auto-configuration** — `vex init --shell auto` detects and configures your shell automatically (zsh, bash, fish, nushell)
 - **Project templates** — `vex init --list-templates` and `vex init --template <name>` bootstrap official starters for Node, Go, Java, Rust, and Python
 - **Safe add-only templating** — `vex init --template <name> --add-only` only merges `.tool-versions` and `.gitignore`, then creates missing starter files
@@ -51,7 +51,7 @@
 - **Lockfile support** — `vex lock` generates reproducible `.tool-versions.lock` with checksums
 - **Team config sync** — `vex install --from` / `vex sync --from` support local files, `vex-config.toml`, HTTPS team configs, and Git repositories with a safe `[tools]` schema
 - **Managed npm globals** — Shell hooks and `vex exec`/`run` export `NPM_CONFIG_PREFIX=$HOME/.vex/npm/prefix` and keep `~/.vex/npm/prefix/bin` on PATH for stable `npm install -g` behavior
-- **Auto-export env vars** — Automatic `JAVA_HOME`, `GOROOT`, `CARGO_HOME`, captured user-state env vars, and project `.venv` activation in shell hooks
+- **Auto-export env vars** — Automatic `JAVA_HOME`, `GOROOT`, `CARGO_HOME`, captured user-state env vars, Python base CLI paths, and project `.venv` activation in shell hooks
 - **Official Rust extensions** — `vex rust target/component` manages official Rust toolchain extensions such as `rust-src` and iOS std targets
 - **Contained user-state capture** — supported language homes, caches, and user bins default into `~/.vex`
 - **Explicit home repair** — `vex repair migrate-home` previews and applies safe migrations from legacy home-directory paths
@@ -71,7 +71,7 @@
 - **Parallel extraction** — fast archive extraction using parallel file processing
 - **Security hardening** — TOCTOU protection, ownership validation, path traversal protection, atomic operations
 - **Self-update** — `vex self-update` upgrades vex itself to the latest GitHub release
-- **Health check** — `vex doctor` validates installation, PATH, shell hooks, managed npm global bins, and active manager conflicts with actionable fixes
+- **Health check** — `vex doctor` validates installation, PATH, shell hooks, managed npm/Python global bins, and active manager conflicts with actionable fixes
 - **Disk space check** — prevents installation when less than 500 MB free space available
 - **Machine-readable output** — `--json` for `current`, `list`, `list-remote`, and `doctor`
 - **Homebrew support** — optional official tap for brew users, while direct install remains the recommended path
@@ -293,6 +293,10 @@ For the full CLI reference, including command groups and option details, see [do
 | `vex env <shell>` | Output shell hook script | `vex env zsh` |
 | `vex rust target <subcommand>` | Manage official Rust targets for the active Rust toolchain | `vex rust target add aarch64-apple-ios` |
 | `vex rust component <subcommand>` | Manage official Rust components for the active Rust toolchain | `vex rust component add rust-src` |
+| `vex python base` | Ensure the active Python base environment exists | `vex python base` |
+| `vex python base pip <args>` | Run pip inside the active Python base environment | `vex python base pip install kaggle` |
+| `vex python base freeze` | Lock base Python CLI packages to `requirements.lock` inside the base env | `vex python base freeze` |
+| `vex python base sync` | Restore base Python CLI packages from the base env lockfile | `vex python base sync` |
 | `vex python init` | Create `.venv` in current directory | `vex python init` |
 | `vex python freeze` | Lock environment to `requirements.lock` | `vex python freeze` |
 | `vex python sync` | Restore environment from `requirements.lock` | `vex python sync` |
@@ -545,17 +549,23 @@ vex install python@3.12   # or: python@latest, python@bugfix, python@security
 # 2. Activate it
 vex use python@3.12
 
-# 3. Create a project venv
+# 3. Optional: install global Python CLIs into the managed base env
+#    These are available when no project .venv is active.
+vex python base
+vex python base pip install kaggle
+kaggle --version
+
+# 4. Create a project venv
 #    Uses ~/.vex/bin/python3 (the active vex-managed python), falls back to system python3
 cd my-project
 vex python init      # runs: python3 -m venv .venv
                      # also writes python version to .tool-versions
 
-# 4. Install packages and lock them
+# 5. Install packages and lock them
 pip install requests flask
 vex python freeze    # runs: pip freeze > requirements.lock
 
-# 5. Commit both files
+# 6. Commit both files
 git add .tool-versions requirements.lock
 ```
 
@@ -568,6 +578,13 @@ vex python sync      # auto-creates .venv if missing + pip install -r requiremen
 ```
 
 The shell hook automatically refreshes `PATH`, `VIRTUAL_ENV`, and captured tool env vars when you `cd` into or out of a project — no manual `source .venv/bin/activate` needed.
+
+Python has two managed dependency scopes:
+
+- `~/.vex/python/base/<version>` is the per-version base environment. Use it for user-level Python CLIs such as `kaggle`, `black`, or `pipx` alternatives when no project `.venv` is active.
+- `project/.venv` is the project environment. When the shell hook activates `.venv`, the Python base `bin` directory is intentionally hidden so base packages and CLI scripts do not leak into the project.
+
+If you install a CLI with `vex python base pip install kaggle`, it is available from the shell outside project virtual environments. Inside a project, install project-specific dependencies into `.venv` and lock them with `vex python freeze`.
 
 `requirements.lock` is generated by `pip freeze` and pins all packages including transitive dependencies. Commit it to git for reproducible environments.
 
@@ -624,6 +641,7 @@ Run `vex doctor` to perform a comprehensive health check. It validates:
 - Shell hook setup (auto-switch on cd)
 - Installed tool versions and activation status
 - Binary symlinks integrity
+- Managed Python base environment health and project `.venv` isolation
 - Provides actionable suggestions for fixing issues
 
 **Why does `vex list-remote go` not show every historical Go release?**

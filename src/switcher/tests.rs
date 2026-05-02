@@ -2,8 +2,9 @@ use super::*;
 use crate::tools::go::GoTool;
 use crate::tools::node::NodeTool;
 use crate::tools::rust::RustTool;
+use crate::tools::{Arch, Tool, Version};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub(crate) fn make_temp_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("vex_switcher_test_{}", name));
@@ -417,6 +418,73 @@ fn test_switch_rolls_back_when_bin_link_update_fails() {
             target.display()
         );
     }
+
+    let _ = fs::remove_dir_all(&base);
+}
+
+struct PostSwitchFailTool;
+
+impl Tool for PostSwitchFailTool {
+    fn name(&self) -> &str {
+        "failswitch"
+    }
+
+    fn list_remote(&self) -> Result<Vec<Version>> {
+        Ok(Vec::new())
+    }
+
+    fn download_url(&self, _version: &str, _arch: Arch) -> Result<String> {
+        Ok(String::new())
+    }
+
+    fn checksum_url(&self, _version: &str, _arch: Arch) -> Option<String> {
+        None
+    }
+
+    fn bin_names(&self) -> Vec<&str> {
+        vec!["failswitch"]
+    }
+
+    fn bin_subpath(&self) -> &str {
+        "bin"
+    }
+
+    fn post_switch(&self, _vex_dir: &Path, _install_dir: &Path, _version: &str) -> Result<()> {
+        Err(VexError::Parse("post-switch failed".to_string()))
+    }
+}
+
+#[test]
+fn test_switch_rolls_back_when_post_switch_fails() {
+    let base = make_temp_dir("rollback_on_post_switch_failure");
+
+    let tc_v1 = base.join("toolchains/failswitch/1.0.0/bin");
+    let tc_v2 = base.join("toolchains/failswitch/2.0.0/bin");
+    fs::create_dir_all(&tc_v1).unwrap();
+    fs::create_dir_all(&tc_v2).unwrap();
+    fs::write(tc_v1.join("failswitch"), "v1").unwrap();
+    fs::write(tc_v2.join("failswitch"), "v2").unwrap();
+
+    fs::create_dir_all(base.join("current")).unwrap();
+    fs::create_dir_all(base.join("bin")).unwrap();
+    std::os::unix::fs::symlink(
+        base.join("toolchains/failswitch/1.0.0"),
+        base.join("current/failswitch"),
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(tc_v1.join("failswitch"), base.join("bin/failswitch")).unwrap();
+
+    let err = switch_version_in(&PostSwitchFailTool, "2.0.0", &base)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("post-switch failed"));
+
+    let current_target = fs::read_link(base.join("current/failswitch")).unwrap();
+    assert!(current_target.ends_with("toolchains/failswitch/1.0.0"));
+    let bin_target = fs::read_link(base.join("bin/failswitch")).unwrap();
+    assert!(bin_target
+        .to_string_lossy()
+        .contains("/toolchains/failswitch/1.0.0/"));
 
     let _ = fs::remove_dir_all(&base);
 }

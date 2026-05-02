@@ -211,7 +211,7 @@ According to the official `pyenv` docs, `pyenv` uses shims, resolves versions fr
 
 - `.python-version` can stay in place temporarily because `vex` reads it.
 - `pyenv local` maps conceptually to a project version file.
-- `pyenv global` maps conceptually to `vex global python@<version>`.
+- `pyenv global` maps conceptually to `vex global python@<version>`; user-level Python CLIs belong in `vex python base`.
 - `pyenv-virtualenv` style "activate a project environment when I enter the directory" maps conceptually to `vex` shell hook plus a local `.venv`.
 
 ### What changes
@@ -219,10 +219,15 @@ According to the official `pyenv` docs, `pyenv` uses shims, resolves versions fr
 - `vex` stores global defaults in `~/.vex/tool-versions`, not in `pyenv`'s global file location.
 - `vex` does not expose a direct equivalent of `pyenv shell` or `PYENV_VERSION`.
 - For one-off commands, `vex exec` is the cleaner replacement.
+- For global Python CLIs installed with pip, use the per-version base environment:
+  - `vex python base pip install kaggle`
+  - `vex python base freeze`
+  - `vex python base sync`
 - For Python environments, `vex` uses project-local `.venv` plus:
   - `vex python init`
   - `vex python freeze`
   - `vex python sync`
+- The base environment is hidden while a project `.venv` is active, so base-installed tools do not leak into project dependency resolution.
 - If your `.python-version` file contains multiple entries or other `pyenv`-specific patterns, rewrite it to a single version string before treating it as a `vex` source of truth.
 
 ### Suggested migration flow
@@ -236,14 +241,21 @@ According to the official `pyenv` docs, `pyenv` uses shims, resolves versions fr
 
 2. For Python-only repos, you can keep `.python-version` during the initial migration.
 
-3. For mixed-language repos, convert to `.tool-versions`:
+3. Move global pip CLIs into the active Python base environment:
+
+   ```bash
+   vex python base pip install kaggle
+   vex python base freeze
+   ```
+
+4. For mixed-language repos, convert to `.tool-versions`:
 
    ```text
    python 3.12.8
    node 20.11.0
    ```
 
-4. Replace virtualenv plugin workflows with `vex` commands:
+5. Replace virtualenv plugin workflows with `vex` commands:
 
    ```bash
    vex python init
@@ -251,7 +263,7 @@ According to the official `pyenv` docs, `pyenv` uses shims, resolves versions fr
    vex python sync
    ```
 
-5. Verify:
+6. Verify:
 
    ```bash
    vex current
