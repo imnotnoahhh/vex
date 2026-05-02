@@ -1,7 +1,7 @@
 use super::*;
 use crate::tools::go::GoTool;
 use crate::tools::node::NodeTool;
-use crate::tools::python::PythonTool;
+use crate::tools::python::{PythonTool, PYTHON_BUILD_STANDALONE_INTERNAL_ALIAS};
 use crate::tools::rust::RustTool;
 use crate::tools::{Arch, Tool, Version};
 use std::fs;
@@ -185,11 +185,20 @@ fn test_dynamic_binary_detection() {
 #[test]
 fn test_python_dynamic_versioned_binaries_are_linked_without_internal_alias() {
     use std::os::unix::fs::PermissionsExt;
+    use std::process::Command;
 
     let base = make_temp_dir("python_dynamic_bins");
     let toolchain = base.join("toolchains/python/3.14.4");
     let bin = toolchain.join("bin");
     fs::create_dir_all(&bin).unwrap();
+
+    let write_executable = |name: &str, content: &str| {
+        let path = bin.join(name);
+        fs::write(&path, content).unwrap();
+        let mut perms = fs::metadata(&path).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&path, perms).unwrap();
+    };
 
     for name in &[
         "python",
@@ -197,18 +206,33 @@ fn test_python_dynamic_versioned_binaries_are_linked_without_internal_alias() {
         "pip",
         "pip3",
         "idle3.14",
-        "pip3.14",
         "pydoc3.14",
         "python3.14",
         "python3.14-config",
-        "\u{1d70b}thon",
     ] {
-        let path = bin.join(name);
-        fs::write(&path, "fake").unwrap();
-        let mut perms = fs::metadata(&path).unwrap().permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&path, perms).unwrap();
+        write_executable(name, "#!/bin/sh\nexit 0\n");
     }
+    write_executable(
+        "pip3.14",
+        &format!(
+            "#!/bin/sh\n\
+             SCRIPT=\"$0\"\n\
+             while [ -L \"$SCRIPT\" ]; do\n\
+             \tDIR=$(CDPATH= cd -- \"$(dirname -- \"$SCRIPT\")\" && pwd)\n\
+             \tTARGET=$(readlink \"$SCRIPT\")\n\
+             \tcase \"$TARGET\" in\n\
+             \t\t/*) SCRIPT=\"$TARGET\" ;;\n\
+             \t\t*) SCRIPT=\"$DIR/$TARGET\" ;;\n\
+             \tesac\n\
+             done\n\
+             DIR=$(CDPATH= cd -- \"$(dirname -- \"$SCRIPT\")\" && pwd)\n\
+             exec \"$DIR/{PYTHON_BUILD_STANDALONE_INTERNAL_ALIAS}\" \"$@\"\n"
+        ),
+    );
+    write_executable(
+        PYTHON_BUILD_STANDALONE_INTERNAL_ALIAS,
+        "#!/bin/sh\necho internal-ok\n",
+    );
 
     super::links::perform_switch(&PythonTool, &base, &toolchain).unwrap();
 
@@ -221,7 +245,17 @@ fn test_python_dynamic_versioned_binaries_are_linked_without_internal_alias() {
     ] {
         assert!(base.join("bin").join(name).exists());
     }
-    assert!(!base.join("bin").join("\u{1d70b}thon").exists());
+    assert!(!base
+        .join("bin")
+        .join(PYTHON_BUILD_STANDALONE_INTERNAL_ALIAS)
+        .exists());
+
+    let output = Command::new(base.join("bin/pip3.14")).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "internal-ok"
+    );
 
     let _ = fs::remove_dir_all(&base);
 }

@@ -28,6 +28,8 @@ pub use base::{
     base_bin_dir, base_env_dir, base_pip_bin, ensure_base_environment, is_base_env_healthy,
 };
 
+pub const PYTHON_BUILD_STANDALONE_INTERNAL_ALIAS: &str = "\u{1d70b}thon";
+
 /// Python tool (python-build-standalone prebuilt CPython)
 pub struct PythonTool;
 
@@ -142,7 +144,7 @@ impl Tool for PythonTool {
     }
 
     fn should_link_dynamic_binary(&self, name: &str) -> bool {
-        name != "\u{1d70b}thon"
+        name != PYTHON_BUILD_STANDALONE_INTERNAL_ALIAS
     }
 
     fn managed_environment(
