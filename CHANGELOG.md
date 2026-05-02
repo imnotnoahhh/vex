@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-05-02
+
+### Security
+
+- **Project env keys are now validated before shell export rendering** — `.vex.toml` `[env]` names must be valid environment variable identifiers, preventing malicious project config keys from injecting shell syntax into `vex env <shell> --exports`.
+- **Dependency advisories resolved in the lockfile** — Updated `rustls-webpki` and advisory-flagged `rand` versions to fixed releases used by the locked dependency graph.
+
 ## [1.6.1] - 2026-04-08
 
 ### Added
