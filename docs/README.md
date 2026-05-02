@@ -17,12 +17,14 @@ Welcome to the vex documentation! This directory contains guides and resources t
 ## Main Documentation
 
 - [README.md](../README.md) - Project overview and quick start
+- [README.zh-CN.md](../README.zh-CN.md) - Simplified Chinese overview and quick start
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - How to contribute to vex
 - [development/README.md](development/README.md) - Maintainer-focused documentation index
 - [development/architecture.md](development/architecture.md) - System architecture and design decisions
 - [development/testing.md](development/testing.md) - Testing guidelines and validation strategy
 - [development/releasing.md](development/releasing.md) - Release process and versioning
 - [SECURITY.md](../SECURITY.md) - Security policy and reporting vulnerabilities
+- [SUPPORT.md](../SUPPORT.md) - Where to get help and what to include in reports
 - [CHANGELOG.md](../CHANGELOG.md) - Version history and release notes
 
 ## API Documentation
