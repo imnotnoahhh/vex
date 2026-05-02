@@ -1,7 +1,7 @@
 mod discovery;
 
 use crate::error::{Result, VexError};
-pub use discovery::{find_nearest_project_file, find_nearest_venv};
+pub use discovery::{find_nearest_node_modules_bin, find_nearest_project_file, find_nearest_venv};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;

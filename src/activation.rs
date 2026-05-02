@@ -28,6 +28,7 @@ pub fn build_activation_plan(cwd: &Path) -> Result<ActivationPlan> {
     let versions = resolve_active_versions(cwd, &vex_dir)?;
     let venv_dir = resolve_venv_dir(cwd, project.as_ref())?;
     let shared_path_entries = collect_shared_path_entries(
+        cwd,
         &vex_dir,
         &toolchains_dir,
         &versions,

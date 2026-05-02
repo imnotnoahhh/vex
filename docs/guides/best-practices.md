@@ -211,6 +211,12 @@ CI recommendations:
 - keep version files in the repository so cache keys reflect real tool changes
 - use `vex repair migrate-home` after onboarding to pull supported legacy home state into `~/.vex`
 
+## Node Projects
+
+Install project tools into `node_modules` and commit the package-manager lockfile. When Node is active, `vex` puts the nearest `node_modules/.bin` before managed npm globals in shell hooks, `vex exec`, and `vex run`.
+
+That means direct commands such as `vite`, `eslint`, and `tsc` resolve to the project-installed versions first. Use `npm install -g` for user-level CLIs only; those go into `~/.vex/npm/prefix/bin`.
+
 ## Rust Projects
 
 For Rust projects that need official extensions, keep them in `vex` instead of falling back to a second toolchain manager:
