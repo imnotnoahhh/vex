@@ -55,6 +55,7 @@ pub(super) fn resolve_active_versions(
 }
 
 pub(super) fn collect_shared_path_entries(
+    cwd: &Path,
     vex_dir: &Path,
     toolchains_dir: &Path,
     versions: &BTreeMap<String, String>,
@@ -66,6 +67,12 @@ pub(super) fn collect_shared_path_entries(
 
     if let Some(venv_dir) = venv_dir {
         push_path_entry(&mut path_entries, &mut path_seen, venv_dir.join("bin"));
+    }
+
+    if versions.contains_key("node") {
+        if let Some(node_modules_bin) = project::find_nearest_node_modules_bin(cwd) {
+            push_path_entry(&mut path_entries, &mut path_seen, node_modules_bin);
+        }
     }
 
     if capture_user_state {

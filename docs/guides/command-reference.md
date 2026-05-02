@@ -258,8 +258,9 @@ vex relink <tool>
 Notes:
 
 - currently only `node` is supported
-- use this after `npm install -g <package>` adds a new executable to the active Node toolchain
+- use this after `npm install -g <package>` adds a new executable to the managed npm prefix
 - it only rebuilds links under `~/.vex/bin`; it does not install packages or change shell configuration
+- project-local `node_modules/.bin` is preferred automatically when Node is active, so local CLIs win over npm globals in shell hooks, `vex exec`, and `vex run`
 
 Examples:
 

@@ -50,7 +50,7 @@
 - **Offline mode** — `--offline` flag for cache-only operations, no network required
 - **Lockfile support** — `vex lock` generates reproducible `.tool-versions.lock` with checksums
 - **Team config sync** — `vex install --from` / `vex sync --from` support local files, `vex-config.toml`, HTTPS team configs, and Git repositories with a safe `[tools]` schema
-- **Managed npm globals** — Shell hooks and `vex exec`/`run` export `NPM_CONFIG_PREFIX=$HOME/.vex/npm/prefix` and keep `~/.vex/npm/prefix/bin` on PATH for stable `npm install -g` behavior
+- **Managed npm globals** — Shell hooks and `vex exec`/`run` export `NPM_CONFIG_PREFIX=$HOME/.vex/npm/prefix`, keep `~/.vex/npm/prefix/bin` on PATH, and prefer project `node_modules/.bin` when present
 - **Auto-export env vars** — Automatic `JAVA_HOME`, `GOROOT`, `CARGO_HOME`, captured user-state env vars, Python base CLI paths, and project `.venv` activation in shell hooks
 - **Official Rust extensions** — `vex rust target/component` manages official Rust toolchain extensions such as `rust-src` and iOS std targets
 - **Contained user-state capture** — supported language homes, caches, and user bins default into `~/.vex`
@@ -168,7 +168,7 @@ vex env nu | save -f ~/.config/nushell/vex.nu
 echo 'source ~/.config/nushell/vex.nu' >> ~/.config/nushell/config.nu
 ```
 
-The generated hook keeps `~/.vex/npm/prefix/bin` and `~/.vex/bin` on `PATH`, runs `vex use --auto` on directory changes, and refreshes the exported activation environment via `vex env <shell> --exports`.
+The generated hook keeps `~/.vex/npm/prefix/bin` and `~/.vex/bin` on `PATH`, runs `vex use --auto` on directory changes, and refreshes the exported activation environment via `vex env <shell> --exports`. In Node projects, the refreshed PATH prefers the nearest `node_modules/.bin` before managed npm globals so project-local CLIs win.
 
 ### Usage
 

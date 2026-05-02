@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Python PATH isolation now matches project intent** - Shell activation exposes the Python base environment when no project `.venv` is active, but hides it inside project `.venv` environments so base-installed CLIs and packages do not leak into project dependency resolution.
 - **Python no longer links dynamic toolchain executables into `~/.vex/bin`** - Python keeps its declared interpreter tools linked, while pip-installed console scripts belong in the managed base environment instead of the immutable interpreter toolchain.
+- **Node project CLIs now take precedence over npm globals** - When Node is active and a nearest `node_modules/.bin` exists, shell hooks, `vex exec`, and `vex run` place it before managed npm globals so project-local tools such as `vite`, `eslint`, and `tsc` win over globally installed versions.
 - **Doctor checks Python base health** - `vex doctor` now reports missing or incomplete Python base environments and warns if a base `bin` path is active inside a project virtual environment.
 
 ## [1.6.2] - 2026-05-02
