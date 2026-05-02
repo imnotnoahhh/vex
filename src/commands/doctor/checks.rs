@@ -5,6 +5,7 @@ mod summary;
 mod system;
 
 use super::types::DoctorReport;
+use crate::commands::globals;
 use crate::config;
 use crate::error::{Result, VexError};
 use crate::resolver;
@@ -31,6 +32,8 @@ pub(super) fn collect() -> Result<DoctorReport> {
     let disk_usage = analysis::collect_disk_usage(&vex_dir)?;
     let unused_versions = analysis::collect_unused_versions(&vex_dir, &retained)?;
     let lifecycle_warnings = analysis::collect_lifecycle_warnings(&vex_dir)?;
+    let global_clis = globals::collect(None)?.entries;
+    push_global_cli_inventory_check(&global_clis, &mut checks);
 
     let total_disk_bytes = disk_usage.iter().map(|u| u.total_bytes).sum();
     let reclaimable_bytes = unused_versions.iter().map(|u| u.bytes).sum();
@@ -52,6 +55,7 @@ pub(super) fn collect() -> Result<DoctorReport> {
         issues,
         warnings,
         checks,
+        global_clis,
         disk_usage,
         unused_versions,
         lifecycle_warnings,
@@ -59,4 +63,44 @@ pub(super) fn collect() -> Result<DoctorReport> {
         reclaimable_bytes,
         suggestions,
     })
+}
+
+fn push_global_cli_inventory_check(
+    global_clis: &[globals::GlobalCliEntry],
+    checks: &mut Vec<super::types::DoctorCheck>,
+) {
+    let mut counts = std::collections::BTreeMap::<&str, usize>::new();
+    for entry in global_clis {
+        *counts.entry(entry.tool.as_str()).or_default() += 1;
+    }
+
+    let details = if counts.is_empty() {
+        Vec::new()
+    } else {
+        let mut details = counts
+            .into_iter()
+            .map(|(tool, count)| {
+                format!(
+                    "{}: {} {}",
+                    tool,
+                    count,
+                    if count == 1 { "entry" } else { "entries" }
+                )
+            })
+            .collect::<Vec<_>>();
+        details.push("Run 'vex globals --verbose' for paths and version-source hints.".to_string());
+        details
+    };
+
+    super::types::push_check(
+        checks,
+        "global_cli_inventory",
+        super::types::CheckStatus::Ok,
+        if global_clis.is_empty() {
+            "no managed global CLI entries were detected"
+        } else {
+            "global CLI inventory is available"
+        },
+        details,
+    );
 }

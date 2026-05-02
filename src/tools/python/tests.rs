@@ -3,6 +3,9 @@ use super::releases::{
     asset_filename, extract_python_version, find_matching_checksum, get_major_minor,
 };
 use super::*;
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use tempfile::TempDir;
 
 #[test]
 fn test_name() {
@@ -40,6 +43,57 @@ fn test_bin_paths() {
     assert!(paths.contains(&("pydoc3", "bin")));
     assert!(paths.contains(&("python3-config", "bin")));
     assert_eq!(paths.len(), 8);
+}
+
+#[test]
+fn test_python_does_not_link_dynamic_toolchain_binaries() {
+    assert!(!PythonTool.link_dynamic_binaries());
+}
+
+#[test]
+fn test_base_paths_are_versioned_under_vex_home() {
+    let vex = std::path::Path::new("/tmp/vex-home");
+    assert_eq!(
+        base_env_dir(vex, "3.13.3"),
+        vex.join("python").join("base").join("3.13.3")
+    );
+    assert_eq!(
+        base_bin_dir(vex, "3.13.3"),
+        vex.join("python").join("base").join("3.13.3").join("bin")
+    );
+}
+
+#[test]
+fn test_ensure_base_environment_creates_missing_base() {
+    let temp = TempDir::new().unwrap();
+    let vex = temp.path().join(".vex");
+    let install = temp.path().join("python-3.13.3");
+    let bin = install.join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let python = bin.join("python3");
+    fs::write(
+        &python,
+        r#"#!/bin/sh
+if [ "$1" = "-m" ] && [ "$2" = "venv" ]; then
+  mkdir -p "$3/bin"
+  printf '#!/bin/sh\n' > "$3/bin/python"
+  printf '#!/bin/sh\n' > "$3/bin/pip"
+  chmod +x "$3/bin/python" "$3/bin/pip"
+  exit 0
+fi
+exit 42
+"#,
+    )
+    .unwrap();
+    let mut perms = fs::metadata(&python).unwrap().permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&python, perms).unwrap();
+
+    let base = ensure_base_environment(&vex, "3.13.3", &install).unwrap();
+    assert_eq!(base, base_env_dir(&vex, "3.13.3"));
+    assert!(base.join("bin/python").exists());
+    assert!(base.join("bin/pip").exists());
+    assert!(is_base_env_healthy(&vex, "3.13.3"));
 }
 
 #[test]

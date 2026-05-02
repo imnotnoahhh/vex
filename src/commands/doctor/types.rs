@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use crate::commands::globals::GlobalCliEntry;
+
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckStatus {
@@ -44,6 +46,7 @@ pub struct DoctorReport {
     pub issues: usize,
     pub warnings: usize,
     pub checks: Vec<DoctorCheck>,
+    pub global_clis: Vec<GlobalCliEntry>,
     pub disk_usage: Vec<ToolDiskUsage>,
     pub unused_versions: Vec<UnusedVersion>,
     pub lifecycle_warnings: Vec<LifecycleWarning>,

@@ -38,7 +38,8 @@
 
 - **Symlink-based switching** — version changes take effect instantly, no shim overhead
 - **Multi-language** — manage Node.js, Go, Java (Eclipse Temurin), Rust, and Python from one tool
-- **Python venv integration** — `vex python init/freeze/sync` for venv and lockfile management; shell hook auto-activates `.venv` on `cd`
+- **Python base + venv integration** — managed per-version base environments for global Python CLIs, plus `vex python init/freeze/sync` for project `.venv` isolation
+- **Python stable latest behavior** — `vex list-remote python --filter latest` prefers bugfix/security releases over feature or prerelease assets
 - **Shell auto-configuration** — `vex init --shell auto` detects and configures your shell automatically (zsh, bash, fish, nushell)
 - **Project templates** — `vex init --list-templates` and `vex init --template <name>` bootstrap official starters for Node, Go, Java, Rust, and Python
 - **Safe add-only templating** — `vex init --template <name> --add-only` only merges `.tool-versions` and `.gitignore`, then creates missing starter files
@@ -50,14 +51,15 @@
 - **Offline mode** — `--offline` flag for cache-only operations, no network required
 - **Lockfile support** — `vex lock` generates reproducible `.tool-versions.lock` with checksums
 - **Team config sync** — `vex install --from` / `vex sync --from` support local files, `vex-config.toml`, HTTPS team configs, and Git repositories with a safe `[tools]` schema
-- **Managed npm globals** — Shell hooks and `vex exec`/`run` export `NPM_CONFIG_PREFIX=$HOME/.vex/npm/prefix` and keep `~/.vex/npm/prefix/bin` on PATH for stable `npm install -g` behavior
-- **Auto-export env vars** — Automatic `JAVA_HOME`, `GOROOT`, `CARGO_HOME`, captured user-state env vars, and project `.venv` activation in shell hooks
+- **Managed npm globals** — Shell hooks and `vex exec`/`run` export `NPM_CONFIG_PREFIX=$HOME/.vex/npm/prefix`, keep `~/.vex/npm/prefix/bin` on PATH, and prefer project `node_modules/.bin` when present
+- **Global CLI inventory** — `vex globals` shows npm globals, Python base CLIs, Go `GOBIN`, Cargo-installed tools, and Maven/Gradle build-tool state with version-source hints
+- **Auto-export env vars** — Automatic `JAVA_HOME`, `GOROOT`, `CARGO_HOME`, captured user-state env vars, Python base CLI paths, and project `.venv` activation in shell hooks
 - **Official Rust extensions** — `vex rust target/component` manages official Rust toolchain extensions such as `rust-src` and iOS std targets
 - **Contained user-state capture** — supported language homes, caches, and user bins default into `~/.vex`
 - **Explicit home repair** — `vex repair migrate-home` previews and applies safe migrations from legacy home-directory paths
 - **One-command upgrade** — `vex upgrade node` installs and switches to the latest version
 - **Managed context upgrades** — `vex outdated` inspects the current project/global/active scope, and `vex upgrade --all` upgrades that whole managed set
-- **Explicit relink for Node globals** — `vex relink node` rebuilds `~/.vex/bin` after npm adds new executables to the active Node toolchain
+- **Explicit relink for Node toolchain bins** — `vex relink node` rebuilds `~/.vex/bin` when executables appear inside the active Node toolchain
 - **Transient execution** — `vex exec -- <command>` runs tools in the resolved vex environment without changing global symlinks
 - **Project task runner** — `.vex.toml` can define project env vars and named commands for `vex run <task>`
 - **Official GitHub Action** — `uses: imnotnoahhh/vex@v1` installs `vex` plus cached toolchains and managed npm globals on macOS GitHub Actions runners
@@ -71,9 +73,9 @@
 - **Parallel extraction** — fast archive extraction using parallel file processing
 - **Security hardening** — TOCTOU protection, ownership validation, path traversal protection, atomic operations
 - **Self-update** — `vex self-update` upgrades vex itself to the latest GitHub release
-- **Health check** — `vex doctor` validates installation, PATH, shell hooks, managed npm global bins, and active manager conflicts with actionable fixes
+- **Health check** — `vex doctor` validates installation, PATH, shell hooks, managed global bins, Maven/Gradle state, and active manager conflicts with actionable fixes
 - **Disk space check** — prevents installation when less than 500 MB free space available
-- **Machine-readable output** — `--json` for `current`, `list`, `list-remote`, and `doctor`
+- **Machine-readable output** — `--json` for `current`, `globals`, `list`, `list-remote`, and `doctor`
 - **Homebrew support** — optional official tap for brew users, while direct install remains the recommended path
 - **Multi-shell support** — zsh, bash, fish, and nushell integration for auto-switching
 - **macOS native** — supports both Apple Silicon and Intel macOS environments
@@ -91,7 +93,7 @@ Automatically downloads the correct prebuilt binary for your macOS architecture 
 curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash
 
 # Specific tag
-curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.6.2
+curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.7.0
 ```
 
 For auditability, review the script before running:
@@ -168,7 +170,7 @@ vex env nu | save -f ~/.config/nushell/vex.nu
 echo 'source ~/.config/nushell/vex.nu' >> ~/.config/nushell/config.nu
 ```
 
-The generated hook keeps `~/.vex/npm/prefix/bin` and `~/.vex/bin` on `PATH`, runs `vex use --auto` on directory changes, and refreshes the exported activation environment via `vex env <shell> --exports`.
+The generated hook keeps `~/.vex/npm/prefix/bin` and `~/.vex/bin` on `PATH`, runs `vex use --auto` on directory changes, and refreshes the exported activation environment via `vex env <shell> --exports`. In Node projects, the refreshed PATH prefers the nearest `node_modules/.bin` before managed npm globals so project-local CLIs win.
 
 ### Usage
 
@@ -213,7 +215,7 @@ vex exec -- node -v
 # Run a named task from .vex.toml
 vex run test
 
-# Rebuild Node binary links after npm installs a new global CLI
+# Rebuild Node binary links after toolchain executables change
 vex relink node
 
 # Preview or apply safe home-directory migrations into ~/.vex
@@ -253,7 +255,7 @@ For the full CLI reference, including command groups and option details, see [do
 | `vex install --from <source>` | Install from a version file, `vex-config.toml`, HTTPS URL, or Git repo | `vex install --from git@github.com:company/vex-config.git` |
 | `vex use <tool@version>` | Switch to installed version | `vex use node@22` |
 | `vex use --auto` | Auto-switch from version files | `vex use --auto` |
-| `vex relink node` | Rebuild `~/.vex/bin` from the active Node toolchain after new npm global executables appear | `vex relink node` |
+| `vex relink node` | Rebuild `~/.vex/bin` from the active Node toolchain | `vex relink node` |
 | `vex local <tool@version>` | Pin version in `.tool-versions` | `vex local node@20.11.0` |
 | `vex global <tool@version>` | Pin version in `~/.vex/tool-versions` | `vex global go@1.23` |
 | `vex list <tool>` | List installed versions | `vex list node` |
@@ -284,6 +286,8 @@ For the full CLI reference, including command groups and option details, see [do
 | `vex run <task> [args...]` | Run a named task from `.vex.toml` | `vex run test -- --nocapture` |
 | `vex current` | Show active versions | `vex current` |
 | `vex current --json` | Show active versions as JSON | `vex current --json` |
+| `vex globals` | Show global CLIs and Java build-tool state | `vex globals --verbose` |
+| `vex globals go --json` | Show global CLI inventory for one tool/ecosystem as JSON | `vex globals go --json` |
 | `vex uninstall <tool@version>` | Uninstall a version | `vex uninstall node@20.11.0` |
 | `vex doctor` | Run health check and diagnostics | `vex doctor` |
 | `vex doctor --json` | Run health check and emit JSON | `vex doctor --json` |
@@ -293,6 +297,10 @@ For the full CLI reference, including command groups and option details, see [do
 | `vex env <shell>` | Output shell hook script | `vex env zsh` |
 | `vex rust target <subcommand>` | Manage official Rust targets for the active Rust toolchain | `vex rust target add aarch64-apple-ios` |
 | `vex rust component <subcommand>` | Manage official Rust components for the active Rust toolchain | `vex rust component add rust-src` |
+| `vex python base` | Ensure the active Python base environment exists | `vex python base` |
+| `vex python base pip <args>` | Run pip inside the active Python base environment | `vex python base pip install kaggle` |
+| `vex python base freeze` | Lock base Python CLI packages to `requirements.lock` inside the base env | `vex python base freeze` |
+| `vex python base sync` | Restore base Python CLI packages from the base env lockfile | `vex python base sync` |
 | `vex python init` | Create `.venv` in current directory | `vex python init` |
 | `vex python freeze` | Lock environment to `requirements.lock` | `vex python freeze` |
 | `vex python sync` | Restore environment from `requirements.lock` | `vex python sync` |
@@ -545,17 +553,23 @@ vex install python@3.12   # or: python@latest, python@bugfix, python@security
 # 2. Activate it
 vex use python@3.12
 
-# 3. Create a project venv
+# 3. Optional: install global Python CLIs into the managed base env
+#    These are available when no project .venv is active.
+vex python base
+vex python base pip install kaggle
+kaggle --version
+
+# 4. Create a project venv
 #    Uses ~/.vex/bin/python3 (the active vex-managed python), falls back to system python3
 cd my-project
 vex python init      # runs: python3 -m venv .venv
                      # also writes python version to .tool-versions
 
-# 4. Install packages and lock them
+# 5. Install packages and lock them
 pip install requests flask
 vex python freeze    # runs: pip freeze > requirements.lock
 
-# 5. Commit both files
+# 6. Commit both files
 git add .tool-versions requirements.lock
 ```
 
@@ -568,6 +582,13 @@ vex python sync      # auto-creates .venv if missing + pip install -r requiremen
 ```
 
 The shell hook automatically refreshes `PATH`, `VIRTUAL_ENV`, and captured tool env vars when you `cd` into or out of a project — no manual `source .venv/bin/activate` needed.
+
+Python has two managed dependency scopes:
+
+- `~/.vex/python/base/<version>` is the per-version base environment. Use it for user-level Python CLIs such as `kaggle`, `black`, or `pipx` alternatives when no project `.venv` is active.
+- `project/.venv` is the project environment. When the shell hook activates `.venv`, the Python base `bin` directory is intentionally hidden so base packages and CLI scripts do not leak into the project.
+
+If you install a CLI with `vex python base pip install kaggle`, it is available from the shell outside project virtual environments. Inside a project, install project-specific dependencies into `.venv` and lock them with `vex python freeze`.
 
 `requirements.lock` is generated by `pip freeze` and pins all packages including transitive dependencies. Commit it to git for reproducible environments.
 
@@ -624,6 +645,7 @@ Run `vex doctor` to perform a comprehensive health check. It validates:
 - Shell hook setup (auto-switch on cd)
 - Installed tool versions and activation status
 - Binary symlinks integrity
+- Managed Python base environment health and project `.venv` isolation
 - Provides actionable suggestions for fixing issues
 
 **Why does `vex list-remote go` not show every historical Go release?**

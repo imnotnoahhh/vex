@@ -56,6 +56,11 @@ fn switch_version_in(tool: &dyn Tool, version: &str, base_dir: &Path) -> Result<
 
     match links::perform_switch(tool, base_dir, &toolchain_dir) {
         Ok(_) => {
+            if let Err(err) = tool.post_switch(base_dir, &toolchain_dir, version) {
+                warn!("Post-switch setup failed: {}, attempting rollback", err);
+                attempt_rollback(tool, base_dir, old_version.as_deref());
+                return Err(err);
+            }
             println!("{} Switched to {}@{}", "✓".green(), tool.name(), version);
             Ok(())
         }

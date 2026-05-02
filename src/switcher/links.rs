@@ -61,7 +61,9 @@ fn update_bin_links(tool: &dyn Tool, base_dir: &Path, toolchain_dir: &Path) -> R
 
     let bin_paths = tool.bin_paths();
     let mut new_binaries = link_declared_binaries(toolchain_dir, &bin_dir, &bin_paths)?;
-    link_dynamic_binaries(toolchain_dir, &bin_dir, &bin_paths, &mut new_binaries)?;
+    if tool.link_dynamic_binaries() {
+        link_dynamic_binaries(toolchain_dir, &bin_dir, &bin_paths, &mut new_binaries)?;
+    }
     cleanup_stale_bin_links(tool, &bin_dir, &new_binaries);
 
     Ok(())

@@ -91,6 +91,17 @@ jobs:
         with:
           key: feature-smoke-macos-14
       - run: cargo build
+      - name: Global CLI inventory smoke
+        run: |
+          target/debug/vex globals --help
+          target/debug/vex globals --json
+          target/debug/vex doctor --json > /tmp/vex-doctor.json
+          python3 - <<'PY'
+          import json
+          payload = json.load(open("/tmp/vex-doctor.json"))
+          assert "global_clis" in payload
+          assert any(check["id"] == "global_cli_inventory" for check in payload["checks"])
+          PY
       - run: bash scripts/test-management-features.sh
       - run: VEX_BIN="$(pwd)/target/debug/vex" bash scripts/test-shell-hooks.sh
       - run: VEX_BIN="$(pwd)/target/debug/vex" bash scripts/test-rust-extensions-live.sh

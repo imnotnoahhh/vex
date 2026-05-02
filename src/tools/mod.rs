@@ -95,6 +95,17 @@ pub trait Tool: Send + Sync {
         Ok(())
     }
 
+    /// Post-switch hook for tool-specific active-version setup, defaults to no-op.
+    /// A failure rolls the switch back to the previous active version.
+    fn post_switch(&self, _vex_dir: &Path, _install_dir: &Path, _version: &str) -> Result<()> {
+        Ok(())
+    }
+
+    /// Whether executable files not declared by [`Tool::bin_paths`] should be linked into `~/.vex/bin`.
+    fn link_dynamic_binaries(&self) -> bool {
+        true
+    }
+
     /// Return managed user-state directories and environment variables for this tool.
     fn managed_environment(&self, _vex_dir: &Path, _install_dir: Option<&Path>) -> ToolEnvironment {
         ToolEnvironment::default()
