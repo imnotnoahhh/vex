@@ -55,6 +55,7 @@ pub fn load_nearest_project_config(start_dir: &Path) -> Result<Option<LoadedProj
     let content = fs::read_to_string(&path)?;
     let config: ProjectConfig = toml::from_str(&content)
         .map_err(|err| VexError::Config(format!("Failed to parse {}: {}", path.display(), err)))?;
+    validate_project_config(&path, &config)?;
 
     Ok(Some(LoadedProjectConfig {
         root: path
@@ -64,6 +65,31 @@ pub fn load_nearest_project_config(start_dir: &Path) -> Result<Option<LoadedProj
         path,
         config,
     }))
+}
+
+fn validate_project_config(path: &Path, config: &ProjectConfig) -> Result<()> {
+    for key in config.env.keys() {
+        let key = key.trim();
+        if !is_valid_env_key(key) {
+            return Err(VexError::Config(format!(
+                "Invalid environment variable name '{}' in {}. Names must match [A-Za-z_][A-Za-z0-9_]*.",
+                key.escape_debug(),
+                path.display()
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+fn is_valid_env_key(key: &str) -> bool {
+    let mut chars = key.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+
+    matches!(first, 'A'..='Z' | 'a'..='z' | '_')
+        && chars.all(|ch| matches!(ch, 'A'..='Z' | 'a'..='z' | '0'..='9' | '_'))
 }
 
 #[cfg(test)]
