@@ -62,7 +62,7 @@ fn update_bin_links(tool: &dyn Tool, base_dir: &Path, toolchain_dir: &Path) -> R
     let bin_paths = tool.bin_paths();
     let mut new_binaries = link_declared_binaries(toolchain_dir, &bin_dir, &bin_paths)?;
     if tool.link_dynamic_binaries() {
-        link_dynamic_binaries(toolchain_dir, &bin_dir, &bin_paths, &mut new_binaries)?;
+        link_dynamic_binaries(tool, toolchain_dir, &bin_dir, &bin_paths, &mut new_binaries)?;
     }
     cleanup_stale_bin_links(tool, &bin_dir, &new_binaries);
 
@@ -92,6 +92,7 @@ fn link_declared_binaries(
 }
 
 fn link_dynamic_binaries(
+    tool: &dyn Tool,
     toolchain_dir: &Path,
     bin_dir: &Path,
     bin_paths: &[(&str, &str)],
@@ -109,6 +110,9 @@ fn link_dynamic_binaries(
                 let filename_str = filename.to_string_lossy();
 
                 if bin_paths.iter().any(|(name, _)| *name == filename_str) {
+                    continue;
+                }
+                if !tool.should_link_dynamic_binary(filename_str.as_ref()) {
                     continue;
                 }
 
