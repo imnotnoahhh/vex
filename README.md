@@ -91,7 +91,7 @@ Automatically downloads the correct prebuilt binary for your macOS architecture 
 curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash
 
 # Specific tag
-curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.6.1
+curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.6.2
 ```
 
 For auditability, review the script before running:
