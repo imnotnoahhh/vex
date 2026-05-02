@@ -3,6 +3,8 @@ name: Strict macOS
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       validate_published_release:

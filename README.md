@@ -1,6 +1,10 @@
 <h1 align="center">vex</h1>
 
 <p align="center">
+  <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+<p align="center">
   <strong>A fast, multi-language version manager for macOS</strong>
 </p>
 
@@ -742,6 +746,10 @@ Note: Benchmarks are not run in CI to keep build times fast. Run them locally to
 For reporting guidance and fair comparison rules, see [docs/guides/benchmark-methodology.md](docs/guides/benchmark-methodology.md).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+## Support
+
+For usage help, bug reports, and feature requests, see [SUPPORT.md](SUPPORT.md). Please report vulnerabilities through [SECURITY.md](SECURITY.md), not public issues.
 
 ## Roadmap
 

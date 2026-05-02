@@ -50,7 +50,7 @@ fn test_python_links_dynamic_toolchain_binaries_except_internal_alias() {
     assert!(PythonTool.link_dynamic_binaries());
     assert!(PythonTool.should_link_dynamic_binary("python3.14"));
     assert!(PythonTool.should_link_dynamic_binary("pip3.14"));
-    assert!(!PythonTool.should_link_dynamic_binary("\u{1d70b}thon"));
+    assert!(!PythonTool.should_link_dynamic_binary(PYTHON_BUILD_STANDALONE_INTERNAL_ALIAS));
 }
 
 #[test]

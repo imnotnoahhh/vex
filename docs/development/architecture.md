@@ -542,7 +542,6 @@ Python is supported via [python-build-standalone](https://github.com/astral-sh/p
 
 ## References
 
-- `CLAUDE.md` - Development guidelines
 - [../../CONTRIBUTING.md](../../CONTRIBUTING.md) - Contribution guide
 - [../../SECURITY.md](../../SECURITY.md) - Security policy
 - [testing.md](testing.md) - Testing guidelines

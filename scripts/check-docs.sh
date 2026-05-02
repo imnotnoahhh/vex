@@ -7,10 +7,11 @@ echo "📝 Checking documentation quality..."
 echo ""
 
 markdown_files() {
-    find . -type f -name "*.md" \
-        -not -path "./target/*" \
-        -not -path "./.git/*" \
-        | sort
+    git ls-files --cached --others --exclude-standard "*.md" ":(glob)**/*.md" \
+        | while IFS= read -r file; do
+            [ -f "$file" ] && echo "$file"
+        done \
+        | sort -u
 }
 
 check_markdown_links() {
