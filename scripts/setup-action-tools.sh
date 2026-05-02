@@ -51,6 +51,69 @@ fi
 
 command -v vex >/dev/null 2>&1 || fail "vex must already be installed"
 
+installed_spec_for_request() {
+  local spec="$1"
+  local tool requested tool_dir
+
+  if [[ "$spec" != *@* ]]; then
+    return 1
+  fi
+
+  tool="${spec%%@*}"
+  requested="${spec#*@}"
+  if [ -z "$tool" ] || [ -z "$requested" ]; then
+    return 1
+  fi
+
+  command -v python3 >/dev/null 2>&1 || return 1
+  tool_dir="$HOME/.vex/toolchains/$tool"
+
+  python3 - "$tool_dir" "$requested" "$tool" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+tool_dir = Path(sys.argv[1])
+requested = sys.argv[2].strip()
+tool = sys.argv[3]
+
+
+def normalize(version: str) -> str:
+    return version[1:] if version.startswith("v") else version
+
+
+def matches_request(installed: str, request: str) -> bool:
+    if request in {"latest", "lts"} or request.startswith("lts-"):
+        return True
+    installed = normalize(installed)
+    request = normalize(request)
+    return installed == request or installed.startswith(f"{request}.")
+
+
+def version_key(version: str) -> list[int]:
+    parts = []
+    for segment in normalize(version).split("."):
+        match = re.match(r"\d+", segment)
+        parts.append(int(match.group(0)) if match else -1)
+    return parts
+
+
+if not tool_dir.exists():
+    sys.exit(1)
+
+matches = [
+    path.name
+    for path in tool_dir.iterdir()
+    if path.is_dir() and matches_request(path.name, requested)
+]
+
+if not matches:
+    sys.exit(1)
+
+print(f"{tool}@{max(matches, key=version_key)}")
+PY
+}
+
 # Ensure ~/.vex directory structure exists (may be absent on fresh or cache-miss runs)
 if [ ! -d "$HOME/.vex" ]; then
   vex init --shell skip
@@ -78,6 +141,11 @@ printf 'Installing requested tools: %s\n' "$NORMALIZED_TOOLS"
 vex install --no-switch "${SPECS[@]}"
 
 for spec in "${SPECS[@]}"; do
-  printf 'Activating %s...\n' "$spec"
-  vex use "$spec"
+  if resolved_spec="$(installed_spec_for_request "$spec")"; then
+    printf 'Activating %s...\n' "$resolved_spec"
+    vex use "$resolved_spec"
+  else
+    printf 'Activating %s...\n' "$spec"
+    vex use "$spec"
+  fi
 done
