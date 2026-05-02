@@ -93,3 +93,15 @@ fn test_find_nearest_venv() {
     let venv = find_nearest_venv(&nested).expect("venv should be found");
     assert_eq!(venv, project.join(".venv"));
 }
+
+#[test]
+fn test_find_nearest_node_modules_bin() {
+    let temp = TempDir::new().unwrap();
+    let project = temp.path().join("project");
+    let nested = project.join("packages/app/src");
+    fs::create_dir_all(project.join("node_modules/.bin")).unwrap();
+    fs::create_dir_all(&nested).unwrap();
+
+    let bin = find_nearest_node_modules_bin(&nested).expect("node_modules/.bin should be found");
+    assert_eq!(bin, project.join("node_modules/.bin"));
+}

@@ -133,6 +133,18 @@ fn definitions(home: &Path) -> Vec<HomeStateAudit> {
             "pyenv installs are outside ~/.vex and need manual cleanup",
             home.join(".pyenv"),
         ),
+        advisory(
+            "maven_local_repository",
+            "java",
+            "Maven local repository is outside ~/.vex; prefer project mvnw and keep this as external build-tool state",
+            home.join(".m2/repository"),
+        ),
+        advisory(
+            "gradle_home",
+            "java",
+            "Gradle home is outside ~/.vex; prefer project gradlew and keep this as external build-tool state",
+            home.join(".gradle"),
+        ),
     ]
 }
 
