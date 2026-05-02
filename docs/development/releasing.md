@@ -24,9 +24,9 @@ MAJOR.MINOR.PATCH
 
 ### Version Examples
 
-- `1.5.0` → `1.6.0`: New feature (backward compatible)
-- `1.6.0` → `1.6.1`: Bug fix
-- `1.6.1` → `2.0.0`: Breaking change
+- `1.7.0` → `1.8.0`: New feature (backward compatible)
+- `1.7.0` → `1.7.1`: Bug fix
+- `1.7.1` → `2.0.0`: Breaking change
 
 ### Pre-1.0 Versioning
 
@@ -94,7 +94,7 @@ Update version in the following files:
 - [ ] `Cargo.toml`
   ```toml
   [package]
-  version = "1.6.1"
+  version = "X.Y.Z"
   ```
 
 - [ ] `Cargo.lock` (run `cargo build` to update)
@@ -113,13 +113,13 @@ Update version in the following files:
 ```markdown
 ## [Unreleased]
 
-## [1.6.1] - 2026-04-06
+## [X.Y.Z] - YYYY-MM-DD
 
 ### Fixed
-- Node managed npm prefix visibility and global CLI inventory
+- Short description of the release fix
 
 ### Changed
-- Documentation refresh and CI/cache updates for managed npm globals
+- Short description of the release change
 ```
 
 ### 4. Update Documentation
@@ -128,10 +128,6 @@ Update version in the following files:
   - New features
   - New commands
   - Installation instructions
-
-- [ ] Update CLAUDE.md if needed
-  - New implementation details
-  - Updated architecture
 
 - [ ] Update docs/development/architecture.md if needed
   - New modules
@@ -145,13 +141,13 @@ Create a release preparation commit:
 
 ```bash
 git add Cargo.toml Cargo.lock CHANGELOG.md README.md
-git commit -m "chore: prepare v1.6.1 release"
+git commit -m "chore: prepare vX.Y.Z release"
 ```
 
 ### 6. Create Pull Request
 
 - [ ] Open PR to `main` branch
-- [ ] Title: `chore: prepare v1.6.1 release`
+- [ ] Title: `chore: prepare vX.Y.Z release`
 - [ ] Description: Link to CHANGELOG section
 - [ ] Wait for CI to pass
 - [ ] Get approval from maintainer
@@ -169,10 +165,10 @@ git checkout main
 git pull origin main
 
 # Create annotated tag
-git tag -a v1.6.1 -m "Release v1.6.1"
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
 
 # Push tag to GitHub
-git push origin v1.6.1
+git push origin vX.Y.Z
 ```
 
 ### 2. GitHub Release
@@ -188,8 +184,8 @@ GitHub Actions will automatically:
 
 1. Go to https://github.com/imnotnoahhh/vex/releases
 2. Click "Draft a new release"
-3. Choose tag: `v1.6.1`
-4. Release title: `v1.6.1`
+3. Choose tag: `vX.Y.Z`
+4. Release title: `vX.Y.Z`
 5. Description: Copy from CHANGELOG.md
 6. Attach binaries (if not automated):
    - `vex-aarch64-apple-darwin.tar.gz`
@@ -202,7 +198,7 @@ GitHub Actions will automatically:
 - [ ] Download and test binaries
   ```bash
   # Download
-  curl -LO https://github.com/imnotnoahhh/vex/releases/download/v1.6.1/vex-aarch64-apple-darwin.tar.gz
+  curl -LO https://github.com/imnotnoahhh/vex/releases/download/vX.Y.Z/vex-aarch64-apple-darwin.tar.gz
 
   # Extract
   tar -xzf vex-aarch64-apple-darwin.tar.gz
@@ -213,7 +209,7 @@ GitHub Actions will automatically:
 
 - [ ] Test installation script
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version v1.6.1
+  curl -fsSL https://raw.githubusercontent.com/imnotnoahhh/vex/main/scripts/install-release.sh | bash -s -- --version vX.Y.Z
   ```
 
 ## CI/CD Pipeline
@@ -234,7 +230,11 @@ jobs:
   setup-action-smoke:  # Local composite action validation on macOS
 ```
 
-#### 2. Release Workflow (`.github/workflows/release.yml`)
+#### 2. Strict macOS Workflow (`.github/workflows/strict-macos.yml`)
+
+Runs the core strict local-build validation on every push to `main`, every PR to `main`, weekly, and by manual dispatch. The release-binary axis is still manual-only and requires `validate_published_release=true`.
+
+#### 3. Release Workflow (`.github/workflows/release.yml`)
 
 Runs on tag push (`v*`):
 
@@ -252,7 +252,7 @@ jobs:
       - Upload to GitHub Release
 ```
 
-#### 3. Release Postflight (`.github/workflows/release-postflight.yml`)
+#### 4. Release Postflight (`.github/workflows/release-postflight.yml`)
 
 Runs automatically from the main release workflow after the GitHub Release is created, and can also be re-run manually with `workflow_dispatch` for an existing tag:
 
@@ -328,7 +328,7 @@ For critical bugs in production:
 ### 1. Create Hotfix Branch
 
 ```bash
-git checkout -b hotfix/v1.6.1 v1.6.0
+git checkout -b hotfix/vX.Y.Z <previous-release-tag>
 ```
 
 ### 2. Fix Bug
@@ -341,22 +341,22 @@ git commit -m "fix: critical bug description"
 
 ### 3. Update Version
 
-- Update `Cargo.toml` to `1.6.1` (PATCH bump)
+- Update `Cargo.toml` to `X.Y.Z` (PATCH bump)
 - Update `CHANGELOG.md`
 
 ### 4. Release
 
 ```bash
 # Commit version bump
-git commit -am "chore: prepare v1.6.1 hotfix"
+git commit -am "chore: prepare vX.Y.Z hotfix"
 
 # Merge to main
 git checkout main
-git merge hotfix/v1.6.1
+git merge hotfix/vX.Y.Z
 
 # Tag and push
-git tag -a v1.6.1 -m "Hotfix v1.6.1"
-git push origin main v1.6.1
+git tag -a vX.Y.Z -m "Hotfix vX.Y.Z"
+git push origin main vX.Y.Z
 ```
 
 ## Rollback Process
@@ -391,13 +391,16 @@ git push origin :refs/tags/v1.6.0
 ### 4. Fix and Re-Release
 
 - Fix the issue
-- Bump version (for example, `1.6.0` → `1.6.1`)
+- Bump version (for example, `1.7.0` → `1.7.1`)
 - Follow normal release process
 
 ## Version History
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.7.0 | 2026-05-02 | Managed Python base environments, global CLI inventory, project Node binary precedence, Maven/Gradle diagnostics, and Python stable latest filtering |
+| 1.6.2 | 2026-05-02 | Security release for project env-key validation and Rust TLS dependency advisory updates |
+| 1.6.1 | 2026-04-08 | Managed npm globals, explicit Node relink workflow, doctor PATH conflict checks, and Rust historical stable discovery |
 | 1.6.0 | 2026-04-04 | Unified activation, managed user-state capture, `vex repair migrate-home`, official Rust targets/components, live Rust extension CI smoke |
 | 1.5.0 | 2026-03-30 | Templates, team config sync, official GitHub Action, release-ready docs refresh |
 | 1.4.0 | 2026-03-16 | Aliases, TUI, offline mode, lockfile support, env auto-export |

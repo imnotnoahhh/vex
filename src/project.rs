@@ -69,7 +69,6 @@ pub fn load_nearest_project_config(start_dir: &Path) -> Result<Option<LoadedProj
 
 fn validate_project_config(path: &Path, config: &ProjectConfig) -> Result<()> {
     for key in config.env.keys() {
-        let key = key.trim();
         if !is_valid_env_key(key) {
             return Err(VexError::Config(format!(
                 "Invalid environment variable name '{}' in {}. Names must match [A-Za-z_][A-Za-z0-9_]*.",

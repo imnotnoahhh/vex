@@ -15,3 +15,9 @@ coverage_output.txt
 coverage_summary.md
 
 .claude/
+
+# Local one-off planning notes
+COMMIT_MSG.txt
+PR_DESCRIPTION.md
+IMPLEMENTATION.md
+UI_IMPLEMENTATION.md

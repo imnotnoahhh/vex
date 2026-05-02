@@ -493,13 +493,13 @@ fn test_checksum_invalid() {
 
 ### Current Coverage Model
 
-As of v1.6.1, validation is intentionally split across several layers:
+Validation is intentionally split across several layers:
 
 - **Unit tests** in `src/**/*.rs` for parsing, resolution, downloading, switching, locking, and tool adapters
 - **CLI integration tests** in `tests/cli_test.rs` for core command behavior without full external installs
 - **End-to-end tests** in `tests/e2e_test.rs` for real installation workflows
 - **Shell and feature smoke tests** in `scripts/test-features.sh`, `scripts/test-management-features.sh`, `scripts/test-shell-hooks.sh`, `scripts/test-rust-extensions-live.sh`, `scripts/test-security.sh`, and `scripts/test-performance.sh`
-- **Strict macOS validation** in `scripts/test_vex_release_strict.py` for local builds by default, with published-release validation available through release-postflight or an explicit `workflow_dispatch` opt-in, covering official-archive diffs, multi-version switching, Python venv flows, project/global auto-switch behavior, and shell export hook coverage
+- **Strict macOS validation** in `scripts/test_vex_release_strict.py` for PR and `main` local builds by default, with published-release validation available through release-postflight or an explicit `workflow_dispatch` opt-in, covering official-archive diffs, multi-version switching, Python venv flows, project/global auto-switch behavior, and shell export hook coverage
 
 ### 100% Coverage Modules
 
