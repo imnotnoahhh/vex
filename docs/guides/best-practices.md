@@ -213,11 +213,11 @@ CI recommendations:
 
 ## Node Projects
 
-Install project tools into `node_modules` and commit the package-manager lockfile. When Node is active, `vex` puts the nearest `node_modules/.bin` before managed npm globals in shell hooks, `vex exec`, and `vex run`.
+Install project tools into `node_modules` and commit the package-manager lockfile. When Node is active, `vex` puts the nearest `node_modules/.bin` before shared npm globals in shell hooks, `vex exec`, and `vex run`.
 
-That means direct commands such as `vite`, `eslint`, and `tsc` resolve to the project-installed versions first. Use `npm install -g` for user-level CLIs only; those go into `~/.vex/npm/prefix/bin`.
+That means direct commands such as `vite`, `eslint`, and `tsc` resolve to the project-installed versions first. Use `npm install -g` for user-level CLIs only; those go into the shared npm globals prefix at `~/.vex/npm/prefix/bin`, shared across vex-managed Node versions. npm's official user config is redirected to `~/.vex/npm/npmrc`.
 
-Use `vex globals --verbose` when debugging command resolution. It shows the global CLI path, source kind, and active version source for npm, Python base, Go, Cargo, Maven, and Gradle entries.
+Use `vex globals --verbose` when debugging command resolution. It shows the global CLI path, source kind, and active version source for npm, Python base/user, Go, Cargo, Maven, and Gradle entries.
 
 ## Java Build Tools
 
@@ -297,7 +297,7 @@ vex use python@3.12
 vex python base pip install kaggle
 ```
 
-That installs into `~/.vex/python/base/<version>`, not into the interpreter toolchain. When no project `.venv` is active, the shell hook exposes the base `bin` directory so commands such as `kaggle` are available. When a project `.venv` is active, `vex` hides the base `bin` directory so global Python CLIs and packages do not affect project dependency resolution.
+That installs into `~/.vex/python/base/<version>`, not into the interpreter toolchain. pip's official `--user` base is redirected to `~/.vex/python/user` for users who explicitly use that mode. When no project `.venv` is active, the shell hook exposes the base and user `bin` directories so commands such as `kaggle` are available. When a project `.venv` is active, `vex` hides those global Python CLI directories so they do not affect project dependency resolution.
 
 ## Keep PATH Ownership Simple
 

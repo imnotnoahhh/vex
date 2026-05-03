@@ -107,7 +107,7 @@ fn collect_node_entries(
         entries,
         "node",
         "npm_global",
-        "managed npm prefix",
+        "shared npm globals",
         &bin_dir,
         contexts.get("node"),
         |_| true,
@@ -125,41 +125,49 @@ fn collect_python_entries(
     }
 
     let base_root = vex_dir.join("python/base");
-    if !base_root.exists() {
-        return Ok(());
-    }
+    if base_root.exists() {
+        for version_entry in fs::read_dir(base_root)?.filter_map(|entry| entry.ok()) {
+            let Ok(file_type) = version_entry.file_type() else {
+                continue;
+            };
+            if !file_type.is_dir() {
+                continue;
+            }
 
-    for version_entry in fs::read_dir(base_root)?.filter_map(|entry| entry.ok()) {
-        let Ok(file_type) = version_entry.file_type() else {
-            continue;
-        };
-        if !file_type.is_dir() {
-            continue;
-        }
+            let version = version_entry.file_name().to_string_lossy().to_string();
+            let bin_dir = python::base_bin_dir(vex_dir, &version);
+            let active_context = contexts
+                .get("python")
+                .filter(|context| context.version == version);
+            push_bin_entries(
+                entries,
+                "python",
+                "python_base",
+                "Python base environment (pip)",
+                &bin_dir,
+                active_context,
+                is_user_python_cli,
+            );
 
-        let version = version_entry.file_name().to_string_lossy().to_string();
-        let bin_dir = python::base_bin_dir(vex_dir, &version);
-        let active_context = contexts
-            .get("python")
-            .filter(|context| context.version == version);
-        push_bin_entries(
-            entries,
-            "python",
-            "python_base",
-            "Python base environment",
-            &bin_dir,
-            active_context,
-            is_user_python_cli,
-        );
-
-        for entry in entries.iter_mut().filter(|entry| {
-            entry.tool == "python"
-                && entry.kind == "python_base"
-                && entry.path.starts_with(&bin_dir.display().to_string())
-        }) {
-            entry.tool_version = Some(version.clone());
+            for entry in entries.iter_mut().filter(|entry| {
+                entry.tool == "python"
+                    && entry.kind == "python_base"
+                    && entry.path.starts_with(&bin_dir.display().to_string())
+            }) {
+                entry.tool_version = Some(version.clone());
+            }
         }
     }
+
+    push_bin_entries(
+        entries,
+        "python",
+        "python_user_base",
+        "Python user base (pip --user)",
+        &python::user_bin_dir(vex_dir),
+        contexts.get("python"),
+        is_user_python_cli,
+    );
 
     Ok(())
 }
@@ -178,7 +186,7 @@ fn collect_go_entries(
         entries,
         "go",
         "go_global",
-        "managed GOBIN",
+        "managed GOBIN (go install)",
         &bin_dir,
         contexts.get("go"),
         |_| true,
@@ -199,7 +207,7 @@ fn collect_rust_entries(
         entries,
         "rust",
         "cargo_global",
-        "managed CARGO_HOME bin",
+        "managed CARGO_HOME bin (cargo install)",
         &bin_dir,
         contexts.get("rust"),
         |_| true,
@@ -358,6 +366,9 @@ fn matches_filter(filter: Option<&str>, tool: &str, name: &str) -> bool {
     let filter = filter.to_ascii_lowercase();
     match filter.as_str() {
         "all" => true,
+        "npm" => tool == "node",
+        "pip" => tool == "python",
+        "cargo" => tool == "rust",
         "maven" | "mvn" => {
             tool == "java" && (name.is_empty() || name.contains("maven") || name == "mvn")
         }
@@ -370,7 +381,9 @@ fn render_text(report: &GlobalsReport, verbose: bool) {
     if report.entries.is_empty() {
         ui::dimmed("No global CLI entries detected.");
         println!();
-        ui::dimmed("Install a global CLI with npm, Go, Cargo, or 'vex python base pip'.");
+        ui::dimmed(
+            "Install a global CLI with shared npm globals, Go, Cargo, or 'vex python base pip'.",
+        );
         return;
     }
 
@@ -408,6 +421,15 @@ fn render_text(report: &GlobalsReport, verbose: bool) {
         }
     }
     table.render();
+    if report
+        .entries
+        .iter()
+        .any(|entry| entry.tool == "node" && entry.kind == "npm_global")
+    {
+        ui::dimmed(
+            "Node npm globals are shared across vex-managed Node versions; project node_modules/.bin still wins when present.",
+        );
+    }
     println!();
 }
 
@@ -424,6 +446,33 @@ mod tests {
         let mut perms = fs::metadata(path).unwrap().permissions();
         perms.set_mode(0o755);
         fs::set_permissions(path, perms).unwrap();
+    }
+
+    #[test]
+    fn collect_reports_node_shared_npm_globals() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let home = TempDir::new().unwrap();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", home.path());
+
+        let bin_dir = home.path().join(".vex/npm/prefix/bin");
+        fs::create_dir_all(&bin_dir).unwrap();
+        write_executable(&bin_dir.join("tsx"));
+
+        let report = collect(Some("node")).unwrap();
+        let tsx = report
+            .entries
+            .iter()
+            .find(|entry| entry.tool == "node" && entry.name == "tsx")
+            .expect("npm global CLI should be reported");
+        assert_eq!(tsx.kind, "npm_global");
+        assert_eq!(tsx.source, "shared npm globals");
+
+        if let Some(home) = old_home {
+            std::env::set_var("HOME", home);
+        } else {
+            std::env::remove_var("HOME");
+        }
     }
 
     #[test]
@@ -498,20 +547,69 @@ mod tests {
         std::env::set_var("HOME", home.path());
 
         let bin_dir = home.path().join(".vex/python/base/3.14.4/bin");
+        let user_bin_dir = home.path().join(".vex/python/user/bin");
         fs::create_dir_all(&bin_dir).unwrap();
+        fs::create_dir_all(&user_bin_dir).unwrap();
         write_executable(&bin_dir.join("kaggle"));
         write_executable(&bin_dir.join("pip"));
         write_executable(&bin_dir.join("python3.14"));
         write_executable(&bin_dir.join(PYTHON_BUILD_STANDALONE_INTERNAL_ALIAS));
+        write_executable(&user_bin_dir.join("black"));
 
         let report = collect(Some("python")).unwrap();
         assert!(report
             .entries
             .iter()
             .any(|entry| entry.tool == "python" && entry.name == "kaggle"));
+        assert!(report.entries.iter().any(|entry| {
+            entry.tool == "python"
+                && entry.kind == "python_user_base"
+                && entry.name == "black"
+                && entry.source == "Python user base (pip --user)"
+        }));
         assert!(!report.entries.iter().any(|entry| entry.name == "pip"
             || entry.name == "python3.14"
             || entry.name == "\u{1d70b}thon"));
+
+        let pip_report = collect(Some("pip")).unwrap();
+        assert!(pip_report
+            .entries
+            .iter()
+            .any(|entry| entry.name == "kaggle"));
+        assert!(pip_report.entries.iter().any(|entry| entry.name == "black"));
+
+        if let Some(home) = old_home {
+            std::env::set_var("HOME", home);
+        } else {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[test]
+    fn collect_accepts_official_package_manager_filters() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let home = TempDir::new().unwrap();
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", home.path());
+
+        let npm_bin = home.path().join(".vex/npm/prefix/bin");
+        let cargo_bin = home.path().join(".vex/cargo/bin");
+        fs::create_dir_all(&npm_bin).unwrap();
+        fs::create_dir_all(&cargo_bin).unwrap();
+        write_executable(&npm_bin.join("eslint"));
+        write_executable(&cargo_bin.join("cargo-audit"));
+
+        let npm_report = collect(Some("npm")).unwrap();
+        assert!(npm_report
+            .entries
+            .iter()
+            .any(|entry| entry.tool == "node" && entry.name == "eslint"));
+
+        let cargo_report = collect(Some("cargo")).unwrap();
+        assert!(cargo_report
+            .entries
+            .iter()
+            .any(|entry| entry.tool == "rust" && entry.name == "cargo-audit"));
 
         if let Some(home) = old_home {
             std::env::set_var("HOME", home);

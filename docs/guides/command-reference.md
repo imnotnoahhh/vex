@@ -142,7 +142,10 @@ Usage:
 ```bash
 vex globals
 vex globals --verbose
+vex globals npm --json
+vex globals pip
 vex globals go --json
+vex globals cargo
 vex globals maven
 vex globals mvn
 vex globals gradle
@@ -150,16 +153,17 @@ vex globals gradle
 
 The inventory includes:
 
-- npm globals from `~/.vex/npm/prefix/bin`
+- shared npm globals from `~/.vex/npm/prefix/bin`
 - Python base CLIs from `~/.vex/python/base/<version>/bin`
+- Python user-base CLIs from `~/.vex/python/user/bin` when installed through pip's official `--user` path
 - Go tools from `~/.vex/go/bin`
 - Cargo-installed tools from `~/.vex/cargo/bin`
 - external `mvn` and `gradle` CLIs found on PATH
 - Maven and Gradle build-tool state under `~/.m2` and `~/.gradle`
 
-Each entry includes its path, source kind, and the active vex version source when a matching toolchain is active.
+Each entry includes its path, source kind, and the active vex version source when a matching toolchain is active. For Node, npm globals are a shared vex-managed user-level CLI pool, not a separate prefix per Node version.
 
-Supported filters are `all`, `node`, `python`, `go`, `rust`, `java`, `maven`, `mvn`, and `gradle`.
+Supported filters are `all`, `node`, `npm`, `python`, `pip`, `go`, `rust`, `cargo`, `java`, `maven`, `mvn`, and `gradle`.
 
 ### `vex repair`
 
@@ -288,9 +292,9 @@ Notes:
 
 - currently only `node` is supported
 - use this only when an executable appears inside the active Node toolchain's `bin`
-- npm globals installed into `~/.vex/npm/prefix/bin` are already on PATH and do not need relinking
+- shared npm globals installed into `~/.vex/npm/prefix/bin` are already on PATH and do not need relinking
 - it only rebuilds links under `~/.vex/bin`; it does not install packages or change shell configuration
-- project-local `node_modules/.bin` is preferred automatically when Node is active, so local CLIs win over npm globals in shell hooks, `vex exec`, and `vex run`
+- project-local `node_modules/.bin` is preferred automatically when Node is active, so local CLIs win over shared npm globals in shell hooks, `vex exec`, and `vex run`
 
 Examples:
 

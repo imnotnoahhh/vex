@@ -401,6 +401,7 @@ def env_for_subprocess(
     current_path = env.get("PATH", "")
     env["PATH"] = ":".join([part for part in [*path_parts, current_path] if part])
     env["NPM_CONFIG_PREFIX"] = str(npm_prefix)
+    env["NPM_CONFIG_USERCONFIG"] = str(active_home / ".vex" / "npm" / "npmrc")
     env["CARGO_HOME"] = str(active_home / ".vex" / "cargo")
     return env
 
@@ -875,8 +876,8 @@ def validate_init_and_shells(vex_release: VexReleasePlan) -> None:
         )
         REPORT.expect(
             all(snippet in env_output.output for snippet in ENV_HOOK_COMMON_CHECKS),
-            f"vex env {shell_name} exports managed npm globals",
-            f"vex env {shell_name} is missing managed npm global exports: {env_output.output.strip()}",
+            f"vex env {shell_name} exports shared npm globals",
+            f"vex env {shell_name} is missing shared npm globals exports: {env_output.output.strip()}",
         )
 
     unsupported_env = run_cmd([str(VEX_BIN), "env", "powershell"], timeout=30, allow_nonzero=True)
@@ -1519,8 +1520,8 @@ def validate_node_managed_environment(plan: ToolPlan) -> None:
     npm_bin = npm_prefix / "bin"
     REPORT.expect(
         npm_bin.is_dir(),
-        "managed npm global bin directory exists",
-        f"managed npm global bin directory missing: {npm_bin}",
+        "shared npm globals bin directory exists",
+        f"shared npm globals bin directory missing: {npm_bin}",
     )
 
     npm_prefix_output = run_cmd(
@@ -1546,15 +1547,15 @@ def validate_node_managed_environment(plan: ToolPlan) -> None:
     ).output.strip()
     REPORT.expect(
         managed_resolution == str(managed_cmd),
-        "managed npm global bin is ahead of the activated PATH",
-        f"managed npm global binary resolved to {managed_resolution}, expected {managed_cmd}",
+        "shared npm globals bin is ahead of the activated PATH",
+        f"shared npm globals binary resolved to {managed_resolution}, expected {managed_cmd}",
     )
 
     managed_run = run_cmd([str(VEX_BIN), "exec", "--", managed_cmd.name], timeout=30)
     REPORT.expect(
         "strict-managed-npm-global" in managed_run.output,
-        "managed npm global binaries run inside vex exec",
-        f"managed npm global binary did not run correctly: {managed_run.output.strip()}",
+        "shared npm globals binaries run inside vex exec",
+        f"shared npm globals binary did not run correctly: {managed_run.output.strip()}",
     )
 
 
@@ -2097,7 +2098,12 @@ def validate_doctor() -> None:
     REPORT.expect("Checking symlinks integrity" in output, "doctor checks symlinks", f"doctor output missing symlink check: {output.strip()}")
     REPORT.expect("Checking binary runnability" in output, "doctor checks binary runnability", f"doctor output missing runnability check: {output.strip()}")
     REPORT.expect("Checking tool manager conflicts" in output, "doctor checks active tool manager conflicts", f"doctor output missing tool manager conflict check: {output.strip()}")
-    REPORT.expect("Checking npm global bin path" in output, "doctor checks managed npm global bin path", f"doctor output missing npm global bin path check: {output.strip()}")
+    REPORT.expect(
+        "Checking shared npm globals bin path" in output
+        or "Checking npm global bin path" in output,
+        "doctor checks shared npm globals bin path",
+        f"doctor output missing shared npm globals bin path check: {output.strip()}",
+    )
     REPORT.expect("Error:" not in output, "doctor has no fatal error banner", f"doctor reported an error: {output.strip()}")
 
 

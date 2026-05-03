@@ -64,7 +64,11 @@ fn test_init() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("vex init --shell auto"));
+    assert!(home.join(".vex/go/bin").exists());
+    assert!(home.join(".vex/go/pkg/mod").exists());
+    assert!(home.join(".vex/go/cache").exists());
     assert!(home.join(".vex/npm/prefix/bin").exists());
+    assert!(home.join(".vex/python/user/bin").exists());
 
     let _ = std::fs::remove_dir_all(&home);
 }
@@ -170,7 +174,8 @@ fn test_globals_help() {
     assert!(output.status.success(), "{:?}", output);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("List global CLIs"));
-    assert!(stdout.contains("node, python, go, rust, java, maven, mvn, or gradle"));
+    assert!(stdout.contains("shared npm globals"));
+    assert!(stdout.contains("node, npm, python, pip, go, rust, cargo, java, maven, mvn, or gradle"));
 }
 
 #[test]

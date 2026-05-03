@@ -232,18 +232,19 @@ find ~/.vex -type l ! -exec test -e {} \; -print
 
 ```bash
 echo "$NPM_CONFIG_PREFIX"
+echo "$NPM_CONFIG_USERCONFIG"
 echo "$PATH" | tr ':' '\n' | grep "$HOME/.vex/npm/prefix/bin"
 vex doctor
 ```
 
 **Solutions**:
 
-1. **Inspect the managed global CLI path**:
+1. **Inspect the shared npm globals path**:
    ```bash
-   vex globals node --verbose
+   vex globals npm --verbose
    ```
 
-2. **Refresh shell integration if the managed npm bin path is missing**:
+2. **Refresh shell integration if the shared npm globals bin path is missing**:
    ```bash
    vex init --shell auto
    ```
@@ -753,21 +754,22 @@ If you also use rustup independently, be aware that rustup manages its own `~/.r
 
 ### `~/.cache/node` directory created by npm/pnpm
 
-**Cause**: npm and pnpm store their cache in `~/.cache/node` by default on macOS (following the XDG base directory spec). This is behavior of npm/pnpm themselves, not vex.
+**Cause**: npm and pnpm can store cache or package-manager state outside `~/.vex` when they are run without the vex shell/export environment.
 
-**Workaround**: You can redirect npm's cache manually:
-
-```bash
-npm config set cache ~/.vex/npm-cache
-```
-
-For pnpm, set `PNPM_HOME` in your shell config:
+**Diagnosis**:
 
 ```bash
-export PNPM_HOME="$HOME/.vex/pnpm"
+echo "$NPM_CONFIG_CACHE"
+echo "$NPM_CONFIG_USERCONFIG"
+echo "$PNPM_HOME"
 ```
 
-vex does not manage npm or pnpm configuration, so this must be done manually.
+**Workaround**: Reopen your shell after `vex init --shell auto`, or run commands through `vex exec` / `vex run`. vex manages npm's official cache, prefix, and user config. pnpm remains an external package-manager ecosystem; vex only sets `PNPM_HOME` when Node's managed environment is active.
+
+```bash
+vex init --shell auto
+exec $SHELL
+```
 
 ---
 

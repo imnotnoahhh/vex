@@ -117,7 +117,7 @@ pub(super) fn collect_environment_checks(
             DoctorCheck {
                 id: "npm_global_bin_path".to_string(),
                 status: CheckStatus::Warn,
-                summary: "managed npm global bin directory is missing".to_string(),
+                summary: "shared npm globals bin directory is missing".to_string(),
                 details: vec![
                     "Run 'vex init' to recreate ~/.vex/npm/prefix/bin, or reinstall Node with 'vex install node@<version> --force'".to_string(),
                 ],
@@ -128,7 +128,7 @@ pub(super) fn collect_environment_checks(
                     DoctorCheck {
                         id: "npm_global_bin_path".to_string(),
                         status: CheckStatus::Ok,
-                        summary: "managed npm global bin dir is present in PATH".to_string(),
+                        summary: "shared npm globals bin dir is present in PATH".to_string(),
                         details: Vec::new(),
                     }
                 }
@@ -137,7 +137,7 @@ pub(super) fn collect_environment_checks(
                     DoctorCheck {
                         id: "npm_global_bin_path".to_string(),
                         status: CheckStatus::Warn,
-                        summary: "managed npm global bin dir is not present in PATH".to_string(),
+                        summary: "shared npm globals bin dir is not present in PATH".to_string(),
                         details: vec![
                             "Re-run 'vex init --shell auto', or add ~/.vex/npm/prefix/bin before ~/.vex/bin in your shell PATH".to_string(),
                         ],
@@ -146,7 +146,7 @@ pub(super) fn collect_environment_checks(
                 Err(_) => DoctorCheck {
                     id: "npm_global_bin_path".to_string(),
                     status: CheckStatus::Ok,
-                    summary: "managed npm global bin dir could not be inspected".to_string(),
+                    summary: "shared npm globals bin dir could not be inspected".to_string(),
                     details: Vec::new(),
                 },
             }
@@ -312,12 +312,15 @@ fn collect_captured_env_check(
         "GOBIN",
         "GOMODCACHE",
         "GOCACHE",
+        "GOENV",
         "NPM_CONFIG_CACHE",
         "NPM_CONFIG_PREFIX",
+        "NPM_CONFIG_USERCONFIG",
         "COREPACK_HOME",
         "PNPM_HOME",
         "YARN_CACHE_FOLDER",
         "PIP_CACHE_DIR",
+        "PYTHONUSERBASE",
     ] {
         if let Ok(value) = std::env::var(key) {
             if !value.starts_with(&expected_prefix) {

@@ -195,16 +195,18 @@ vex exec -- node -v
 vex exec -- python -m pytest
 ```
 
-When Node is active, `vex` also prefers the nearest `node_modules/.bin` before managed npm globals. That keeps commands such as `vite`, `eslint`, and `tsc` pointed at the project-installed version when you run them directly, through `vex exec`, or through `vex run`.
+When Node is active, `vex` also prefers the nearest `node_modules/.bin` before shared npm globals. That keeps commands such as `vite`, `eslint`, and `tsc` pointed at the project-installed version when you run them directly, through `vex exec`, or through `vex run`.
 
 Use `vex globals` when a command resolves differently than expected:
 
 ```bash
 vex globals --verbose
+vex globals npm --json
+vex globals pip
 vex globals go --json
 ```
 
-It lists managed global CLIs from npm, Python base environments, Go, and Cargo, plus Maven/Gradle CLI and cache state with active version-source hints.
+It lists shared npm globals, Python base/user environments, Go, and Cargo managed global CLIs, plus Maven/Gradle CLI and cache state with active version-source hints.
 
 Use `.vex.toml` plus `vex run` for repeatable project tasks:
 

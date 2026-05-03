@@ -192,6 +192,7 @@ fn active_python_install(vex: &Path) -> Result<(String, PathBuf)> {
 }
 
 fn run_base_pip(args: &[String]) -> Result<()> {
+    let vex = vex_dir()?;
     let (version, _base_dir) = ensure_active_base()?;
     if args.is_empty() {
         return Err(VexError::Parse(
@@ -199,8 +200,10 @@ fn run_base_pip(args: &[String]) -> Result<()> {
         ));
     }
 
-    let pip = python::base_pip_bin(&vex_dir()?, &version);
-    let status = Command::new(&pip)
+    let pip = python::base_pip_bin(&vex, &version);
+    let mut command = Command::new(&pip);
+    configure_base_pip_env(&mut command, &vex);
+    let status = command
         .args(args)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
@@ -218,9 +221,12 @@ fn run_base_pip(args: &[String]) -> Result<()> {
 }
 
 fn freeze_base() -> Result<()> {
+    let vex = vex_dir()?;
     let (version, base_dir) = ensure_active_base()?;
-    let pip = python::base_pip_bin(&vex_dir()?, &version);
-    let output = Command::new(&pip).arg("freeze").output()?;
+    let pip = python::base_pip_bin(&vex, &version);
+    let mut command = Command::new(&pip);
+    configure_base_pip_env(&mut command, &vex);
+    let output = command.arg("freeze").output()?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(VexError::PythonEnv(format!(
@@ -243,6 +249,7 @@ fn freeze_base() -> Result<()> {
 }
 
 fn sync_base() -> Result<()> {
+    let vex = vex_dir()?;
     let (version, base_dir) = ensure_active_base()?;
     let lock_path = base_dir.join("requirements.lock");
     if !lock_path.exists() {
@@ -252,12 +259,10 @@ fn sync_base() -> Result<()> {
         )));
     }
 
-    let pip = python::base_pip_bin(&vex_dir()?, &version);
-    let status = Command::new(&pip)
-        .arg("install")
-        .arg("-r")
-        .arg(&lock_path)
-        .status()?;
+    let pip = python::base_pip_bin(&vex, &version);
+    let mut command = Command::new(&pip);
+    configure_base_pip_env(&mut command, &vex);
+    let status = command.arg("install").arg("-r").arg(&lock_path).status()?;
     if !status.success() {
         return Err(VexError::PythonEnv(format!(
             "Base pip sync failed for python@{}",
@@ -271,4 +276,10 @@ fn sync_base() -> Result<()> {
         lock_path.display().to_string().cyan()
     );
     Ok(())
+}
+
+fn configure_base_pip_env(command: &mut Command, vex: &Path) {
+    command
+        .env("PIP_CACHE_DIR", vex.join("pip/cache"))
+        .env("PYTHONUSERBASE", python::user_base_dir(vex));
 }

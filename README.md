@@ -55,9 +55,9 @@
 - **Offline mode** — `--offline` flag for cache-only operations, no network required
 - **Lockfile support** — `vex lock` generates reproducible `.tool-versions.lock` with checksums
 - **Team config sync** — `vex install --from` / `vex sync --from` support local files, `vex-config.toml`, HTTPS team configs, and Git repositories with a safe `[tools]` schema
-- **Managed npm globals** — Shell hooks and `vex exec`/`run` export `NPM_CONFIG_PREFIX=$HOME/.vex/npm/prefix`, keep `~/.vex/npm/prefix/bin` on PATH, and prefer project `node_modules/.bin` when present
-- **Global CLI inventory** — `vex globals` shows npm globals, Python base CLIs, Go `GOBIN`, Cargo-installed tools, and Maven/Gradle build-tool state with version-source hints
-- **Auto-export env vars** — Automatic `JAVA_HOME`, `GOROOT`, `CARGO_HOME`, captured user-state env vars, Python base CLI paths, and project `.venv` activation in shell hooks
+- **Shared npm globals** — Shell hooks and `vex exec`/`run` export `NPM_CONFIG_PREFIX=$HOME/.vex/npm/prefix` and `NPM_CONFIG_USERCONFIG=$HOME/.vex/npm/npmrc`, keep `~/.vex/npm/prefix/bin` on PATH, and use that as a shared user-level npm CLI pool across vex-managed Node versions
+- **Global CLI inventory** — `vex globals` shows shared npm globals, Python base/user-base CLIs, Go `GOBIN`, Cargo-installed tools, and Maven/Gradle build-tool state with version-source hints
+- **Auto-export env vars** — Automatic `JAVA_HOME`, `GOROOT`, `GOENV`, `CARGO_HOME`, captured user-state env vars, Python base/user CLI paths, and project `.venv` activation in shell hooks
 - **Official Rust extensions** — `vex rust target/component` manages official Rust toolchain extensions such as `rust-src` and iOS std targets
 - **Contained user-state capture** — supported language homes, caches, and user bins default into `~/.vex`
 - **Explicit home repair** — `vex repair migrate-home` previews and applies safe migrations from legacy home-directory paths
@@ -66,7 +66,7 @@
 - **Explicit relink for Node toolchain bins** — `vex relink node` rebuilds `~/.vex/bin` when executables appear inside the active Node toolchain
 - **Transient execution** — `vex exec -- <command>` runs tools in the resolved vex environment without changing global symlinks
 - **Project task runner** — `.vex.toml` can define project env vars and named commands for `vex run <task>`
-- **Official GitHub Action** — `uses: imnotnoahhh/vex@v1` installs `vex` plus cached toolchains and managed npm globals on macOS GitHub Actions runners
+- **Official GitHub Action** — `uses: imnotnoahhh/vex@v1` installs `vex` plus cached toolchains and shared npm globals on macOS GitHub Actions runners
 - **`.tool-versions` support** — per-project pinning, auto-switch on `cd`, batch install
 - **Project configuration** — `.vex.toml` adds project-local commands, env vars, behavior overrides, and optional network/mirror overrides
 - **Smart version filtering** — `vex list-remote node --filter lts` shows only LTS versions
@@ -174,7 +174,7 @@ vex env nu | save -f ~/.config/nushell/vex.nu
 echo 'source ~/.config/nushell/vex.nu' >> ~/.config/nushell/config.nu
 ```
 
-The generated hook keeps `~/.vex/npm/prefix/bin` and `~/.vex/bin` on `PATH`, runs `vex use --auto` on directory changes, and refreshes the exported activation environment via `vex env <shell> --exports`. In Node projects, the refreshed PATH prefers the nearest `node_modules/.bin` before managed npm globals so project-local CLIs win.
+The generated hook keeps `~/.vex/npm/prefix/bin` and `~/.vex/bin` on `PATH`, runs `vex use --auto` on directory changes, and refreshes the exported activation environment via `vex env <shell> --exports`. In Node projects, the refreshed PATH prefers the nearest `node_modules/.bin` before shared npm globals so project-local CLIs win. "Shared" means `npm install -g` writes to one vex-managed npm CLI pool, not to a separate prefix per Node version.
 
 ### Usage
 
@@ -291,7 +291,7 @@ For the full CLI reference, including command groups and option details, see [do
 | `vex current` | Show active versions | `vex current` |
 | `vex current --json` | Show active versions as JSON | `vex current --json` |
 | `vex globals` | Show global CLIs and Java build-tool state | `vex globals --verbose` |
-| `vex globals go --json` | Show global CLI inventory for one tool/ecosystem as JSON | `vex globals go --json` |
+| `vex globals <filter> --json` | Show global CLI inventory for one official tool/ecosystem as JSON | `vex globals npm --json` |
 | `vex uninstall <tool@version>` | Uninstall a version | `vex uninstall node@20.11.0` |
 | `vex doctor` | Run health check and diagnostics | `vex doctor` |
 | `vex doctor --json` | Run health check and emit JSON | `vex doctor --json` |
