@@ -22,6 +22,7 @@ use releases::{
     find_matching_checksum, lifecycle_status_for,
 };
 use std::collections::BTreeMap;
+use std::fs;
 use tracing::warn;
 
 pub use base::{
@@ -29,6 +30,14 @@ pub use base::{
 };
 
 pub const PYTHON_BUILD_STANDALONE_INTERNAL_ALIAS: &str = "\u{1d70b}thon";
+
+pub fn user_base_dir(vex_dir: &std::path::Path) -> std::path::PathBuf {
+    vex_dir.join("python/user")
+}
+
+pub fn user_bin_dir(vex_dir: &std::path::Path) -> std::path::PathBuf {
+    user_base_dir(vex_dir).join("bin")
+}
 
 /// Python tool (python-build-standalone prebuilt CPython)
 pub struct PythonTool;
@@ -136,6 +145,7 @@ impl Tool for PythonTool {
         install_dir: &std::path::Path,
         version: &str,
     ) -> Result<()> {
+        fs::create_dir_all(user_bin_dir(vex_dir))?;
         ensure_base_environment(vex_dir, version, install_dir).map(|_| ())
     }
 
@@ -153,7 +163,7 @@ impl Tool for PythonTool {
         install_dir: Option<&std::path::Path>,
     ) -> ToolEnvironment {
         let pip_cache = vex_dir.join("pip/cache");
-        let managed_user_bin_dirs = install_dir
+        let mut managed_user_bin_dirs = install_dir
             .and_then(|path| path.file_name())
             .map(|version| {
                 vec![base_bin_dir(vex_dir, &version.to_string_lossy())
@@ -161,22 +171,27 @@ impl Tool for PythonTool {
                     .to_string()]
             })
             .unwrap_or_default();
+        managed_user_bin_dirs.push(user_bin_dir(vex_dir).display().to_string());
 
         ToolEnvironment {
-            managed_env: BTreeMap::from([(
-                "PIP_CACHE_DIR".to_string(),
-                pip_cache.display().to_string(),
-            )]),
+            managed_env: BTreeMap::from([
+                ("PIP_CACHE_DIR".to_string(), pip_cache.display().to_string()),
+                (
+                    "PYTHONUSERBASE".to_string(),
+                    user_base_dir(vex_dir).display().to_string(),
+                ),
+            ]),
             managed_user_bin_dirs,
             owned_home_dirs: vec![
                 pip_cache.display().to_string(),
                 base::base_root(vex_dir).display().to_string(),
+                user_base_dir(vex_dir).display().to_string(),
             ],
             project_owned_dirs: vec![".venv".to_string()],
         }
     }
 
     fn managed_env_keys(&self) -> Vec<&'static str> {
-        vec!["PIP_CACHE_DIR"]
+        vec!["PIP_CACHE_DIR", "PYTHONUSERBASE"]
     }
 }

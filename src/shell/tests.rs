@@ -10,6 +10,7 @@ fn test_generate_zsh_hook() {
     assert!(hook.contains("$HOME/.vex/bin"));
     assert!(hook.contains("$HOME/.vex/npm/prefix/bin"));
     assert!(hook.contains("NPM_CONFIG_PREFIX"));
+    assert!(hook.contains("NPM_CONFIG_USERCONFIG"));
     assert!(hook.contains("VEX_ORIGINAL_PATH"));
 }
 
@@ -22,6 +23,7 @@ fn test_generate_bash_hook() {
     assert!(hook.contains("vex env bash --exports"));
     assert!(hook.contains("$HOME/.vex/npm/prefix/bin"));
     assert!(hook.contains("NPM_CONFIG_PREFIX"));
+    assert!(hook.contains("NPM_CONFIG_USERCONFIG"));
     assert!(hook.contains("VEX_ORIGINAL_PATH"));
 }
 
@@ -35,6 +37,7 @@ fn test_generate_fish_hook() {
     assert!(hook.contains("$HOME/.vex/bin"));
     assert!(hook.contains("$HOME/.vex/npm/prefix/bin"));
     assert!(hook.contains("NPM_CONFIG_PREFIX"));
+    assert!(hook.contains("NPM_CONFIG_USERCONFIG"));
     assert!(hook.contains("VEX_ORIGINAL_PATH"));
 }
 
@@ -48,6 +51,7 @@ fn test_generate_nushell_hook() {
     assert!(hook.contains("$env.PATH"));
     assert!(hook.contains(".vex/npm/prefix/bin"));
     assert!(hook.contains("NPM_CONFIG_PREFIX"));
+    assert!(hook.contains("NPM_CONFIG_USERCONFIG"));
     assert!(hook.contains("VEX_ORIGINAL_PATH"));
 }
 
