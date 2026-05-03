@@ -400,7 +400,7 @@ git push origin :refs/tags/v1.6.0
 |---------|------|------------|
 | 1.7.0 | 2026-05-02 | Managed Python base environments, global CLI inventory, project Node binary precedence, Maven/Gradle diagnostics, and Python stable latest filtering |
 | 1.6.2 | 2026-05-02 | Security release for project env-key validation and Rust TLS dependency advisory updates |
-| 1.6.1 | 2026-04-08 | Managed npm globals, explicit Node relink workflow, doctor PATH conflict checks, and Rust historical stable discovery |
+| 1.6.1 | 2026-04-08 | Shared npm globals, explicit Node relink workflow, doctor PATH conflict checks, and Rust historical stable discovery |
 | 1.6.0 | 2026-04-04 | Unified activation, managed user-state capture, `vex repair migrate-home`, official Rust targets/components, live Rust extension CI smoke |
 | 1.5.0 | 2026-03-30 | Templates, team config sync, official GitHub Action, release-ready docs refresh |
 | 1.4.0 | 2026-03-16 | Aliases, TUI, offline mode, lockfile support, env auto-export |

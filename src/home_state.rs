@@ -38,6 +38,7 @@ fn definitions(home: &Path) -> Vec<HomeStateAudit> {
     let go_root = home.join("go");
     let cache_dir = home.join(".cache");
     let library_caches = home.join("Library/Caches");
+    let library_application_support = home.join("Library/Application Support");
 
     vec![
         migratable(
@@ -89,11 +90,25 @@ fn definitions(home: &Path) -> Vec<HomeStateAudit> {
             vex.join("go/cache"),
         ),
         migratable(
+            "go_env",
+            "go",
+            "legacy Go persistent env config can move into ~/.vex/go/env",
+            library_application_support.join("go/env"),
+            vex.join("go/env"),
+        ),
+        migratable(
             "npm_cache",
             "node",
             "legacy npm cache can move into ~/.vex/npm/cache",
             home.join(".npm"),
             vex.join("npm/cache"),
+        ),
+        migratable(
+            "npm_userconfig",
+            "node",
+            "legacy npm user config can move into ~/.vex/npm/npmrc",
+            home.join(".npmrc"),
+            vex.join("npm/npmrc"),
         ),
         advisory(
             "nvm_home",

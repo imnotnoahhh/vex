@@ -9,6 +9,7 @@
 - 安装失败后的清理与切换失败后的回滚
 - 仓库内 `imnotnoahhh/vex` GitHub Action 所依赖的脚本和 CI smoke path
 - `vex repair migrate-home`、captured user-state 导出、以及 Rust 官方 targets/components live smoke
+- PR CI 中的 `cargo audit` 与 `cargo deny`，其中 `deny.toml` 固定 license、advisory、ban、source 策略
 
 ## 验证入口
 
@@ -91,8 +92,9 @@ VEX_STRICT_VEX_BIN="$(pwd)/target/debug/vex"
 - 项目与全局切换：`.tool-versions`、`vex global`、shell hook `cd` 自动切换
 - Python 自动激活：进入项目自动激活 `.venv`，离开项目自动退出，并隐藏 Python base `bin`
 - 健康检查：`vex doctor`
-- 全局 CLI 盘点：`vex globals` 覆盖 Go、Rust、Python、Node 与 Java Maven/Gradle 状态
+- 全局 CLI 盘点：`vex globals` 覆盖 Go、Cargo、Python/pip、Node/npm 与 Java Maven/Gradle 状态
 - Rust 官方扩展：`vex rust target add/remove`、`vex rust component add/remove`
+- 依赖与供应链：GitHub CI 运行 RustSec audit 与 cargo-deny 检查
 - 模板与 team-config 相关 CLI：由单元测试与 CLI integration tests 覆盖
 
 ## 当前发现并验证的二进制数量
@@ -164,5 +166,5 @@ python3 scripts/test_vex_release_strict.py
 - 快速功能脚本的覆盖目标发生明显变化
 - 新增模板、team config 语义、或 GitHub Action 行为变化
 
-**Last Updated**: 2026-04-04
+**Last Updated**: 2026-05-03
 **Status**: ✅ Comprehensive coverage

@@ -67,6 +67,25 @@ fn test_base_paths_are_versioned_under_vex_home() {
 }
 
 #[test]
+fn test_managed_environment_sets_official_pip_state() {
+    let vex = std::path::Path::new("/tmp/vex-home");
+    let install = std::path::Path::new("/tmp/vex-home/toolchains/python/3.13.3");
+    let env = PythonTool.managed_environment(vex, Some(install));
+    assert_eq!(
+        env.managed_env.get("PYTHONUSERBASE").map(String::as_str),
+        Some("/tmp/vex-home/python/user")
+    );
+    assert_eq!(
+        env.managed_env.get("PIP_CACHE_DIR").map(String::as_str),
+        Some("/tmp/vex-home/pip/cache")
+    );
+    assert!(env
+        .managed_user_bin_dirs
+        .contains(&"/tmp/vex-home/python/user/bin".to_string()));
+    assert!(PythonTool.managed_env_keys().contains(&"PYTHONUSERBASE"));
+}
+
+#[test]
 fn test_ensure_base_environment_creates_missing_base() {
     let temp = TempDir::new().unwrap();
     let vex = temp.path().join(".vex");

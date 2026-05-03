@@ -81,7 +81,7 @@ pub(super) fn collect_path_priority_check(vex_bin: &Path) -> DoctorCheck {
             details: if index == 0 {
                 Vec::new()
             } else {
-                vec!["~/.vex/npm/prefix/bin appears before ~/.vex/bin, which is expected for npm global binaries".to_string()]
+                vec!["~/.vex/npm/prefix/bin appears before ~/.vex/bin, which is expected for shared npm globals".to_string()]
             },
         }
     } else {
