@@ -250,7 +250,7 @@ What it does:
 - resolves versions from `.tool-versions` and language-specific files
 - prepends the matching toolchain `bin` directories to `PATH`
 - prepends the nearest project `.venv/bin` when auto-activation is enabled
-- injects captured user-state env vars such as `CARGO_HOME`, `GOPATH`, `NPM_CONFIG_PREFIX`, and `PIP_CACHE_DIR` when enabled
+- injects captured user-state env vars such as `CARGO_HOME`, `GOPATH`, `GOENV`, `NPM_CONFIG_PREFIX`, `NPM_CONFIG_USERCONFIG`, `PIP_CACHE_DIR`, and `PYTHONUSERBASE` when enabled
 - applies project env vars from `.vex.toml`
 
 ## `vex run`

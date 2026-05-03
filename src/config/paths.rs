@@ -26,12 +26,12 @@ pub fn bin_dir() -> Option<PathBuf> {
     vex_home().map(|path| path.join(BIN_DIR))
 }
 
-/// Get the managed npm global prefix directory path.
+/// Get the shared npm globals prefix directory path.
 pub fn npm_prefix_dir() -> Option<PathBuf> {
     vex_home().map(|path| path.join("npm").join("prefix"))
 }
 
-/// Get the managed npm global bin directory path.
+/// Get the shared npm globals bin directory path.
 pub fn npm_bin_dir() -> Option<PathBuf> {
     npm_prefix_dir().map(|path| path.join("bin"))
 }

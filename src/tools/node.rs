@@ -84,6 +84,7 @@ impl Tool for NodeTool {
     ) -> ToolEnvironment {
         let npm_cache = vex_dir.join("npm/cache");
         let npm_prefix = vex_dir.join("npm/prefix");
+        let npm_userconfig = vex_dir.join("npm/npmrc");
         let corepack_home = vex_dir.join("corepack");
         let pnpm_home = vex_dir.join("pnpm");
         let yarn_cache = vex_dir.join("yarn/cache");
@@ -95,6 +96,10 @@ impl Tool for NodeTool {
             (
                 "NPM_CONFIG_PREFIX".to_string(),
                 npm_prefix.display().to_string(),
+            ),
+            (
+                "NPM_CONFIG_USERCONFIG".to_string(),
+                npm_userconfig.display().to_string(),
             ),
             (
                 "COREPACK_HOME".to_string(),
@@ -116,6 +121,7 @@ impl Tool for NodeTool {
             owned_home_dirs: vec![
                 npm_cache.display().to_string(),
                 npm_prefix.display().to_string(),
+                npm_userconfig.display().to_string(),
                 corepack_home.display().to_string(),
                 pnpm_home.display().to_string(),
                 yarn_cache.display().to_string(),
@@ -128,6 +134,7 @@ impl Tool for NodeTool {
         vec![
             "NPM_CONFIG_CACHE",
             "NPM_CONFIG_PREFIX",
+            "NPM_CONFIG_USERCONFIG",
             "COREPACK_HOME",
             "PNPM_HOME",
             "YARN_CACHE_FOLDER",

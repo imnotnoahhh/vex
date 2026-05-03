@@ -22,6 +22,25 @@ fn test_bin_paths_default() {
 }
 
 #[test]
+fn test_managed_environment_sets_official_go_state() {
+    let vex_dir = std::path::Path::new("/tmp/vex-home");
+    let install_dir = std::path::Path::new("/tmp/vex-home/toolchains/go/1.26.2");
+    let env = GoTool.managed_environment(vex_dir, Some(install_dir));
+    assert_eq!(
+        env.managed_env.get("GOENV").map(String::as_str),
+        Some("/tmp/vex-home/go/env")
+    );
+    assert_eq!(
+        env.managed_env.get("GOROOT").map(String::as_str),
+        Some("/tmp/vex-home/toolchains/go/1.26.2")
+    );
+    assert!(env
+        .managed_user_bin_dirs
+        .contains(&"/tmp/vex-home/go/bin".to_string()));
+    assert!(GoTool.managed_env_keys().contains(&"GOENV"));
+}
+
+#[test]
 fn test_download_url_arm64() {
     let url = GoTool.download_url("1.23.5", Arch::Arm64).unwrap();
     assert_eq!(url, "https://go.dev/dl/go1.23.5.darwin-arm64.tar.gz");

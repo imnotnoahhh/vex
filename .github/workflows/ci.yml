@@ -66,6 +66,15 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+  cargo-deny:
+    name: Cargo Deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
   shellcheck:
     name: ShellCheck
     runs-on: ubuntu-latest

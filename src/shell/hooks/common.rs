@@ -8,6 +8,7 @@ if [ -z "${{VEX_ORIGINAL_PATH+x}}" ]; then
 fi
 export PATH="$HOME/.vex/npm/prefix/bin:$HOME/.vex/bin:$PATH"
 export NPM_CONFIG_PREFIX="$HOME/.vex/npm/prefix"
+export NPM_CONFIG_USERCONFIG="$HOME/.vex/npm/npmrc"
 export CARGO_HOME="$HOME/.vex/cargo"
 
 __vex_apply_exports() {{

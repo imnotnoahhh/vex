@@ -26,6 +26,27 @@ fn test_bin_paths_default() {
 }
 
 #[test]
+fn test_managed_environment_sets_official_npm_state() {
+    let tool = NodeTool;
+    let vex_dir = std::path::Path::new("/tmp/vex-home");
+    let env = tool.managed_environment(vex_dir, None);
+    assert_eq!(
+        env.managed_env.get("NPM_CONFIG_PREFIX").map(String::as_str),
+        Some("/tmp/vex-home/npm/prefix")
+    );
+    assert_eq!(
+        env.managed_env
+            .get("NPM_CONFIG_USERCONFIG")
+            .map(String::as_str),
+        Some("/tmp/vex-home/npm/npmrc")
+    );
+    assert!(env
+        .managed_user_bin_dirs
+        .contains(&"/tmp/vex-home/npm/prefix/bin".to_string()));
+    assert!(tool.managed_env_keys().contains(&"NPM_CONFIG_USERCONFIG"));
+}
+
+#[test]
 fn test_download_url_arm64() {
     let tool = NodeTool;
     let url = tool.download_url("20.11.0", Arch::Arm64).unwrap();

@@ -463,7 +463,7 @@ fs::rename(&temp_link, &final_link)?;
 **Two steps run on every directory change**:
 
 1. `__vex_use_if_found` — calls `vex use --auto` to align the active symlink state with the current directory
-2. `__vex_apply_exports` — evaluates `vex env <shell> --exports` to refresh `PATH`, `VIRTUAL_ENV`, and captured tool env vars such as `JAVA_HOME`, `GOROOT`, `CARGO_HOME`, `GOPATH`, and `NPM_CONFIG_PREFIX`
+2. `__vex_apply_exports` — evaluates `vex env <shell> --exports` to refresh `PATH`, `VIRTUAL_ENV`, and captured tool env vars such as `JAVA_HOME`, `GOROOT`, `GOENV`, `CARGO_HOME`, `GOPATH`, `NPM_CONFIG_PREFIX`, and `NPM_CONFIG_USERCONFIG`
 
 This keeps shell activation and `vex exec`/`vex run` on the same activation model instead of having separate shell-only logic for `.venv` and tool env vars.
 

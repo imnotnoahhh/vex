@@ -51,9 +51,10 @@ vex 是一个 macOS 原生的多语言版本管理器。它用直接符号链接
 
 - **无 shim 切换**：`~/.vex/bin/node` 直接指向真实工具链二进制。
 - **多语言支持**：Node.js、Go、Java(Eclipse Temurin)、Rust、Python。
-- **Python base + venv**：`vex python base pip install kaggle` 安装用户级 Python CLI，项目 `.venv` 激活后不会泄漏 base 包。
-- **项目本地优先**：Node 项目里 `node_modules/.bin` 优先于 npm 全局 bin。
-- **全局 CLI 清单**：`vex globals` 显示 npm、Python base、Go、Cargo、Maven、Gradle 来源和状态。
+- **Python base + venv**：`vex python base pip install kaggle` 安装用户级 Python CLI；官方 `pip --user` 路径也会收进 `~/.vex/python/user`，项目 `.venv` 激活后不会泄漏 base/user 包。
+- **项目本地优先**：Node 项目里 `node_modules/.bin` 优先于 shared npm globals。
+- **Shared npm globals**：`npm install -g` 写入同一个 vex 管理的用户级 npm CLI 池 `~/.vex/npm/prefix`，`npm` 的 user config 写入 `~/.vex/npm/npmrc`，不会按 Node 版本各自分开。
+- **全局 CLI 清单**：`vex globals` 显示 shared npm globals、Python base/user、Go、Cargo、Maven、Gradle 来源和状态。
 - **稳定 Python latest**：`vex list-remote python --filter latest` 优先 bugfix/security 版本，避免把 feature/prerelease 当默认 latest。
 - **自动 shell 集成**：支持 zsh、bash、fish、nushell。
 - **项目模板**：`vex init --template python-venv --add-only` 可安全补齐项目模板文件。
@@ -146,6 +147,8 @@ vex use --auto
 # 查看当前版本和全局 CLI
 vex current
 vex globals
+vex globals npm --json
+vex globals pip
 vex globals python --json
 
 # 健康检查

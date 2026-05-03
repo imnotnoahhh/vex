@@ -7,11 +7,13 @@ mod dist;
 #[cfg(test)]
 mod tests;
 
-use crate::error::Result;
+use crate::config;
+use crate::error::{Result, VexError};
 use crate::tools::{Arch, Tool, ToolEnvironment, Version};
 use api::{checksum_for_release, fetch_releases, release_versions, resolve_alias_from_versions};
 use dist::download_url as dist_download_url;
 use std::collections::BTreeMap;
+use std::fs;
 
 /// Go tool (go.dev official distribution)
 pub struct GoTool;
@@ -68,11 +70,13 @@ impl Tool for GoTool {
         let go_bin = go_root.join("bin");
         let go_mod = go_root.join("pkg/mod");
         let go_cache = go_root.join("cache");
+        let go_env = go_root.join("env");
         let mut managed_env = BTreeMap::from([
             ("GOPATH".to_string(), go_root.display().to_string()),
             ("GOBIN".to_string(), go_bin.display().to_string()),
             ("GOMODCACHE".to_string(), go_mod.display().to_string()),
             ("GOCACHE".to_string(), go_cache.display().to_string()),
+            ("GOENV".to_string(), go_env.display().to_string()),
         ]);
         if let Some(install_dir) = install_dir {
             managed_env.insert("GOROOT".to_string(), install_dir.display().to_string());
@@ -86,12 +90,32 @@ impl Tool for GoTool {
                 go_bin.display().to_string(),
                 go_mod.display().to_string(),
                 go_cache.display().to_string(),
+                go_env.display().to_string(),
             ],
             project_owned_dirs: Vec::new(),
         }
     }
 
     fn managed_env_keys(&self) -> Vec<&'static str> {
-        vec!["GOROOT", "GOPATH", "GOBIN", "GOMODCACHE", "GOCACHE"]
+        vec![
+            "GOROOT",
+            "GOPATH",
+            "GOBIN",
+            "GOMODCACHE",
+            "GOCACHE",
+            "GOENV",
+        ]
+    }
+
+    fn post_install(&self, _install_dir: &std::path::Path, _arch: Arch) -> Result<()> {
+        let vex_dir = config::vex_home().ok_or(VexError::HomeDirectoryNotFound)?;
+        for path in [
+            vex_dir.join("go/bin"),
+            vex_dir.join("go/pkg/mod"),
+            vex_dir.join("go/cache"),
+        ] {
+            fs::create_dir_all(path)?;
+        }
+        Ok(())
     }
 }

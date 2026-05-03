@@ -13,7 +13,11 @@ pub(super) fn initialize_vex_home(vex_dir: &Path, dry_run: bool) -> Result<()> {
         "toolchains",
         "current",
         "bin",
+        "go/bin",
+        "go/pkg/mod",
+        "go/cache",
         "npm/prefix/bin",
+        "python/user/bin",
     ] {
         fs::create_dir_all(vex_dir.join(subdir))?;
     }
