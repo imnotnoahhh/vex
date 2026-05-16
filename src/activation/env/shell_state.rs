@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 const SHELL_PROJECT_ENV_KEYS_FILE: &str = "project-env-keys";
 const SHELL_ACTIVATION_CONTEXT_FILE: &str = "activation-context";
 
-pub(in crate::activation) fn load_previous_shell_project_env_keys(vex_dir: &Path) -> Result<Vec<String>> {
+pub(in crate::activation) fn load_previous_shell_project_env_keys(
+    vex_dir: &Path,
+) -> Result<Vec<String>> {
     let path = shell_state_path(vex_dir, SHELL_PROJECT_ENV_KEYS_FILE);
     if !path.exists() {
         return Ok(Vec::new());

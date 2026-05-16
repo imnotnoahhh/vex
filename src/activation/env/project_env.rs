@@ -32,7 +32,9 @@ pub(in crate::activation) fn project_env_for_process(
     env
 }
 
-pub(in crate::activation) fn project_env_for_shell(project: Option<&LoadedProjectConfig>) -> ShellProjectEnv {
+pub(in crate::activation) fn project_env_for_shell(
+    project: Option<&LoadedProjectConfig>,
+) -> ShellProjectEnv {
     let mut env = BTreeMap::new();
     let mut blocked_keys = Vec::new();
 
