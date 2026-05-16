@@ -97,7 +97,8 @@ pub(crate) enum Commands {
     /// Launch interactive TUI dashboard
     ///
     /// Shows current versions, health warnings, disk usage, and quick actions.
-    /// Requires an interactive terminal.
+    /// Requires an interactive terminal. Available when compiled with the `tui` feature (default).
+    #[cfg(feature = "tui")]
     Tui,
 
     /// Python virtual environment management

@@ -133,6 +133,7 @@ fn dispatch(command: Commands) -> Result<()> {
         Commands::SelfUpdate => {
             updater::self_update()?;
         }
+        #[cfg(feature = "tui")]
         Commands::Tui => {
             commands::tui::run()?;
         }
