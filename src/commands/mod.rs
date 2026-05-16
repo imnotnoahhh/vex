@@ -10,6 +10,7 @@ pub mod python;
 pub mod repair;
 pub mod rust;
 pub mod toolchain;
+#[cfg(feature = "tui")]
 pub mod tui;
 pub mod updates;
 pub mod versions;
