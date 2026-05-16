@@ -1,5 +1,7 @@
 use crate::advisories;
 use crate::commands::current::{collect_current, CurrentEntry};
+use crate::commands::doctor::{self, DoctorReport};
+use crate::commands::updates::{collect_outdated, OutdatedReport};
 use crate::config;
 use crate::error::{Result, VexError};
 use crate::fs_utils::path_size;
@@ -8,6 +10,53 @@ use crate::resolver;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum View {
+    Dashboard,
+    Outdated,
+    Doctor,
+}
+
+impl View {
+    pub(super) fn title(&self) -> &'static str {
+        match self {
+            View::Dashboard => "Dashboard",
+            View::Outdated => "Outdated",
+            View::Doctor => "Doctor",
+        }
+    }
+}
+
+pub(super) struct AppState {
+    pub(super) view: View,
+    pub(super) dashboard: DashboardState,
+    pub(super) outdated: Option<std::result::Result<OutdatedReport, String>>,
+    pub(super) doctor: Option<std::result::Result<DoctorReport, String>>,
+}
+
+impl AppState {
+    pub(super) fn new(dashboard: DashboardState) -> Self {
+        Self {
+            view: View::Dashboard,
+            dashboard,
+            outdated: None,
+            doctor: None,
+        }
+    }
+
+    pub(super) fn ensure_outdated(&mut self) {
+        if self.outdated.is_none() {
+            self.outdated = Some(collect_outdated(None).map_err(|e| e.to_string()));
+        }
+    }
+
+    pub(super) fn ensure_doctor(&mut self) {
+        if self.doctor.is_none() {
+            self.doctor = Some(doctor::collect().map_err(|e| e.to_string()));
+        }
+    }
+}
 
 #[derive(Debug)]
 pub(super) struct DashboardState {
