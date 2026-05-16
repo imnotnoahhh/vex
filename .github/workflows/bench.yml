@@ -1,0 +1,94 @@
+name: Benchmarks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "benches/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "benches/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  benchmark:
+    name: Criterion benchmarks (PR)
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-bench-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bench-
+
+      - name: Restore main baseline
+        id: restore-baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: criterion-baseline-main
+          path: target/criterion
+        continue-on-error: true
+
+      - name: Run benchmarks (save pr baseline)
+        run: cargo bench --bench benchmarks -- --save-baseline pr
+
+      - name: Compare PR vs main
+        if: steps.restore-baseline.outcome == 'success' && github.event_name == 'pull_request'
+        uses: boa-dev/criterion-compare-action@v3
+        with:
+          benchName: "benchmarks"
+          branchName: "main"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          threshold: "0.20"
+
+      - name: Upload PR baseline artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-baseline-pr-${{ github.sha }}
+          path: target/criterion
+          retention-days: 30
+
+  save-main-baseline:
+    name: Save main baseline
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-bench-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bench-
+
+      - name: Run benchmarks (save main baseline)
+        run: cargo bench --bench benchmarks -- --save-baseline main
+
+      - name: Upload main baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-baseline-main
+          path: target/criterion
+          retention-days: 30

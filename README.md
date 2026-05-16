@@ -72,17 +72,17 @@
 - **Smart version filtering** — `vex list-remote node --filter lts` shows only LTS versions
 - **Remote version cache** — cached for 5 min by default, configurable via `config.toml`
 - **Concurrent install protection** — file-based locking prevents parallel install corruption
-- **Checksum verification** — Node.js uses official SHA256 verification; Go/Java/Rust follow upstream checksum metadata availability
+- **Checksum verification** — SHA-256 verification on all 5 tools (Node.js, Go, Java, Rust, Python) before extraction; install refuses to proceed if upstream checksum fetch fails
 - **Parallel downloads** — atomic writes with automatic cleanup, up to 3 concurrent downloads
 - **Parallel extraction** — fast archive extraction using parallel file processing
 - **Security hardening** — TOCTOU protection, ownership validation, path traversal protection, atomic operations
 - **Self-update** — `vex self-update` upgrades vex itself to the latest GitHub release
 - **Health check** — `vex doctor` validates installation, PATH, shell hooks, managed global bins, Maven/Gradle state, and active manager conflicts with actionable fixes
-- **Disk space check** — prevents installation when less than 500 MB free space available
+- **Disk space check** — prevents installation when less than 1.5 GB free space available
 - **Machine-readable output** — `--json` for `current`, `globals`, `list`, `list-remote`, and `doctor`
 - **Homebrew support** — optional official tap for brew users, while direct install remains the recommended path
 - **Multi-shell support** — zsh, bash, fish, and nushell integration for auto-switching
-- **macOS native** — supports both Apple Silicon and Intel macOS environments
+- **macOS + Linux** — supports macOS (Apple Silicon / Intel) and Linux (x86_64 / aarch64); shell hooks work on zsh, bash, fish, nushell
 
 ## Quick Start
 
@@ -311,13 +311,13 @@ For the full CLI reference, including command groups and option details, see [do
 
 ## Supported Tools
 
-| Tool | Binaries | Source |
-|------|----------|--------|
-| Node.js | node, npm, npx (+ corepack in v24 and earlier) | Official binaries |
-| Go | go, gofmt | Official binaries |
-| Java | java, javac, jar, javadoc + 26 more JDK tools | Eclipse Temurin JDK |
-| Rust | rustc, rustdoc, cargo, rustfmt, clippy, rust-analyzer + 5 more | Official stable binaries |
-| Python | python3, pip3, python, pip, 2to3, idle3, pydoc3, python3-config | python-build-standalone (astral-sh) |
+| Tool | Binaries | Source | Checksum source |
+|------|----------|--------|-----------------|
+| Node.js | node, npm, npx (+ corepack in v24 and earlier) | nodejs.org official binaries | `SHASUMS256.txt` sidecar |
+| Go | go, gofmt | go.dev official binaries | `sha256` field in go.dev JSON API |
+| Java | java, javac, jar, javadoc + 26 more JDK tools | Eclipse Temurin JDK | Adoptium API `binary.package.checksum` |
+| Rust | rustc, rustdoc, cargo, rustfmt, clippy, rust-analyzer + 5 more | static.rust-lang.org stable channel | `.sha256` sidecar in channel manifest |
+| Python | python3, pip3, python, pip, 2to3, idle3, pydoc3, python3-config | python-build-standalone (astral-sh) | `SHA256SUMS` from GitHub release |
 
 ## Documentation
 

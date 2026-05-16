@@ -11,7 +11,7 @@ const LOG_ENV: &str = "VEX_LOG";
 fn env_filter() -> EnvFilter {
     EnvFilter::try_from_env(LOG_ENV)
         .or_else(|_| EnvFilter::try_new("off"))
-        .unwrap()
+        .expect("'off' is a valid EnvFilter directive")
 }
 
 pub fn diagnostics_enabled() -> bool {

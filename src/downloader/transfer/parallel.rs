@@ -17,12 +17,15 @@ pub(super) fn download_parallel(downloads: &[(String, PathBuf)], retries: u32) -
     pool.install(|| {
         downloads.par_iter().for_each(|(url, dest)| {
             if let Err(error) = download_with_retry_with_settings(url, dest, retries, &settings) {
-                errors.lock().unwrap().push(format!("{}", error));
+                errors
+                    .lock()
+                    .expect("download error mutex poisoned")
+                    .push(format!("{}", error));
             }
         });
     });
 
-    let errors = errors.lock().unwrap();
+    let errors = errors.lock().expect("download error mutex poisoned");
     if !errors.is_empty() {
         return Err(VexError::Parse(format!(
             "Parallel download failed: {}",

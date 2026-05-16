@@ -1,8 +1,9 @@
 use super::extract::{extract_archive, find_extracted_root};
 use super::support::{check_disk_space, CleanupGuard};
 use crate::archive_cache::ArchiveCache;
+use crate::checksum::{verify_tool_archive, VerificationPolicy};
 use crate::config;
-use crate::downloader::{download_with_retry_in_current_context, verify_checksum};
+use crate::downloader::download_with_retry_in_current_context;
 use crate::error::{Result, VexError};
 use crate::lock::InstallLock;
 use crate::paths::vex_dir;
@@ -76,25 +77,14 @@ pub(super) fn install(
 
     let progress = ui::Progress::new(&ctx, "Verifying checksum");
 
-    let verified_checksum = match expected_checksum {
-        Some(expected) => {
-            verify_checksum(&archive_path, expected)?;
-            Some(expected.trim().to_string())
-        }
-        None => match tool.get_checksum(version, arch) {
-            Ok(Some(expected)) => {
-                verify_checksum(&archive_path, &expected)?;
-                Some(expected)
-            }
-            Ok(None) => None,
-            Err(e) => {
-                return Err(VexError::Parse(format!(
-                    "Failed to fetch checksum for verification: {}. Refusing to install unverified binary.",
-                    e
-                )));
-            }
-        },
-    };
+    let verified_checksum = verify_tool_archive(
+        tool,
+        version,
+        arch,
+        &archive_path,
+        expected_checksum,
+        VerificationPolicy::Strict,
+    )?;
 
     let archive_cache = ArchiveCache::new(&vex);
     let _ = archive_cache.store_archive(tool.name(), version, &archive_name, &archive_path);

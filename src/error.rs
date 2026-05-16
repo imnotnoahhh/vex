@@ -20,7 +20,7 @@ pub enum VexError {
     #[error("IO error: {0}\n\nThis may be caused by:\n  - Insufficient permissions\n  - Disk full\n  - File system issues")]
     Io(#[from] std::io::Error),
 
-    /// Insufficient disk space (pre-installation check, requires at least 500 MB)
+    /// Insufficient disk space (pre-installation check, requires at least 1.5 GB)
     #[error("Disk space insufficient: need {need} GB, available {available} GB\n\nSuggestions:\n  - Free up disk space by removing unused files\n  - Run 'vex uninstall <tool@version>' to remove old versions\n  - Check disk usage with 'df -h'")]
     DiskSpace {
         /// Required space (GB)
@@ -36,6 +36,15 @@ pub enum VexError {
         expected: String,
         /// Actual calculated checksum
         actual: String,
+    },
+
+    /// No upstream checksum is published for the requested tool/version pair
+    #[error("Checksum unavailable for {tool}@{version}\n\nvex refuses to install a binary without a verified SHA-256 checksum.\n\nThis can happen when:\n  - The upstream publisher has not posted a checksum file yet\n  - A custom mirror serves the archive without checksum metadata\n  - A pre-release version is queried before its checksum is uploaded\n\nNext steps:\n  - Wait until upstream publishes the checksum, or\n  - Install a different version that already has a checksum, or\n  - Pin the checksum in .tool-versions.lock when you can verify it manually")]
+    ChecksumUnavailable {
+        /// Tool name
+        tool: String,
+        /// Version number
+        version: String,
     },
 
     /// Specified tool version does not exist or is not installed

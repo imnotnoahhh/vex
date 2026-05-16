@@ -64,7 +64,7 @@ fn fetch_with_spinner(
     spinner.set_style(
         ProgressStyle::default_spinner()
             .template("{spinner:.green} {msg}")
-            .unwrap(),
+            .expect("static spinner template is valid"),
     );
     spinner.set_message(format!("Fetching available versions of {}...", tool_name));
     spinner.enable_steady_tick(std::time::Duration::from_millis(100));
