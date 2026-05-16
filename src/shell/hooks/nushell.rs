@@ -16,6 +16,9 @@ def --env __vex_apply_exports [] {
     let exports_path = ($env.HOME | path join ".vex" "state" "env.nu")
     mkdir ($exports_path | path dirname)
     let status = (do -i { ^vex env nushell --exports } | complete)
+    if (($status.stderr | str length) > 0) {
+        print -e $status.stderr
+    }
     if $status.exit_code == 0 {
         $status.stdout | save -f $exports_path
         source $exports_path
@@ -23,7 +26,10 @@ def --env __vex_apply_exports [] {
 }
 
 def --env __vex_use_if_found [] {
-    do -i { ^vex use --auto } | complete | ignore
+    let switch_status = (do -i { ^vex use --auto } | complete)
+    if (($switch_status.stderr | str length) > 0) {
+        print -e $switch_status.stderr
+    }
     __vex_apply_exports
 }
 

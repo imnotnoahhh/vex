@@ -48,6 +48,7 @@ done
 
 command -v curl >/dev/null 2>&1 || fail "curl is required"
 command -v tar >/dev/null 2>&1 || fail "tar is required"
+command -v shasum >/dev/null 2>&1 || fail "shasum is required"
 
 OS_NAME="$(uname -s)"
 ARCH_NAME="$(uname -m)"
@@ -109,19 +110,19 @@ log "Downloading $ASSET_NAME..."
 curl -fL --retry 3 --retry-delay 1 --output "$ARCHIVE_PATH" "$ASSET_URL" \
   || fail "Failed to download release asset"
 
-# Verify checksum if available
 CHECKSUM_URL="${ASSET_URL}.sha256"
-if curl -fsSL "$CHECKSUM_URL" -o "$TMP_DIR/checksum.txt" 2>/dev/null; then
-  log "Verifying checksum..."
-  EXPECTED=$(awk '{print $1}' "$TMP_DIR/checksum.txt")
-  ACTUAL=$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')
-  if [ "$EXPECTED" = "$ACTUAL" ]; then
-    log "✓ Checksum verified"
-  else
-    fail "Checksum verification failed (expected: $EXPECTED, got: $ACTUAL)"
-  fi
+curl -fsSL "$CHECKSUM_URL" -o "$TMP_DIR/checksum.txt" \
+  || fail "Checksum file not found at $CHECKSUM_URL; refusing to install unverified release asset"
+log "Verifying checksum..."
+EXPECTED=$(awk '{print $1}' "$TMP_DIR/checksum.txt")
+if ! printf '%s' "$EXPECTED" | grep -qE '^[0-9a-fA-F]{64}$'; then
+  fail "Checksum file did not contain a valid SHA256 digest"
+fi
+ACTUAL=$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')
+if [ "$EXPECTED" = "$ACTUAL" ]; then
+  log "✓ Checksum verified"
 else
-  log "⚠ Checksum file not found, skipping verification"
+  fail "Checksum verification failed (expected: $EXPECTED, got: $ACTUAL)"
 fi
 
 log "Extracting archive..."

@@ -1,10 +1,7 @@
 use super::model::{CACHE_TTL, MAX_CACHE_TTL, MAX_DOWNLOAD_RETRIES, MIN_CACHE_TTL};
 use super::*;
-use std::sync::Mutex;
 use std::time::Duration;
 use tempfile::TempDir;
-
-static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn save_env(keys: &[&str]) -> Vec<(String, Option<String>)> {
     keys.iter()
@@ -154,7 +151,7 @@ node = "https://mirror.example.com/cache"
 
 #[test]
 fn test_load_effective_settings_applies_project_overrides() {
-    let _guard = ENV_LOCK.lock().unwrap();
+    let _guard = crate::test_env::lock();
     let original_home = std::env::var("HOME").ok();
     let saved_env = save_env(&[
         "VEX_CONNECT_TIMEOUT_SECS",
@@ -241,7 +238,7 @@ node = "https://project.example.com/node"
 
 #[test]
 fn test_load_effective_settings_keeps_env_overrides_highest_priority() {
-    let _guard = ENV_LOCK.lock().unwrap();
+    let _guard = crate::test_env::lock();
     let original_home = std::env::var("HOME").ok();
     let saved_env = save_env(&["VEX_PROXY", "VEX_DOWNLOAD_RETRIES"]);
     let temp = TempDir::new().unwrap();

@@ -13,12 +13,12 @@ export CARGO_HOME="$HOME/.vex/cargo"
 
 __vex_apply_exports() {{
     local exports
-    exports="$(vex env {shell} --exports 2>/dev/null)" || return 0
+    exports="$(vex env {shell} --exports)" || return 0
     eval "$exports"
 }}
 
 __vex_use_if_found() {{
-    vex use --auto >/dev/null 2>&1 || true
+    vex use --auto >/dev/null || true
     __vex_apply_exports
 }}
 "#

@@ -154,12 +154,9 @@ pub(super) fn collect_tool_manager_conflict_check(vex_bin: &Path) -> DoctorCheck
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn with_path<T>(path: Option<&str>, f: impl FnOnce() -> T) -> T {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = crate::test_env::lock();
         let original = std::env::var("PATH").ok();
 
         if let Some(path) = path {

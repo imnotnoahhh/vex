@@ -144,14 +144,15 @@ curl -fL --retry 3 --retry-delay 1 --output "$ARCHIVE_PATH" "$ASSET_URL" \
   || fail "Failed to download release asset"
 
 CHECKSUM_URL="${ASSET_URL}.sha256"
-if curl -fsSL "$CHECKSUM_URL" -o "$CHECKSUM_PATH" 2>/dev/null; then
-  EXPECTED="$(awk '{print $1}' "$CHECKSUM_PATH")"
-  ACTUAL="$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')"
-  [ "$EXPECTED" = "$ACTUAL" ] || fail "Checksum verification failed for $ASSET_NAME"
-  printf 'Verified checksum for %s.\n' "$ASSET_NAME"
-else
-  printf 'Checksum file not found for %s, skipping verification.\n' "$ASSET_NAME"
+curl -fsSL "$CHECKSUM_URL" -o "$CHECKSUM_PATH" \
+  || fail "Checksum file not found at $CHECKSUM_URL; refusing to install unverified release asset"
+EXPECTED="$(awk '{print $1}' "$CHECKSUM_PATH")"
+if ! printf '%s' "$EXPECTED" | grep -qE '^[0-9a-fA-F]{64}$'; then
+  fail "Checksum file did not contain a valid SHA256 digest"
 fi
+ACTUAL="$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')"
+[ "$EXPECTED" = "$ACTUAL" ] || fail "Checksum verification failed for $ASSET_NAME"
+printf 'Verified checksum for %s.\n' "$ASSET_NAME"
 
 printf 'Extracting vex archive...\n'
 tar -xf "$ARCHIVE_PATH" -C "$EXTRACT_DIR" || fail "Failed to extract release archive"
