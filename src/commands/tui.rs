@@ -25,9 +25,10 @@ pub fn run() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let state = state::collect_dashboard_state()?;
+    let dashboard = state::collect_dashboard_state()?;
+    let app_state = state::AppState::new(dashboard);
 
-    let res = render::run_tui(&mut terminal, state);
+    let res = render::run_tui(&mut terminal, app_state);
 
     disable_raw_mode()?;
     execute!(
