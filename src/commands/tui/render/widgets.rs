@@ -2,23 +2,12 @@ use super::super::state::DiskUsage;
 use crate::commands::current::CurrentEntry;
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
 };
 use std::collections::HashMap;
-
-pub(super) fn render_header(frame: &mut Frame, area: Rect) {
-    let header = Paragraph::new("vex TUI Dashboard")
-        .style(
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-        .block(Block::default().borders(Borders::ALL));
-    frame.render_widget(header, area);
-}
 
 pub(super) fn render_current_versions(frame: &mut Frame, area: Rect, tools: &[CurrentEntry]) {
     let items = if tools.is_empty() {
@@ -121,9 +110,11 @@ pub(super) fn render_disk_usage(frame: &mut Frame, area: Rect, disk_usage: &Opti
 }
 
 pub(super) fn render_footer(frame: &mut Frame, area: Rect) {
-    let footer = Paragraph::new("Press 'q' or ESC to exit")
-        .style(Style::default().fg(Color::DarkGray))
-        .block(Block::default().borders(Borders::ALL));
+    let footer = Paragraph::new(
+        "Tab/Shift-Tab or 1/2/3 to switch views  ·  'r' refresh  ·  'q'/ESC to exit",
+    )
+    .style(Style::default().fg(Color::DarkGray))
+    .block(Block::default().borders(Borders::ALL));
     frame.render_widget(footer, area);
 }
 

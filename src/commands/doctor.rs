@@ -5,7 +5,7 @@ mod types;
 use crate::error::Result;
 use crate::output::{print_json, OutputMode};
 
-use types::DoctorReport;
+pub use types::{CheckStatus, DoctorReport};
 
 pub fn run(output: OutputMode, verbose: bool) -> Result<()> {
     let report = collect()?;

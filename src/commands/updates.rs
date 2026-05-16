@@ -7,6 +7,8 @@ use crate::error::{Result, VexError};
 use crate::output::{print_json, OutputMode};
 use serde::Serialize;
 
+pub use outdated::collect_outdated;
+
 use render::{render_outdated_text, render_upgrade_text};
 use upgrade::{upgrade_all, upgrade_one};
 
@@ -58,7 +60,7 @@ pub struct UpgradeReport {
 }
 
 pub fn outdated(tool: Option<&str>, output: OutputMode) -> Result<()> {
-    let report = outdated::collect_outdated(tool)?;
+    let report = collect_outdated(tool)?;
     match output {
         OutputMode::Json => print_json(&report),
         OutputMode::Text => {
