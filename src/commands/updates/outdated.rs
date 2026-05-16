@@ -3,7 +3,7 @@ use crate::advisories::{self, AdvisoryStatus};
 use crate::error::Result;
 use crate::tools;
 
-pub(super) fn collect_outdated(tool: Option<&str>) -> Result<OutdatedReport> {
+pub fn collect_outdated(tool: Option<&str>) -> Result<OutdatedReport> {
     let (scope, targets) = collect_targets(tool)?;
     let mut entries = Vec::new();
 
