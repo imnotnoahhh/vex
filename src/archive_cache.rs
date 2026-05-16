@@ -39,6 +39,11 @@ impl ArchiveCache {
         self.tool_cache_dir(tool_name, version).join(filename)
     }
 
+    fn checksum_path(&self, tool_name: &str, version: &str, filename: &str) -> PathBuf {
+        self.tool_cache_dir(tool_name, version)
+            .join(format!("{filename}.sha256"))
+    }
+
     /// Check if an archive exists in cache
     #[cfg(test)]
     pub fn has_archive(&self, tool_name: &str, version: &str, filename: &str) -> bool {
@@ -80,6 +85,38 @@ impl ArchiveCache {
         );
 
         Ok(dest_path)
+    }
+
+    /// Store verified archive checksum next to the cached archive.
+    pub fn store_archive_checksum(
+        &self,
+        tool_name: &str,
+        version: &str,
+        filename: &str,
+        checksum: &str,
+    ) -> Result<()> {
+        let cache_dir = self.tool_cache_dir(tool_name, version);
+        fs::create_dir_all(&cache_dir)?;
+        fs::write(
+            self.checksum_path(tool_name, version, filename),
+            format!("{}\n", checksum.trim()),
+        )?;
+        Ok(())
+    }
+
+    /// Get verified checksum recorded for a cached archive.
+    pub fn get_archive_checksum(
+        &self,
+        tool_name: &str,
+        version: &str,
+        filename: &str,
+    ) -> Result<Option<String>> {
+        let path = self.checksum_path(tool_name, version, filename);
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        Ok(Some(fs::read_to_string(path)?.trim().to_string()))
     }
 
     /// Verify archive checksum

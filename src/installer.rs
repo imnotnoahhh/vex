@@ -22,14 +22,23 @@ use crate::tools::Tool;
 
 /// Install specified tool version with offline mode support
 pub fn install_with_mode(tool: &dyn Tool, version: &str, offline: bool) -> Result<()> {
+    install_with_mode_and_checksum(tool, version, offline, None)
+}
+
+pub(crate) fn install_with_mode_and_checksum(
+    tool: &dyn Tool,
+    version: &str,
+    offline: bool,
+    expected_checksum: Option<&str>,
+) -> Result<()> {
     if offline {
-        offline::install_offline(tool, version)
+        offline::install_offline(tool, version, expected_checksum)
     } else {
-        online::install(tool, version)
+        online::install(tool, version, expected_checksum)
     }
 }
 
 /// Install specified tool version
 pub fn install(tool: &dyn Tool, version: &str) -> Result<()> {
-    online::install(tool, version)
+    online::install(tool, version, None)
 }

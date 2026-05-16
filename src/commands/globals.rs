@@ -436,10 +436,7 @@ fn render_text(report: &GlobalsReport, verbose: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
     use tempfile::TempDir;
-
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn write_executable(path: &Path) {
         fs::write(path, "#!/bin/sh\n").unwrap();
@@ -450,7 +447,7 @@ mod tests {
 
     #[test]
     fn collect_reports_node_shared_npm_globals() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = crate::test_env::lock();
         let home = TempDir::new().unwrap();
         let old_home = std::env::var("HOME").ok();
         std::env::set_var("HOME", home.path());
@@ -477,7 +474,7 @@ mod tests {
 
     #[test]
     fn collect_reports_go_and_rust_global_bins() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = crate::test_env::lock();
         let home = TempDir::new().unwrap();
         let old_home = std::env::var("HOME").ok();
         std::env::set_var("HOME", home.path());
@@ -508,7 +505,7 @@ mod tests {
 
     #[test]
     fn collect_reports_java_build_state() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = crate::test_env::lock();
         let home = TempDir::new().unwrap();
         let old_home = std::env::var("HOME").ok();
         std::env::set_var("HOME", home.path());
@@ -541,7 +538,7 @@ mod tests {
 
     #[test]
     fn collect_python_base_reports_user_clis_only() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = crate::test_env::lock();
         let home = TempDir::new().unwrap();
         let old_home = std::env::var("HOME").ok();
         std::env::set_var("HOME", home.path());
@@ -587,7 +584,7 @@ mod tests {
 
     #[test]
     fn collect_accepts_official_package_manager_filters() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = crate::test_env::lock();
         let home = TempDir::new().unwrap();
         let old_home = std::env::var("HOME").ok();
         std::env::set_var("HOME", home.path());

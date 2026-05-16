@@ -5,9 +5,6 @@ use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Mutex;
-
-static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 #[test]
 fn test_verify_checksum_correct() {
@@ -155,7 +152,7 @@ fn test_max_concurrent_downloads_constant() {
 
 #[test]
 fn test_download_with_retry_ignores_invalid_project_config_for_global_use() {
-    let _guard = ENV_LOCK.lock().unwrap();
+    let _guard = crate::test_env::lock();
     let cwd = std::env::current_dir().unwrap();
     let dir = tempfile::tempdir().unwrap();
     let dest = dir.path().join("download.tmp");

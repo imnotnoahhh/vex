@@ -6,10 +6,31 @@ use crate::resolver;
 use crate::tools;
 use crate::version_state;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 const SUPPORTED_TOOLS: &[&str] = &["go", "java", "node", "python", "rust"];
 const ALWAYS_MANAGED_ENV_KEYS: &[&str] = &["GOROOT", "JAVA_HOME"];
+const SHELL_PROJECT_ENV_KEYS_FILE: &str = "project-env-keys";
+const SHELL_ACTIVATION_CONTEXT_FILE: &str = "activation-context";
+const UNSAFE_SHELL_ENV_KEYS: &[&str] = &[
+    "BASH_ENV",
+    "ENV",
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_SYSTEM",
+    "GIT_SSH_COMMAND",
+    "NODE_OPTIONS",
+    "PYTHONHOME",
+    "PYTHONPATH",
+    "PYTHONSTARTUP",
+    "RUBYOPT",
+];
+
+#[derive(Debug, Clone)]
+pub(super) struct ShellProjectEnv {
+    pub values: BTreeMap<String, String>,
+    pub blocked_keys: Vec<String>,
+}
 
 pub(super) fn resolve_venv_dir(
     cwd: &Path,
@@ -114,15 +135,13 @@ pub(super) fn collect_exec_path_entries(
 }
 
 pub(super) fn build_set_env(
-    project: Option<&LoadedProjectConfig>,
+    mut env: BTreeMap<String, String>,
     vex_dir: &Path,
     toolchains_dir: &Path,
     versions: &BTreeMap<String, String>,
     venv_dir: Option<&Path>,
     capture_user_state: bool,
 ) -> Result<BTreeMap<String, String>> {
-    let mut env = project_env(project);
-
     for (tool_name, version) in versions {
         let tool = tools::get_tool(tool_name)?;
         let install_dir = checked_install_dir(toolchains_dir, tool_name, version)?;
@@ -210,6 +229,113 @@ pub(super) fn original_path() -> String {
         .unwrap_or_default()
 }
 
+pub(super) fn project_env_for_process(
+    project: Option<&LoadedProjectConfig>,
+) -> BTreeMap<String, String> {
+    let mut env = BTreeMap::new();
+
+    if let Some(project) = project {
+        for (key, value) in &project.config.env {
+            let key = key.trim();
+            if !key.is_empty() {
+                env.insert(key.to_string(), value.clone());
+            }
+        }
+    }
+
+    env
+}
+
+pub(super) fn project_env_for_shell(project: Option<&LoadedProjectConfig>) -> ShellProjectEnv {
+    let mut env = BTreeMap::new();
+    let mut blocked_keys = Vec::new();
+
+    if let Some(project) = project {
+        for (key, value) in &project.config.env {
+            let key = key.trim();
+            if key.is_empty() {
+                continue;
+            }
+
+            if is_unsafe_shell_env_key(key) {
+                blocked_keys.push(key.to_string());
+            } else {
+                env.insert(key.to_string(), value.clone());
+            }
+        }
+    }
+
+    ShellProjectEnv {
+        values: env,
+        blocked_keys,
+    }
+}
+
+pub(super) fn load_previous_shell_project_env_keys(vex_dir: &Path) -> Result<Vec<String>> {
+    let path = shell_state_path(vex_dir, SHELL_PROJECT_ENV_KEYS_FILE);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let keys = fs::read_to_string(path)?
+        .lines()
+        .map(str::trim)
+        .filter(|key| !key.is_empty())
+        .map(ToOwned::to_owned)
+        .collect::<Vec<_>>();
+    Ok(keys)
+}
+
+pub(super) fn load_previous_shell_context(vex_dir: &Path) -> Result<Option<String>> {
+    let path = shell_state_path(vex_dir, SHELL_ACTIVATION_CONTEXT_FILE);
+    if !path.exists() {
+        return Ok(None);
+    }
+
+    Ok(Some(fs::read_to_string(path)?))
+}
+
+pub(super) fn store_shell_state(
+    vex_dir: &Path,
+    project_env_keys: &[String],
+    context: &str,
+) -> Result<()> {
+    let state_dir = vex_dir.join("state");
+    fs::create_dir_all(&state_dir)?;
+
+    let mut keys = project_env_keys.to_vec();
+    keys.sort();
+    fs::write(
+        state_dir.join(SHELL_PROJECT_ENV_KEYS_FILE),
+        if keys.is_empty() {
+            String::new()
+        } else {
+            format!("{}\n", keys.join("\n"))
+        },
+    )?;
+    fs::write(state_dir.join(SHELL_ACTIVATION_CONTEXT_FILE), context)?;
+    Ok(())
+}
+
+pub(super) fn current_shell_context(
+    project_root: Option<&Path>,
+    venv_dir: Option<&Path>,
+    project_env_keys: &[String],
+) -> String {
+    let mut keys = project_env_keys.to_vec();
+    keys.sort();
+    format!(
+        "project={}\nvenv={}\nenv={}\n",
+        project_root
+            .map(|path| path.display().to_string())
+            .unwrap_or_default(),
+        venv_dir
+            .map(|path| path.display().to_string())
+            .unwrap_or_default(),
+        keys.join(",")
+    )
+}
+
 fn checked_install_dir(toolchains_dir: &Path, tool_name: &str, version: &str) -> Result<PathBuf> {
     let install_dir = toolchains_dir.join(tool_name).join(version);
     if install_dir.exists() {
@@ -254,19 +380,15 @@ fn filter_managed_env(
         .collect()
 }
 
-fn project_env(project: Option<&LoadedProjectConfig>) -> BTreeMap<String, String> {
-    let mut env = BTreeMap::new();
+fn is_unsafe_shell_env_key(key: &str) -> bool {
+    let upper = key.to_ascii_uppercase();
+    UNSAFE_SHELL_ENV_KEYS.contains(&upper.as_str())
+        || upper.starts_with("DYLD_")
+        || upper.starts_with("LD_")
+}
 
-    if let Some(project) = project {
-        for (key, value) in &project.config.env {
-            let key = key.trim();
-            if !key.is_empty() {
-                env.insert(key.to_string(), value.clone());
-            }
-        }
-    }
-
-    env
+fn shell_state_path(vex_dir: &Path, filename: &str) -> PathBuf {
+    vex_dir.join("state").join(filename)
 }
 
 pub(super) fn push_path_entry(

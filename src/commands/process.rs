@@ -60,7 +60,10 @@ pub fn run_task(task: &str, args: &[String]) -> Result<i32> {
 
 pub fn print_exports(shell: &str) -> Result<()> {
     let cwd = resolver::current_dir();
-    let plan = activation::build_activation_plan(&cwd)?;
+    let plan = activation::build_shell_activation_plan(&cwd)?;
+    for warning in &plan.warnings {
+        eprintln!("{warning}");
+    }
     let exports = crate::shell::generate_exports(shell, &plan).map_err(VexError::Parse)?;
     print!("{}", exports);
     Ok(())

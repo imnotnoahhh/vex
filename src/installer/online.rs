@@ -16,7 +16,11 @@ use std::fs;
 use tar::Archive;
 use tracing::{debug, info};
 
-pub(super) fn install(tool: &dyn Tool, version: &str) -> Result<()> {
+pub(super) fn install(
+    tool: &dyn Tool,
+    version: &str,
+    expected_checksum: Option<&str>,
+) -> Result<()> {
     info!("Starting installation: {}@{}", tool.name(), version);
     let arch = Arch::detect()?;
     debug!("Detected architecture: {:?}", arch);
@@ -72,22 +76,31 @@ pub(super) fn install(tool: &dyn Tool, version: &str) -> Result<()> {
 
     let progress = ui::Progress::new(&ctx, "Verifying checksum");
 
-    let verified_checksum = match tool.get_checksum(version, arch) {
-        Ok(Some(expected)) => {
-            verify_checksum(&archive_path, &expected)?;
-            Some(expected)
+    let verified_checksum = match expected_checksum {
+        Some(expected) => {
+            verify_checksum(&archive_path, expected)?;
+            Some(expected.trim().to_string())
         }
-        Ok(None) => None,
-        Err(e) => {
-            return Err(VexError::Parse(format!(
-                "Failed to fetch checksum for verification: {}. Refusing to install unverified binary.",
-                e
-            )));
-        }
+        None => match tool.get_checksum(version, arch) {
+            Ok(Some(expected)) => {
+                verify_checksum(&archive_path, &expected)?;
+                Some(expected)
+            }
+            Ok(None) => None,
+            Err(e) => {
+                return Err(VexError::Parse(format!(
+                    "Failed to fetch checksum for verification: {}. Refusing to install unverified binary.",
+                    e
+                )));
+            }
+        },
     };
 
     let archive_cache = ArchiveCache::new(&vex);
     let _ = archive_cache.store_archive(tool.name(), version, &archive_name, &archive_path);
+    if let Some(checksum) = &verified_checksum {
+        let _ = archive_cache.store_archive_checksum(tool.name(), version, &archive_name, checksum);
+    }
 
     progress.set_message("Extracting archive");
     fs::create_dir_all(&extract_dir)?;
