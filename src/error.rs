@@ -20,7 +20,7 @@ pub enum VexError {
     #[error("IO error: {0}\n\nThis may be caused by:\n  - Insufficient permissions\n  - Disk full\n  - File system issues")]
     Io(#[from] std::io::Error),
 
-    /// Insufficient disk space (pre-installation check, requires at least 500 MB)
+    /// Insufficient disk space (pre-installation check, requires at least 1.5 GB)
     #[error("Disk space insufficient: need {need} GB, available {available} GB\n\nSuggestions:\n  - Free up disk space by removing unused files\n  - Run 'vex uninstall <tool@version>' to remove old versions\n  - Check disk usage with 'df -h'")]
     DiskSpace {
         /// Required space (GB)
