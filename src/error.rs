@@ -38,6 +38,15 @@ pub enum VexError {
         actual: String,
     },
 
+    /// No upstream checksum is published for the requested tool/version pair
+    #[error("Checksum unavailable for {tool}@{version}\n\nvex refuses to install a binary without a verified SHA-256 checksum.\n\nThis can happen when:\n  - The upstream publisher has not posted a checksum file yet\n  - A custom mirror serves the archive without checksum metadata\n  - A pre-release version is queried before its checksum is uploaded\n\nNext steps:\n  - Wait until upstream publishes the checksum, or\n  - Install a different version that already has a checksum, or\n  - Pin the checksum in .tool-versions.lock when you can verify it manually")]
+    ChecksumUnavailable {
+        /// Tool name
+        tool: String,
+        /// Version number
+        version: String,
+    },
+
     /// Specified tool version does not exist or is not installed
     #[error("Version not found: {tool}@{version}{suggestions}\n\nRun 'vex list-remote {tool}' to see all available versions.")]
     VersionNotFound {
