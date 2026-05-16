@@ -40,21 +40,27 @@ pub(super) fn write_files_in_parallel(extract_dir: &Path, files: Vec<EntryData>)
 
         if let Some(parent) = target.parent() {
             if let Err(error) = fs::create_dir_all(parent) {
-                errors.lock().unwrap().push(format!(
-                    "Failed to create parent directory for {}: {}",
-                    entry.path.display(),
-                    error
-                ));
+                errors
+                    .lock()
+                    .expect("extract error mutex poisoned")
+                    .push(format!(
+                        "Failed to create parent directory for {}: {}",
+                        entry.path.display(),
+                        error
+                    ));
                 return;
             }
         }
 
         if let Err(error) = fs::write(&target, &entry.data) {
-            errors.lock().unwrap().push(format!(
-                "Failed to write {}: {}",
-                entry.path.display(),
-                error
-            ));
+            errors
+                .lock()
+                .expect("extract error mutex poisoned")
+                .push(format!(
+                    "Failed to write {}: {}",
+                    entry.path.display(),
+                    error
+                ));
             return;
         }
 
@@ -63,16 +69,19 @@ pub(super) fn write_files_in_parallel(extract_dir: &Path, files: Vec<EntryData>)
             use std::os::unix::fs::PermissionsExt;
             if let Err(error) = fs::set_permissions(&target, fs::Permissions::from_mode(entry.mode))
             {
-                errors.lock().unwrap().push(format!(
-                    "Failed to set permissions for {}: {}",
-                    entry.path.display(),
-                    error
-                ));
+                errors
+                    .lock()
+                    .expect("extract error mutex poisoned")
+                    .push(format!(
+                        "Failed to set permissions for {}: {}",
+                        entry.path.display(),
+                        error
+                    ));
             }
         }
     });
 
-    let errors = errors.lock().unwrap();
+    let errors = errors.lock().expect("extract error mutex poisoned");
     if !errors.is_empty() {
         return Err(VexError::Parse(format!("Extraction failed: {}", errors[0])));
     }
