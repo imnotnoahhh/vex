@@ -1,4 +1,7 @@
-use super::lockfile_support::{load_lockfile_for_frozen, validate_lockfile_matches_versions};
+use super::lockfile_support::{
+    load_lockfile_for_frozen, locked_tools, validate_lockfile_matches_versions,
+    verify_installed_checksum, LockedTool,
+};
 use super::NO_VERSION_FILES_MESSAGE;
 use crate::error::Result;
 use crate::installer;
@@ -27,12 +30,8 @@ pub(super) fn from_lockfile(offline: bool) -> Result<()> {
     let versions = resolver::resolve_versions(&cwd);
     validate_lockfile_matches_versions(&lockfile, &versions)?;
 
-    let requested = lockfile
-        .tools
-        .iter()
-        .map(|(tool, entry)| (tool.clone(), entry.version.clone()))
-        .collect::<Vec<_>>();
-    install_requested_versions(&requested, offline)
+    let requested = locked_tools(&lockfile)?;
+    install_locked_versions(&requested, offline)
 }
 
 fn install_requested_versions(requested: &[(String, String)], offline: bool) -> Result<()> {
@@ -63,6 +62,51 @@ fn install_requested_versions(requested: &[(String, String)], offline: bool) -> 
 
         installer::install_with_mode(tool.as_ref(), &resolved, offline)?;
         switcher::switch_version(tool.as_ref(), &resolved)?;
+    }
+
+    Ok(())
+}
+
+fn install_locked_versions(requested: &[LockedTool], offline: bool) -> Result<()> {
+    let vex = vex_dir()?;
+
+    for locked in requested {
+        let tool = match tools::get_tool(&locked.tool) {
+            Ok(tool) => tool,
+            Err(_) => {
+                eprintln!("vex: skipping unsupported tool '{}'", locked.tool);
+                continue;
+            }
+        };
+
+        if let Some(installed) =
+            requested_versions::resolve_installed_version(&vex, &locked.tool, &locked.version)?
+        {
+            verify_installed_checksum(&vex, &locked.tool, &installed, &locked.sha256)?;
+            println!("{}@{} already installed, verified.", locked.tool, installed);
+            continue;
+        }
+
+        let version_dir = vex
+            .join("toolchains")
+            .join(&locked.tool)
+            .join(&locked.version);
+        if version_dir.exists() {
+            verify_installed_checksum(&vex, &locked.tool, &locked.version, &locked.sha256)?;
+            println!(
+                "{}@{} already installed, verified.",
+                locked.tool, locked.version
+            );
+            continue;
+        }
+
+        installer::install_with_mode_and_checksum(
+            tool.as_ref(),
+            &locked.version,
+            offline,
+            Some(&locked.sha256),
+        )?;
+        switcher::switch_version(tool.as_ref(), &locked.version)?;
     }
 
     Ok(())

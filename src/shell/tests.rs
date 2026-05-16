@@ -7,6 +7,8 @@ fn test_generate_zsh_hook() {
     assert!(hook.contains("__vex_use_if_found"));
     assert!(hook.contains("__vex_apply_exports"));
     assert!(hook.contains("vex env zsh --exports"));
+    assert!(hook.contains("vex use --auto >/dev/null || true"));
+    assert!(!hook.contains("2>/dev/null"));
     assert!(hook.contains("$HOME/.vex/bin"));
     assert!(hook.contains("$HOME/.vex/npm/prefix/bin"));
     assert!(hook.contains("NPM_CONFIG_PREFIX"));
@@ -21,6 +23,8 @@ fn test_generate_bash_hook() {
     assert!(hook.contains("__vex_use_if_found"));
     assert!(hook.contains("__vex_apply_exports"));
     assert!(hook.contains("vex env bash --exports"));
+    assert!(hook.contains("vex use --auto >/dev/null || true"));
+    assert!(!hook.contains("2>/dev/null"));
     assert!(hook.contains("$HOME/.vex/npm/prefix/bin"));
     assert!(hook.contains("NPM_CONFIG_PREFIX"));
     assert!(hook.contains("NPM_CONFIG_USERCONFIG"));
@@ -34,6 +38,8 @@ fn test_generate_fish_hook() {
     assert!(hook.contains("__vex_apply_exports"));
     assert!(hook.contains("on-variable PWD"));
     assert!(hook.contains("vex env fish --exports"));
+    assert!(hook.contains("vex use --auto >/dev/null"));
+    assert!(!hook.contains("2>/dev/null"));
     assert!(hook.contains("$HOME/.vex/bin"));
     assert!(hook.contains("$HOME/.vex/npm/prefix/bin"));
     assert!(hook.contains("NPM_CONFIG_PREFIX"));
@@ -48,6 +54,8 @@ fn test_generate_nushell_hook() {
     assert!(hook.contains("__vex_apply_exports"));
     assert!(hook.contains("pre_prompt"));
     assert!(hook.contains("vex env nushell --exports"));
+    assert!(hook.contains("print -e $switch_status.stderr"));
+    assert!(hook.contains("print -e $status.stderr"));
     assert!(hook.contains("$env.PATH"));
     assert!(hook.contains(".vex/npm/prefix/bin"));
     assert!(hook.contains("NPM_CONFIG_PREFIX"));

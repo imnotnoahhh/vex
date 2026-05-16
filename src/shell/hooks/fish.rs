@@ -12,14 +12,14 @@ set -gx NPM_CONFIG_USERCONFIG $HOME/.vex/npm/npmrc
 set -gx CARGO_HOME $HOME/.vex/cargo
 
 function __vex_apply_exports
-    set -l exports (vex env fish --exports 2>/dev/null)
+    set -l exports (vex env fish --exports)
     if test $status -eq 0
         eval $exports
     end
 end
 
 function __vex_use_if_found
-    vex use --auto >/dev/null 2>/dev/null
+    vex use --auto >/dev/null
     __vex_apply_exports
 end
 

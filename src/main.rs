@@ -32,6 +32,8 @@ mod spec;
 mod switcher;
 mod team_config;
 mod templates;
+#[cfg(test)]
+mod test_env;
 mod tool_metadata;
 mod tools;
 mod ui;

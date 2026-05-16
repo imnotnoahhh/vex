@@ -1,10 +1,7 @@
 use super::*;
-use std::sync::Mutex;
-
-static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn with_home<T>(home: &std::path::Path, f: impl FnOnce() -> T) -> T {
-    let _guard = ENV_LOCK.lock().unwrap();
+    let _guard = crate::test_env::lock();
     let original_home = std::env::var("HOME").ok();
 
     std::env::set_var("HOME", home);

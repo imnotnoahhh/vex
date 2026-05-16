@@ -40,6 +40,23 @@ fn test_archive_cache_store_and_retrieve() {
 }
 
 #[test]
+fn test_archive_cache_store_and_retrieve_checksum() {
+    let tmp = TempDir::new().unwrap();
+    let cache = ArchiveCache::new(tmp.path());
+
+    cache
+        .store_archive_checksum("node", "20.11.0", "node-v20.11.0.tar.gz", "abc123")
+        .unwrap();
+
+    assert_eq!(
+        cache
+            .get_archive_checksum("node", "20.11.0", "node-v20.11.0.tar.gz")
+            .unwrap(),
+        Some("abc123".to_string())
+    );
+}
+
+#[test]
 fn test_archive_cache_remove_version() {
     let tmp = TempDir::new().unwrap();
     let cache = ArchiveCache::new(tmp.path());

@@ -2,6 +2,7 @@ use super::extract::{extract_archive, find_extracted_root};
 use super::offline::install_offline;
 use super::support::{check_disk_space, CleanupGuard};
 use crate::archive_cache::ArchiveCache;
+use crate::checksum;
 use crate::config;
 use crate::error::{Result, VexError};
 use crate::paths::vex_dir;
@@ -12,11 +13,8 @@ use flate2::Compression;
 use std::fs;
 use std::io::empty;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use tar::{Archive, Builder, EntryType, Header};
 use tempfile::TempDir;
-
-static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 struct MockTool {
     fail_post_install: bool,
@@ -57,7 +55,7 @@ impl Tool for MockTool {
 }
 
 fn with_vex_home<T>(vex_home: &Path, f: impl FnOnce() -> T) -> T {
-    let _guard = ENV_LOCK.lock().unwrap();
+    let _guard = crate::test_env::lock();
     let original_vex_home = std::env::var("VEX_HOME").ok();
 
     std::env::set_var("VEX_HOME", vex_home);
@@ -300,8 +298,12 @@ fn test_install_offline_cleans_final_dir_when_post_install_fails() {
         cache
             .store_archive("mock", "1.0.0", "mock-1.0.0.tar.gz", &source_archive)
             .unwrap();
+        let checksum = checksum::sha256_hex(&source_archive).unwrap();
+        cache
+            .store_archive_checksum("mock", "1.0.0", "mock-1.0.0.tar.gz", &checksum)
+            .unwrap();
 
-        let result = install_offline(&tool, "1.0.0");
+        let result = install_offline(&tool, "1.0.0", None);
         assert!(
             matches!(result, Err(VexError::Parse(message)) if message.contains("mock post-install failure"))
         );
@@ -311,5 +313,28 @@ fn test_install_offline_cleans_final_dir_when_post_install_fails() {
         assert!(vex_home
             .join("cache/archives/mock/1.0.0/mock-1.0.0.tar.gz")
             .exists());
+    });
+}
+
+#[test]
+fn test_install_offline_refuses_cached_archive_without_checksum() {
+    let temp_dir = TempDir::new().unwrap();
+    let vex_home = temp_dir.path().join(".vex");
+    let source_archive = temp_dir.path().join("mock.tar.gz");
+    let tool = MockTool {
+        fail_post_install: false,
+    };
+    write_mock_archive(&source_archive, "mock-1.0.0");
+
+    with_vex_home(&vex_home, || {
+        let cache = ArchiveCache::new(&vex_home);
+        cache
+            .store_archive("mock", "1.0.0", "mock-1.0.0.tar.gz", &source_archive)
+            .unwrap();
+
+        let result = install_offline(&tool, "1.0.0", None);
+        assert!(
+            matches!(result, Err(VexError::OfflineModeError(message)) if message.contains("No checksum available"))
+        );
     });
 }

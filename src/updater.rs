@@ -6,7 +6,7 @@ mod extract;
 mod release;
 mod repair;
 
-use crate::downloader::download_with_retry;
+use crate::downloader::{download_with_retry, verify_checksum};
 use crate::error::{Result, VexError};
 use owo_colors::OwoColorize;
 use std::fs;
@@ -57,6 +57,23 @@ pub fn self_update() -> Result<()> {
         crate::config::download_retries()?,
     )?;
 
+    let checksum_path = current_exe.with_extension("tmp.sha256");
+    let checksum_url = format!("{}.sha256", asset.browser_download_url);
+    println!("Verifying release checksum...");
+    download_with_retry(
+        &checksum_url,
+        &checksum_path,
+        crate::config::download_retries()?,
+    )
+    .map_err(|err| {
+        VexError::Config(format!(
+            "Release checksum not available at {}. Refusing self-update without checksum verification. Error: {}",
+            checksum_url, err
+        ))
+    })?;
+    let expected_checksum = parse_checksum_sidecar(&fs::read_to_string(&checksum_path)?)?;
+    verify_checksum(&tmp_path, &expected_checksum)?;
+
     // If it's an archive, extract the binary from it
     let final_tmp = if asset.name.ends_with(".tar.xz") {
         extract_binary_from_tarball_xz(&tmp_path, &current_exe)?
@@ -76,6 +93,9 @@ pub fn self_update() -> Result<()> {
     if tmp_path.exists() && tmp_path != final_tmp {
         let _ = fs::remove_file(&tmp_path);
     }
+    if checksum_path.exists() {
+        let _ = fs::remove_file(&checksum_path);
+    }
 
     println!(
         "{} Updated to vex {}",
@@ -87,4 +107,39 @@ pub fn self_update() -> Result<()> {
     detect_and_repair_broken_installations(current_version)?;
 
     Ok(())
+}
+
+fn parse_checksum_sidecar(content: &str) -> Result<String> {
+    let Some(token) = content.split_whitespace().next() else {
+        return Err(VexError::Parse(
+            "Release checksum file was empty. Refusing self-update.".to_string(),
+        ));
+    };
+
+    if token.len() != 64 || !token.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Err(VexError::Parse(format!(
+            "Release checksum file did not contain a valid SHA256 digest: {}",
+            token
+        )));
+    }
+
+    Ok(token.to_ascii_lowercase())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_checksum_sidecar;
+
+    #[test]
+    fn test_parse_checksum_sidecar_accepts_sha256sum_format() {
+        let checksum = "A".repeat(64);
+        let parsed = parse_checksum_sidecar(&format!("{}  vex.tar.gz\n", checksum)).unwrap();
+        assert_eq!(parsed, "a".repeat(64));
+    }
+
+    #[test]
+    fn test_parse_checksum_sidecar_rejects_missing_digest() {
+        assert!(parse_checksum_sidecar("").is_err());
+        assert!(parse_checksum_sidecar("not-a-checksum vex.tar.gz").is_err());
+    }
 }

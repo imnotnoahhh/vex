@@ -47,7 +47,7 @@ pub fn generate_lockfile() -> Result<()> {
             tool_name.clone(),
             lockfile::LockEntry {
                 version: resolved,
-                sha256,
+                sha256: Some(sha256),
                 url: None,
             },
         );
@@ -64,7 +64,7 @@ pub fn generate_lockfile() -> Result<()> {
     Ok(())
 }
 
-fn get_installed_checksum(tool: &dyn Tool, version: &str) -> Result<Option<String>> {
+fn get_installed_checksum(tool: &dyn Tool, version: &str) -> Result<String> {
     let vex = vex_dir()?;
     let checksum_file = vex
         .join("toolchains")
@@ -74,8 +74,19 @@ fn get_installed_checksum(tool: &dyn Tool, version: &str) -> Result<Option<Strin
 
     if checksum_file.exists() {
         let content = fs::read_to_string(&checksum_file)?;
-        Ok(Some(content.trim().to_string()))
+        let checksum = content.trim();
+        if checksum.len() == 64 && checksum.chars().all(|ch| ch.is_ascii_hexdigit()) {
+            Ok(checksum.to_ascii_lowercase())
+        } else {
+            Err(VexError::Config(format!(
+                "Installed checksum for {}@{} is invalid. Reinstall this tool before generating a lockfile.",
+                tool.name(), version
+            )))
+        }
     } else {
-        Ok(None)
+        Err(VexError::Config(format!(
+            "Installed checksum for {}@{} is missing. Reinstall this tool before generating a lockfile.",
+            tool.name(), version
+        )))
     }
 }

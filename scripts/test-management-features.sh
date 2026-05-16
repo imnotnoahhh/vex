@@ -106,6 +106,12 @@ EOF
     chmod +x "$path"
 }
 
+write_fake_checksum() {
+    local toolchain_dir="$1"
+    local checksum="$2"
+    printf '%s\n' "$checksum" > "$toolchain_dir/.vex-checksum"
+}
+
 write_executable_script() {
     local path="$1"
     local body="$2"
@@ -251,11 +257,14 @@ mkdir -p "$LOCAL_HOME/.vex/toolchains/node/25.8.0/bin"
 mkdir -p "$LOCAL_HOME/.vex/toolchains/go/9.9.9/bin"
 write_fake_node "$LOCAL_HOME/.vex/toolchains/node/20.20.1/bin/node" "20.20.1"
 write_fake_node "$LOCAL_HOME/.vex/toolchains/node/25.8.0/bin/node" "25.8.0"
+write_fake_checksum "$LOCAL_HOME/.vex/toolchains/node/20.20.1" "1111111111111111111111111111111111111111111111111111111111111111"
+write_fake_checksum "$LOCAL_HOME/.vex/toolchains/node/25.8.0" "2222222222222222222222222222222222222222222222222222222222222222"
 cat > "$LOCAL_HOME/.vex/toolchains/go/9.9.9/bin/go" <<'EOF'
 #!/bin/sh
 echo go-unused
 EOF
 chmod +x "$LOCAL_HOME/.vex/toolchains/go/9.9.9/bin/go"
+write_fake_checksum "$LOCAL_HOME/.vex/toolchains/go/9.9.9" "3333333333333333333333333333333333333333333333333333333333333333"
 
 cat > "$LOCAL_HOME/.vex/tool-versions" <<'EOF'
 node 20.20.1
@@ -490,7 +499,8 @@ EOF
 lock_out="$TMP_ROOT/lock.txt"
 run_local_in "$lock_project" lock > "$lock_out"
 if grep -Fq 'Lockfile generated:' "$lock_out" \
-    && grep -Fq 'version = "20.20.1"' "$lock_project/.tool-versions.lock"; then
+    && grep -Fq 'version = "20.20.1"' "$lock_project/.tool-versions.lock" \
+    && grep -Fq 'sha256 = "1111111111111111111111111111111111111111111111111111111111111111"' "$lock_project/.tool-versions.lock"; then
     pass "lock generates a lockfile from the current .tool-versions"
 else
     fail "lock did not generate the expected .tool-versions.lock file"
@@ -498,10 +508,7 @@ fi
 
 sync_frozen_out="$TMP_ROOT/sync-frozen.txt"
 run_local_in "$lock_project" sync --frozen > "$sync_frozen_out"
-if grep -Fq 'Sync Summary:' "$sync_frozen_out" \
-    && grep -Fq 'node' "$sync_frozen_out" \
-    && grep -Fq '20.20.1' "$sync_frozen_out" \
-    && grep -Fq '(already installed)' "$sync_frozen_out"; then
+if grep -Fq 'node@20.20.1 already installed, verified.' "$sync_frozen_out"; then
     pass "sync --frozen reads the generated lockfile and enforces the locked version"
 else
     fail "sync --frozen did not use the generated lockfile"
@@ -509,7 +516,7 @@ fi
 
 install_frozen_out="$TMP_ROOT/install-frozen.txt"
 run_local_in "$lock_project" install --frozen > "$install_frozen_out"
-if grep -Fq 'node@20.20.1 already installed, skipping.' "$install_frozen_out"; then
+if grep -Fq 'node@20.20.1 already installed, verified.' "$install_frozen_out"; then
     pass "install --frozen respects the generated lockfile"
 else
     fail "install --frozen did not use the generated lockfile"

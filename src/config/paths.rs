@@ -48,9 +48,6 @@ pub fn config_path() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_directory_names() {
@@ -63,11 +60,13 @@ mod tests {
 
     #[test]
     fn test_vex_home() {
+        let _guard = crate::test_env::lock();
         assert!(vex_home().is_some());
     }
 
     #[test]
     fn test_subdirectories() {
+        let _guard = crate::test_env::lock();
         if let Some(home) = vex_home() {
             assert_eq!(toolchains_dir(), Some(home.join(TOOLCHAINS_DIR)));
             assert_eq!(current_dir(), Some(home.join(CURRENT_DIR)));
@@ -84,7 +83,7 @@ mod tests {
 
     #[test]
     fn test_vex_home_with_env() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = crate::test_env::lock();
         let original = std::env::var("VEX_HOME").ok();
 
         std::env::set_var("VEX_HOME", "/tmp/test_vex");
