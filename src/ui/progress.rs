@@ -17,7 +17,7 @@ impl Progress {
             progress_bar.set_style(
                 ProgressStyle::default_spinner()
                     .template("{spinner:.cyan} {msg}")
-                    .unwrap()
+                    .expect("static spinner template is valid")
                     .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
             );
             progress_bar.set_message(message.to_string());
