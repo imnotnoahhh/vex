@@ -1,7 +1,9 @@
+use crate::alias::AliasManager;
 use crate::error::{Result, VexError};
 use crate::paths::vex_dir;
 use crate::spec::parse_spec;
 use crate::tools;
+use crate::version_files;
 use owo_colors::OwoColorize;
 use std::fs;
 
@@ -36,6 +38,8 @@ pub fn uninstall(tool_name: &str, version: &str) -> Result<()> {
         remove_active_links(&vex_dir, tool_name)?;
     }
 
+    prune_dangling_references(&vex_dir, tool_name, version)?;
+
     println!(
         "{} Uninstalled {} {}",
         "✓".green(),
@@ -43,6 +47,85 @@ pub fn uninstall(tool_name: &str, version: &str) -> Result<()> {
         version.yellow()
     );
     Ok(())
+}
+
+/// Remove vex-owned references to the just-uninstalled `tool@version`.
+///
+/// Touches only files vex itself manages:
+/// - `~/.vex/aliases.toml` global aliases
+/// - `~/.vex/tool-versions` global pin
+///
+/// Project-level `.tool-versions` lives under user/team control, so we only warn
+/// when one nearby still pins the removed version.
+fn prune_dangling_references(
+    vex_dir: &std::path::Path,
+    tool_name: &str,
+    version: &str,
+) -> Result<()> {
+    let manager = AliasManager::new(vex_dir);
+    let removed_aliases = manager.prune_global_for_version(tool_name, version)?;
+    for alias in &removed_aliases {
+        println!(
+            "  {} dropped global alias {}@{}",
+            "·".dimmed(),
+            tool_name,
+            alias
+        );
+    }
+
+    let global_pin = vex_dir.join("tool-versions");
+    if version_files::remove_tool_version_if_matches(&global_pin, tool_name, version)? {
+        println!(
+            "  {} cleared {} from {}",
+            "·".dimmed(),
+            tool_name,
+            global_pin.display().to_string().dimmed()
+        );
+    }
+
+    if let Some(local) = find_local_tool_version_pin(
+        &std::env::current_dir().unwrap_or_default(),
+        tool_name,
+        version,
+    ) {
+        eprintln!(
+            "  {} {} still pins {}@{} — leaving it alone (project files are user-owned)",
+            "!".yellow(),
+            local.display(),
+            tool_name,
+            version
+        );
+    }
+
+    Ok(())
+}
+
+fn find_local_tool_version_pin(
+    start_dir: &std::path::Path,
+    tool_name: &str,
+    version: &str,
+) -> Option<std::path::PathBuf> {
+    let mut dir = start_dir.to_path_buf();
+    loop {
+        let candidate = dir.join(".tool-versions");
+        if candidate.is_file() {
+            if let Ok(content) = std::fs::read_to_string(&candidate) {
+                if content.lines().any(|line| {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() || trimmed.starts_with('#') {
+                        return false;
+                    }
+                    let mut parts = trimmed.split_whitespace();
+                    parts.next() == Some(tool_name) && parts.next() == Some(version)
+                }) {
+                    return Some(candidate);
+                }
+            }
+        }
+        if !dir.pop() {
+            return None;
+        }
+    }
 }
 
 fn active_version_matches(

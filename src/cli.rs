@@ -26,6 +26,9 @@ pub(crate) enum Commands {
     /// Initialize vex directory structure
     Init(init::InitArgs),
 
+    /// Remove the vex shell hook from your shell config (inverse of `vex init --shell`)
+    Uninit(init::UninitArgs),
+
     /// Install a tool version (or all from .tool-versions)
     Install(toolchain::InstallArgs),
 

@@ -84,6 +84,26 @@ fn test_activation_plan_uses_python_base_without_project_venv() {
             plan.set_env.get("PYTHONUSERBASE").cloned(),
             Some(vex_dir.join("python/user").display().to_string())
         );
+        assert!(!plan.set_env.contains_key("PYTHONPATH"));
+        assert!(plan.unset_env.contains(&"PYTHONPATH".to_string()));
+    });
+}
+
+#[test]
+fn test_activation_plan_unsets_hostile_java_env_vars() {
+    let home = TempDir::new().unwrap();
+    let project = TempDir::new().unwrap();
+    let vex_dir = home.path().join(".vex");
+    fs::create_dir_all(vex_dir.join("toolchains/java/25")).unwrap();
+    fs::write(project.path().join(".tool-versions"), "java 25\n").unwrap();
+
+    with_home(home.path(), || {
+        let plan = build_activation_plan(project.path()).unwrap();
+
+        assert!(!plan.set_env.contains_key("JAVA_TOOL_OPTIONS"));
+        assert!(!plan.set_env.contains_key("_JAVA_OPTIONS"));
+        assert!(plan.unset_env.contains(&"JAVA_TOOL_OPTIONS".to_string()));
+        assert!(plan.unset_env.contains(&"_JAVA_OPTIONS".to_string()));
     });
 }
 

@@ -141,6 +141,25 @@ vex env fish --exports
 vex env nu --exports
 ```
 
+## Removing Shell Integration
+
+Use `vex uninit` when you want to remove the managed hook that `vex init --shell`
+added to your shell config:
+
+```bash
+vex uninit --shell auto
+```
+
+Preview first with:
+
+```bash
+vex uninit --shell zsh --dry-run
+```
+
+`vex uninit` removes only the managed vex hook block or older legacy vex hook
+snippet. It leaves `~/.vex`, installed toolchains, version files, and project
+configuration untouched.
+
 ## Verifying Shell Integration
 
 ### Check if hook is installed

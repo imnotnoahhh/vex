@@ -142,4 +142,29 @@ impl AliasManager {
         let global = self.load_global()?;
         Ok(global.tools.get(tool).and_then(|a| a.get(alias)).cloned())
     }
+
+    /// Remove every global alias that points at `tool@version`.
+    /// Returns the alias names that were deleted.
+    pub fn prune_global_for_version(&self, tool: &str, version: &str) -> Result<Vec<String>> {
+        let mut config = self.load_global()?;
+        let Some(aliases) = config.tools.get_mut(tool) else {
+            return Ok(Vec::new());
+        };
+
+        let removed: Vec<String> = aliases
+            .iter()
+            .filter(|(_, v)| v.as_str() == version)
+            .map(|(name, _)| name.clone())
+            .collect();
+        for name in &removed {
+            aliases.remove(name);
+        }
+        if aliases.is_empty() {
+            config.tools.remove(tool);
+        }
+        if !removed.is_empty() {
+            self.save_global(&config)?;
+        }
+        Ok(removed)
+    }
 }

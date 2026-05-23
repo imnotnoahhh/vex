@@ -101,25 +101,48 @@ impl Tool for JavaTool {
 
     fn managed_environment(
         &self,
-        _vex_dir: &std::path::Path,
+        vex_dir: &std::path::Path,
         install_dir: Option<&std::path::Path>,
     ) -> ToolEnvironment {
         let Some(install_dir) = install_dir else {
             return ToolEnvironment::default();
         };
 
+        let maven_repo = vex_dir.join("maven/repository");
+        let gradle_home = vex_dir.join("gradle");
+        let maven_opts = format!("-Dmaven.repo.local={}", maven_repo.display());
+
         ToolEnvironment {
-            managed_env: BTreeMap::from([(
-                "JAVA_HOME".to_string(),
-                install_dir.join("Contents/Home").display().to_string(),
-            )]),
+            managed_env: BTreeMap::from([
+                (
+                    "JAVA_HOME".to_string(),
+                    install_dir.join("Contents/Home").display().to_string(),
+                ),
+                ("MAVEN_OPTS".to_string(), maven_opts),
+                (
+                    "GRADLE_USER_HOME".to_string(),
+                    gradle_home.display().to_string(),
+                ),
+                // Neutralize host JVM option globals so vex Java behaves predictably.
+                ("JAVA_TOOL_OPTIONS".to_string(), String::new()),
+                ("_JAVA_OPTIONS".to_string(), String::new()),
+            ]),
             managed_user_bin_dirs: Vec::new(),
-            owned_home_dirs: Vec::new(),
+            owned_home_dirs: vec![
+                maven_repo.display().to_string(),
+                gradle_home.display().to_string(),
+            ],
             project_owned_dirs: Vec::new(),
         }
     }
 
     fn managed_env_keys(&self) -> Vec<&'static str> {
-        vec!["JAVA_HOME"]
+        vec![
+            "JAVA_HOME",
+            "MAVEN_OPTS",
+            "GRADLE_USER_HOME",
+            "JAVA_TOOL_OPTIONS",
+            "_JAVA_OPTIONS",
+        ]
     }
 }

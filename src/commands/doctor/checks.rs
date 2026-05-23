@@ -10,6 +10,11 @@ use crate::config;
 use crate::error::{Result, VexError};
 use crate::resolver;
 use crate::version_state;
+use std::path::Path;
+
+pub(crate) fn repair_broken_links(vex_dir: &Path) -> Vec<String> {
+    system::repair_broken_links(vex_dir)
+}
 
 pub(super) fn collect() -> Result<DoctorReport> {
     let vex_dir = config::vex_home().ok_or(VexError::HomeDirectoryNotFound)?;

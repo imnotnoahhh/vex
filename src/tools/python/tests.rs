@@ -79,6 +79,14 @@ fn test_managed_environment_sets_official_pip_state() {
         env.managed_env.get("PIP_CACHE_DIR").map(String::as_str),
         Some("/tmp/vex-home/pip/cache")
     );
+    assert_eq!(
+        env.managed_env.get("PYTHONPATH").map(String::as_str),
+        Some("")
+    );
+    assert_eq!(
+        env.managed_env.get("PYTHONNOUSERSITE").map(String::as_str),
+        Some("1")
+    );
     assert!(env
         .managed_user_bin_dirs
         .contains(&"/tmp/vex-home/python/user/bin".to_string()));

@@ -207,22 +207,49 @@ find ~/.vex -type l ! -exec test -e {} \; -print
 
 **Solutions**:
 
-1. **Remove broken symlinks**:
+1. **Use doctor repair mode**:
+   ```bash
+   vex doctor --repair
+   ```
+
+2. **Remove broken symlinks manually**:
    ```bash
    find ~/.vex/bin -type l ! -exec test -e {} \; -delete
    find ~/.vex/current -type l ! -exec test -e {} \; -delete
    ```
 
-2. **If the broken link points into the active Node toolchain, rebuild Node links explicitly**:
+3. **If the broken link points into the active Node toolchain, rebuild Node links explicitly**:
    ```bash
    vex relink node
    ```
 
-3. **Reinstall version**:
+4. **Reinstall version**:
    ```bash
    vex uninstall node@20.11.0
    vex install node@20.11.0
    ```
+
+#### Remove vex shell integration
+
+**Symptoms**:
+
+- you want to stop automatic version switching
+- an old shell config still contains a vex hook
+- `vex doctor` reports duplicate shell hooks
+
+**Solution**:
+
+```bash
+vex uninit --shell auto
+```
+
+Use `--dry-run` to preview the target config file without editing it:
+
+```bash
+vex uninit --shell zsh --dry-run
+```
+
+This removes only the vex-managed hook block or legacy vex hook snippet. It does not delete `~/.vex` or installed toolchains.
 
 #### npm install -g succeeded but command is still not found
 

@@ -9,6 +9,10 @@ pub(super) fn collect_broken_links(vex_dir: &Path) -> (Vec<String>, bool) {
     links::collect_broken_links(vex_dir)
 }
 
+pub(crate) fn repair_broken_links(vex_dir: &Path) -> Vec<String> {
+    links::repair_broken_links(vex_dir)
+}
+
 pub(super) fn collect_failed_binaries(bin_dir: &Path) -> Vec<String> {
     binaries::collect_failed_binaries(bin_dir)
 }
