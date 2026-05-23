@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Managed shell removal** - Added `vex uninit` to remove the vex-managed shell hook block created by `vex init --shell`, including legacy unmarked hook lines.
+- **Doctor auto-repair mode** - Added `vex doctor --repair` to delete dangling symlinks under `~/.vex/current` and `~/.vex/bin` before re-running health checks.
+- **Archive cache size guard** - The reusable archive cache now prunes oldest cached archives beyond a 5 GB cap while keeping the newest archive available for offline reuse.
+- **Rust toolchain TOML discovery** - Rust version resolution now supports `rust-toolchain`, `.rust-toolchain.toml`, and `rust-toolchain.toml` in addition to `.rust-toolchain`.
+
+### Changed
+
+- **Java and Python activation is stricter** - Java activation now isolates Maven/Gradle state under `~/.vex` and neutralizes global JVM option variables; Python activation clears `PYTHONPATH` and sets `PYTHONNOUSERSITE=1`.
+- **Uninstall cleans vex-owned references** - `vex uninstall <tool@version>` now removes matching global aliases and global `~/.vex/tool-versions` pins while warning, not editing, project-owned `.tool-versions` files.
+
 ## [1.7.0] - 2026-05-02
 
 ### Added

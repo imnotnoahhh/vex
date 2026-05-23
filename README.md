@@ -45,6 +45,7 @@
 - **Python base + venv integration** — managed per-version base environments for global Python CLIs, plus `vex python init/freeze/sync` for project `.venv` isolation
 - **Python stable latest behavior** — `vex list-remote python --filter latest` prefers bugfix/security releases over feature or prerelease assets
 - **Shell auto-configuration** — `vex init --shell auto` detects and configures your shell automatically (zsh, bash, fish, nushell)
+- **Managed shell removal** — `vex uninit --shell auto` removes the vex-managed hook block when you want to disable auto-switching cleanly
 - **Project templates** — `vex init --list-templates` and `vex init --template <name>` bootstrap official starters for Node, Go, Java, Rust, and Python
 - **Safe add-only templating** — `vex init --template <name> --add-only` only merges `.tool-versions` and `.gitignore`, then creates missing starter files
 - **Fuzzy version matching** — `node@20` resolves to latest 20.x, `node@lts` to latest LTS
@@ -57,10 +58,11 @@
 - **Team config sync** — `vex install --from` / `vex sync --from` support local files, `vex-config.toml`, HTTPS team configs, and Git repositories with a safe `[tools]` schema
 - **Shared npm globals** — Shell hooks and `vex exec`/`run` export `NPM_CONFIG_PREFIX=$HOME/.vex/npm/prefix` and `NPM_CONFIG_USERCONFIG=$HOME/.vex/npm/npmrc`, keep `~/.vex/npm/prefix/bin` on PATH, and use that as a shared user-level npm CLI pool across vex-managed Node versions
 - **Global CLI inventory** — `vex globals` shows shared npm globals, Python base/user-base CLIs, Go `GOBIN`, Cargo-installed tools, and Maven/Gradle build-tool state with version-source hints
-- **Auto-export env vars** — Automatic `JAVA_HOME`, `GOROOT`, `GOENV`, `CARGO_HOME`, captured user-state env vars, Python base/user CLI paths, and project `.venv` activation in shell hooks
+- **Auto-export env vars** — Automatic `JAVA_HOME`, `GOROOT`, `GOENV`, `CARGO_HOME`, Java Maven/Gradle state, Python isolation vars, captured user-state env vars, Python base/user CLI paths, and project `.venv` activation in shell hooks
 - **Official Rust extensions** — `vex rust target/component` manages official Rust toolchain extensions such as `rust-src` and iOS std targets
 - **Contained user-state capture** — supported language homes, caches, and user bins default into `~/.vex`
 - **Explicit home repair** — `vex repair migrate-home` previews and applies safe migrations from legacy home-directory paths
+- **Doctor repair mode** — `vex doctor --repair` removes dangling vex symlinks before re-running health checks
 - **One-command upgrade** — `vex upgrade node` installs and switches to the latest version
 - **Managed context upgrades** — `vex outdated` inspects the current project/global/active scope, and `vex upgrade --all` upgrades that whole managed set
 - **Explicit relink for Node toolchain bins** — `vex relink node` rebuilds `~/.vex/bin` when executables appear inside the active Node toolchain
@@ -73,6 +75,7 @@
 - **Remote version cache** — cached for 5 min by default, configurable via `config.toml`
 - **Concurrent install protection** — file-based locking prevents parallel install corruption
 - **Checksum verification** — SHA-256 verification on all 5 tools (Node.js, Go, Java, Rust, Python) before extraction; install refuses to proceed if upstream checksum fetch fails
+- **Bounded archive cache** — reusable install archives are capped at 5 GB and pruned oldest-first while keeping the newest download available
 - **Parallel downloads** — atomic writes with automatic cleanup, up to 3 concurrent downloads
 - **Parallel extraction** — fast archive extraction using parallel file processing
 - **Security hardening** — TOCTOU protection, ownership validation, path traversal protection, atomic operations
@@ -222,6 +225,9 @@ vex run test
 # Rebuild Node binary links after toolchain executables change
 vex relink node
 
+# Remove the managed shell hook
+vex uninit --shell auto
+
 # Preview or apply safe home-directory migrations into ~/.vex
 vex repair migrate-home
 vex repair migrate-home --apply
@@ -250,6 +256,7 @@ For the full CLI reference, including command groups and option details, see [do
 | `vex init` | Initialize directory structure | `vex init` |
 | `vex init --shell auto` | Initialize and auto-configure shell | `vex init --shell auto` |
 | `vex init --shell zsh` | Initialize and configure specific shell | `vex init --shell zsh` |
+| `vex uninit --shell auto` | Remove the managed shell hook from your shell config | `vex uninit --shell auto` |
 | `vex init --list-templates` | List built-in project templates | `vex init --list-templates` |
 | `vex init --template <name>` | Bootstrap a project starter | `vex init --template rust-cli` |
 | `vex init --template <name> --add-only` | Safely merge missing template files into an existing repo | `vex init --template python-venv --add-only` |
@@ -296,6 +303,7 @@ For the full CLI reference, including command groups and option details, see [do
 | `vex doctor` | Run health check and diagnostics | `vex doctor` |
 | `vex doctor --json` | Run health check and emit JSON | `vex doctor --json` |
 | `vex doctor --verbose` | Show extra provenance and captured-env details | `vex doctor --verbose` |
+| `vex doctor --repair` | Remove dangling vex symlinks, then run diagnostics | `vex doctor --repair` |
 | `vex repair migrate-home` | Preview or apply safe legacy home-directory migrations into `~/.vex` | `vex repair migrate-home --apply` |
 | `vex self-update` | Update vex itself to the latest release | `vex self-update` |
 | `vex env <shell>` | Output shell hook script | `vex env zsh` |

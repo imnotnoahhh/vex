@@ -24,7 +24,16 @@ pub(super) use shell_state::{
 
 pub(in crate::activation) const SUPPORTED_TOOLS: &[&str] =
     &["go", "java", "node", "python", "rust"];
-pub(in crate::activation) const ALWAYS_MANAGED_ENV_KEYS: &[&str] = &["GOROOT", "JAVA_HOME"];
+pub(in crate::activation) const ALWAYS_MANAGED_ENV_KEYS: &[&str] = &[
+    "GOROOT",
+    "JAVA_HOME",
+    // Hostile-host env vars vex must always neutralize when the tool is active.
+    "JAVA_TOOL_OPTIONS",
+    "_JAVA_OPTIONS",
+    "PYTHONPATH",
+];
+pub(in crate::activation) const ALWAYS_UNSET_ENV_KEYS: &[&str] =
+    &["JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "PYTHONPATH"];
 
 #[derive(Debug, Clone)]
 pub(in crate::activation) struct ShellProjectEnv {

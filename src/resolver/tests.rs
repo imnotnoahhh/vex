@@ -187,6 +187,35 @@ fn test_resolve_version_rust_toolchain() {
 }
 
 #[test]
+fn test_parse_rust_toolchain_toml_channel() {
+    let content = r#"
+[toolchain]
+channel = "1.76.0"
+components = ["rustfmt"]
+"#;
+
+    assert_eq!(parse_rust_toolchain_toml(content), Some("1.76.0".into()));
+}
+
+#[test]
+fn test_resolve_version_rust_toolchain_toml() {
+    let dir = std::env::temp_dir().join("vex_test_rust_toolchain_toml");
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+
+    fs::write(
+        dir.join("rust-toolchain.toml"),
+        "[toolchain]\nchannel = \"stable\"\n",
+    )
+    .unwrap();
+
+    let result = resolve_version("rust", &dir);
+    assert_eq!(result, Some("stable".into()));
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn test_resolve_version_python_version() {
     let dir = std::env::temp_dir().join("vex_test_python_version");
     let _ = fs::remove_dir_all(&dir);

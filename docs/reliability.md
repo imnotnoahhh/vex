@@ -59,6 +59,16 @@ change and is intentionally not exposed.
 
 Implementation: `src/installer/offline.rs`.
 
+### Archive cache bounds
+
+Reusable install archives live under `~/.vex/cache/archives/`. After storing a
+new archive, vex enforces a 5 GB default cap and evicts the oldest cached archives
+by modification time. The newest archive is kept even if it alone exceeds the cap,
+so a successful download remains usable for immediate retry or offline install.
+
+When an archive is evicted, its `.sha256` sidecar is removed with it. Offline mode
+still requires both the archive and checksum sidecar to be present.
+
 ## 4. CleanupGuard (RAII for temp files)
 
 Every install / extract path constructs a `CleanupGuard` that owns the list of
@@ -150,6 +160,7 @@ on next run cleans it up before retrying.
 | Checksum mismatch | Discard archive; `VexError::ChecksumMismatch` | `src/checksum.rs` |
 | Checksum source unreachable | Refuse install | `src/installer/online.rs:91-95` |
 | Cached archive corrupted | Invalidate cache; re-download (or fail in offline mode) | `src/archive_cache.rs` |
+| Archive cache exceeds 5 GB | Evict oldest archives and their checksum sidecars, keeping the newest archive | `src/archive_cache.rs` |
 | `--offline` cache miss | `VexError::OfflineModeError`; no network fallback | `src/installer/offline.rs` |
 | Panic / SIGTERM mid-extract | `CleanupGuard` removes temp paths | `src/installer/support.rs` |
 | Concurrent same-version install | File lock serializes; PID-based stale-lock recovery | `src/lock.rs` |

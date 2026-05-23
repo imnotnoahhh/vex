@@ -18,6 +18,7 @@ fn dispatch(command: Commands) -> Result<()> {
             args.dry_run,
             args.add_only,
         )?,
+        Commands::Uninit(args) => commands::init::run_uninit(args.shell.as_deref(), args.dry_run)?,
         Commands::Install(args) => {
             if !args.specs.is_empty() {
                 commands::toolchain::install_specs(
@@ -127,7 +128,11 @@ fn dispatch(command: Commands) -> Result<()> {
             exit_on_failure(commands::process::run_task(&args.task, &args.args)?)
         }
         Commands::Doctor(args) => {
-            commands::doctor::run(output::OutputMode::from_json_flag(args.json), args.verbose)?;
+            commands::doctor::run_with_repair(
+                output::OutputMode::from_json_flag(args.json),
+                args.verbose,
+                args.repair,
+            )?;
         }
         Commands::Repair(args) => commands::repair::run(&args)?,
         Commands::SelfUpdate => {

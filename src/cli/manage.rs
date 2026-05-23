@@ -42,6 +42,10 @@ pub(crate) struct DoctorArgs {
     /// Show extended metadata and audit details
     #[arg(long)]
     pub(crate) verbose: bool,
+
+    /// Attempt to auto-fix safe issues (e.g. delete dangling symlinks under ~/.vex/bin)
+    #[arg(long)]
+    pub(crate) repair: bool,
 }
 
 #[derive(Args)]
