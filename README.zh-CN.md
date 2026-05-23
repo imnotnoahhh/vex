@@ -57,8 +57,11 @@ vex 是一个 macOS 原生的多语言版本管理器。它用直接符号链接
 - **全局 CLI 清单**：`vex globals` 显示 shared npm globals、Python base/user、Go、Cargo、Maven、Gradle 来源和状态。
 - **稳定 Python latest**：`vex list-remote python --filter latest` 优先 bugfix/security 版本，避免把 feature/prerelease 当默认 latest。
 - **自动 shell 集成**：支持 zsh、bash、fish、nushell。
+- **可逆 shell 集成**：`vex uninit --shell auto` 可以移除 `vex init --shell` 写入的托管 hook。
 - **项目模板**：`vex init --template python-venv --add-only` 可安全补齐项目模板文件。
 - **锁文件和离线模式**：`.tool-versions.lock`、`--frozen`、`--offline` 支持可复现和缓存优先的安装。
+- **诊断修复模式**：`vex doctor --repair` 会先清理 `~/.vex/current` 和 `~/.vex/bin` 里的悬空符号链接，再运行诊断。
+- **有上限的 archive cache**：下载归档缓存默认 5 GB，超过后按最旧优先清理，并保留最新下载。
 - **发布验证**：CI 覆盖 Rustfmt、Clippy、三平台测试、安全审计、macOS feature smoke、Strict macOS、发布 postflight。
 
 ## 快速开始
@@ -211,6 +214,12 @@ vex install
 ```
 
 启用 shell hook 后，进入项目目录会自动执行 `vex use --auto`。
+
+如果要移除托管 hook：
+
+```bash
+vex uninit --shell auto
+```
 
 ## GitHub Actions
 

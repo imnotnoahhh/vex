@@ -180,6 +180,9 @@ impl Tool for PythonTool {
                     "PYTHONUSERBASE".to_string(),
                     user_base_dir(vex_dir).display().to_string(),
                 ),
+                // Prevent system Python site-packages from leaking into vex Python.
+                ("PYTHONPATH".to_string(), String::new()),
+                ("PYTHONNOUSERSITE".to_string(), "1".to_string()),
             ]),
             managed_user_bin_dirs,
             owned_home_dirs: vec![
@@ -192,6 +195,11 @@ impl Tool for PythonTool {
     }
 
     fn managed_env_keys(&self) -> Vec<&'static str> {
-        vec!["PIP_CACHE_DIR", "PYTHONUSERBASE"]
+        vec![
+            "PIP_CACHE_DIR",
+            "PYTHONUSERBASE",
+            "PYTHONPATH",
+            "PYTHONNOUSERSITE",
+        ]
     }
 }

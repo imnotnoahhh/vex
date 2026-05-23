@@ -19,8 +19,21 @@ pub(super) const TOOL_VERSION_FILES: &[(&str, &str)] = &[
     (".go-version", "go"),
     (".java-version", "java"),
     (".rust-toolchain", "rust"),
+    ("rust-toolchain", "rust"),
+    (".rust-toolchain.toml", "rust"),
+    ("rust-toolchain.toml", "rust"),
     (".python-version", "python"),
 ];
+
+/// Extract the toolchain channel from a `rust-toolchain.toml` file body.
+///
+/// Supports the rustup `[toolchain] channel = "..."` form. Returns `None` when the
+/// file is malformed or the channel key is missing.
+pub fn parse_rust_toolchain_toml(content: &str) -> Option<String> {
+    let value: toml::Value = toml::from_str(content).ok()?;
+    let channel = value.get("toolchain")?.get("channel")?.as_str()?.trim();
+    (!channel.is_empty()).then(|| channel.to_string())
+}
 
 /// Parse .tool-versions file content
 pub fn parse_tool_versions(content: &str) -> Vec<(String, String)> {

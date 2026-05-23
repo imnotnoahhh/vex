@@ -1,3 +1,4 @@
+use crate::resolver::parse_rust_toolchain_toml;
 use crate::resolver::parse_tool_versions;
 use crate::resolver::TOOL_VERSION_FILES;
 use std::collections::HashMap;
@@ -22,6 +23,9 @@ pub(super) fn find_tool_specific_version_file(dir: &Path, tool_name: &str) -> Op
 
 pub(super) fn read_language_version_file(path: &Path) -> Option<String> {
     let content = fs::read_to_string(path).ok()?;
+    if path.extension().and_then(|s| s.to_str()) == Some("toml") {
+        return parse_rust_toolchain_toml(&content);
+    }
     let version = content.trim().to_string();
     (!version.is_empty()).then_some(version)
 }

@@ -18,6 +18,7 @@ Use it when you want the full command map in one place without jumping between R
 
 ```text
 vex init
+vex uninit
 vex install
 vex sync
 vex use
@@ -83,6 +84,31 @@ vex init --template rust-cli
 vex init --template python-venv --add-only
 ```
 
+### `vex uninit`
+
+Remove the vex-managed shell hook block from your shell config.
+
+Usage:
+
+```bash
+vex uninit
+vex uninit --shell <shell>
+vex uninit --shell <shell> --dry-run
+```
+
+Options:
+
+- `--shell <shell>`
+  - valid values: `auto`, `zsh`, `bash`, `fish`, `nu`
+- `--dry-run`
+  - preview the shell config that would be cleaned
+
+Notes:
+
+- `vex uninit` removes the marker block written by current `vex init --shell` runs.
+- It also removes legacy unmarked hook snippets from older installs.
+- It does not delete `~/.vex`, installed toolchains, version files, or project configuration.
+
 ### `vex env`
 
 Print the generated shell hook for auto-switching.
@@ -124,6 +150,7 @@ Usage:
 vex doctor
 vex doctor --json
 vex doctor --verbose
+vex doctor --repair
 ```
 
 Options:
@@ -132,6 +159,8 @@ Options:
   - print machine-readable diagnostics
 - `--verbose`
   - include extra provenance and captured-environment details in text output
+- `--repair`
+  - delete dangling symlinks under `~/.vex/current` and `~/.vex/bin`, then run diagnostics
 
 ### `vex globals`
 
@@ -318,6 +347,10 @@ Example:
 vex local node@20.11.0
 ```
 
+Version discovery also understands common language-specific files. Rust projects can
+use `.rust-toolchain`, `rust-toolchain`, `.rust-toolchain.toml`, or
+`rust-toolchain.toml`; TOML files read `[toolchain].channel`.
+
 ### `vex global`
 
 Write a global default version into `~/.vex/tool-versions`.
@@ -349,6 +382,12 @@ Example:
 ```bash
 vex uninstall node@20.11.0
 ```
+
+Notes:
+
+- matching global aliases in `~/.vex/aliases.toml` are removed automatically
+- matching global pins in `~/.vex/tool-versions` are removed automatically
+- project `.tool-versions` files are not edited; vex warns if the current project still pins the removed version
 
 ## Rust Extensions
 

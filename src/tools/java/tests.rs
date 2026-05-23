@@ -38,6 +38,34 @@ fn test_checksum_url_is_none() {
 }
 
 #[test]
+fn test_managed_environment_sets_build_tool_state() {
+    let vex = std::path::Path::new("/tmp/vex-home");
+    let install = std::path::Path::new("/tmp/vex-home/toolchains/java/21.0.10");
+    let env = JavaTool.managed_environment(vex, Some(install));
+
+    assert_eq!(
+        env.managed_env.get("JAVA_HOME").map(String::as_str),
+        Some("/tmp/vex-home/toolchains/java/21.0.10/Contents/Home")
+    );
+    assert_eq!(
+        env.managed_env.get("MAVEN_OPTS").map(String::as_str),
+        Some("-Dmaven.repo.local=/tmp/vex-home/maven/repository")
+    );
+    assert_eq!(
+        env.managed_env.get("GRADLE_USER_HOME").map(String::as_str),
+        Some("/tmp/vex-home/gradle")
+    );
+    assert_eq!(
+        env.managed_env.get("JAVA_TOOL_OPTIONS").map(String::as_str),
+        Some("")
+    );
+    assert_eq!(
+        env.managed_env.get("_JAVA_OPTIONS").map(String::as_str),
+        Some("")
+    );
+}
+
+#[test]
 fn test_lts_versions_falls_back_to_most_recent_lts() {
     let releases = AvailableReleases {
         available_lts_releases: Vec::new(),
