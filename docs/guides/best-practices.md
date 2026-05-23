@@ -221,11 +221,20 @@ Use `vex globals --verbose` when debugging command resolution. It shows the glob
 
 ## Java Build Tools
 
-`vex` manages the active JDK and `JAVA_HOME`; Maven and Gradle remain project or system tools. Prefer `mvnw` and `gradlew` inside projects so the build tool version is pinned with the repository.
+`vex` manages the active JDK and `JAVA_HOME`. When user-state capture is enabled,
+it also points Maven's local repository and Gradle's user home into `~/.vex` and
+neutralizes global JVM option variables such as `JAVA_TOOL_OPTIONS`.
+
+Maven and Gradle themselves remain project or system tools. Prefer `mvnw` and
+`gradlew` inside projects so the build tool version is pinned with the repository.
 
 `vex globals java` and `vex doctor` report external `mvn`/`gradle` binaries plus `~/.m2` and `~/.gradle` state so you can see when Java build-tool state lives outside `~/.vex`.
 
 ## Rust Projects
+
+`vex` resolves Rust pins from `.tool-versions`, `.rust-toolchain`,
+`rust-toolchain`, `.rust-toolchain.toml`, and `rust-toolchain.toml`. For TOML
+files, it reads `[toolchain].channel`, matching rustup's common project format.
 
 For Rust projects that need official extensions, keep them in `vex` instead of falling back to a second toolchain manager:
 

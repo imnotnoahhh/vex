@@ -7,15 +7,20 @@ use crate::checksum;
 use crate::error::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::{debug, info};
+use std::time::SystemTime;
+use tracing::{debug, info, warn};
 #[cfg(test)]
 mod tests;
+
+/// Default archive cache size cap. Beyond this, oldest archives are evicted (LRU by mtime).
+pub const DEFAULT_CACHE_SIZE_LIMIT_BYTES: u64 = 5 * 1024 * 1024 * 1024; // 5 GB
 
 /// Archive cache manager
 ///
 /// Stores downloaded archives in `~/.vex/cache/archives/<tool>/<version>/<filename>`
 pub struct ArchiveCache {
     cache_dir: PathBuf,
+    size_limit_bytes: u64,
 }
 
 impl ArchiveCache {
@@ -24,8 +29,14 @@ impl ArchiveCache {
     /// # Arguments
     /// - `vex_dir` - vex root directory (`~/.vex`)
     pub fn new(vex_dir: &Path) -> Self {
+        Self::with_size_limit(vex_dir, DEFAULT_CACHE_SIZE_LIMIT_BYTES)
+    }
+
+    /// Create archive cache manager with a custom byte size cap.
+    pub fn with_size_limit(vex_dir: &Path, size_limit_bytes: u64) -> Self {
         Self {
             cache_dir: vex_dir.join("cache").join("archives"),
+            size_limit_bytes,
         }
     }
 
@@ -84,7 +95,63 @@ impl ArchiveCache {
             dest_path.display()
         );
 
+        if let Err(err) = self.enforce_size_limit() {
+            warn!("Archive cache eviction failed: {}", err);
+        }
+
         Ok(dest_path)
+    }
+
+    /// Evict oldest cached archives (by mtime) until total size is under the cap.
+    /// Keeps the just-stored archive even if it alone exceeds the cap.
+    pub fn enforce_size_limit(&self) -> Result<u64> {
+        if self.size_limit_bytes == 0 || !self.cache_dir.exists() {
+            return Ok(0);
+        }
+
+        let mut entries = collect_cached_files(&self.cache_dir)?;
+        let total: u64 = entries.iter().map(|e| e.size).sum();
+        if total <= self.size_limit_bytes {
+            return Ok(0);
+        }
+
+        // Oldest first, but keep the newest archive. If the newest archive alone
+        // exceeds the cap, keeping it is better than deleting the file we just
+        // downloaded and forcing the next install to download it again.
+        entries.sort_by_key(|e| e.mtime);
+
+        let mut evicted_bytes: u64 = 0;
+        let mut running = total;
+        let keep_index = entries.len().saturating_sub(1);
+        for (idx, entry) in entries.into_iter().enumerate() {
+            if running <= self.size_limit_bytes {
+                break;
+            }
+            if idx == keep_index {
+                break;
+            }
+            if remove_cached_archive(&entry.path).is_ok() {
+                evicted_bytes = evicted_bytes.saturating_add(entry.size);
+                running = running.saturating_sub(entry.size);
+                debug!("Evicted cache archive: {}", entry.path.display());
+
+                // Clean up empty per-version dirs to keep the layout tidy.
+                if let Some(parent) = entry.path.parent() {
+                    let _ = remove_dir_if_empty(parent);
+                    if let Some(grandparent) = parent.parent() {
+                        let _ = remove_dir_if_empty(grandparent);
+                    }
+                }
+            }
+        }
+
+        if evicted_bytes > 0 {
+            info!(
+                "Pruned {} bytes from archive cache (cap {} bytes)",
+                evicted_bytes, self.size_limit_bytes
+            );
+        }
+        Ok(evicted_bytes)
     }
 
     /// Store verified archive checksum next to the cached archive.
@@ -135,6 +202,18 @@ impl ArchiveCache {
         Ok(())
     }
 
+    /// Total bytes currently held by the archive cache.
+    #[cfg(test)]
+    pub fn total_size_bytes(&self) -> Result<u64> {
+        if !self.cache_dir.exists() {
+            return Ok(0);
+        }
+        Ok(collect_cached_files(&self.cache_dir)?
+            .iter()
+            .map(|e| e.size)
+            .sum())
+    }
+
     /// List all cached versions for a tool
     #[cfg(test)]
     pub fn list_cached_versions(&self, tool_name: &str) -> Result<Vec<String>> {
@@ -155,4 +234,64 @@ impl ArchiveCache {
 
         Ok(versions)
     }
+}
+
+struct CachedFile {
+    path: PathBuf,
+    size: u64,
+    mtime: SystemTime,
+}
+
+fn collect_cached_files(root: &Path) -> Result<Vec<CachedFile>> {
+    let mut out = Vec::new();
+    walk_cache_files(root, &mut out)?;
+    Ok(out)
+}
+
+fn walk_cache_files(dir: &Path, out: &mut Vec<CachedFile>) -> Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            walk_cache_files(&entry.path(), out)?;
+        } else if file_type.is_file() {
+            // Ignore companion checksum files when computing the cache footprint —
+            // they're tiny and we evict them implicitly when the archive goes.
+            let path = entry.path();
+            if path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|name| name.ends_with(".sha256"))
+                .unwrap_or(false)
+            {
+                continue;
+            }
+            let meta = entry.metadata()?;
+            let size = meta.len();
+            let mtime = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+            out.push(CachedFile { path, size, mtime });
+        }
+    }
+    Ok(())
+}
+
+fn remove_dir_if_empty(path: &Path) -> std::io::Result<()> {
+    if path.is_dir() && fs::read_dir(path)?.next().is_none() {
+        fs::remove_dir(path)?;
+    }
+    Ok(())
+}
+
+fn remove_cached_archive(path: &Path) -> std::io::Result<()> {
+    fs::remove_file(path)?;
+    let checksum_path = path.with_file_name(format!(
+        "{}.sha256",
+        path.file_name()
+            .map(|name| name.to_string_lossy())
+            .unwrap_or_default()
+    ));
+    if checksum_path.exists() {
+        fs::remove_file(checksum_path)?;
+    }
+    Ok(())
 }

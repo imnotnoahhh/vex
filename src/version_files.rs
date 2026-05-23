@@ -7,6 +7,68 @@ enum VersionFileFormat {
     SingleValue,
 }
 
+/// Remove a tool line from a `.tool-versions`-style file if it pins `expected_version`.
+///
+/// Returns `true` when the file was rewritten. Single-value files (`.python-version` etc.)
+/// are deleted instead, since their entire body represents the pinned version.
+pub fn remove_tool_version_if_matches(
+    file_path: &Path,
+    tool_name: &str,
+    expected_version: &str,
+) -> Result<bool> {
+    if !file_path.exists() {
+        return Ok(false);
+    }
+
+    match version_file_format(file_path) {
+        VersionFileFormat::ToolVersions => {
+            let Ok(existing) = fs::read_to_string(file_path) else {
+                return Ok(false);
+            };
+
+            let mut rewritten = Vec::new();
+            let mut removed = false;
+            for line in existing.lines() {
+                if let Some(parts) = parse_tool_line(line) {
+                    if parts.tool == tool_name {
+                        // Extract the version token from the original line.
+                        let rest = &line[parts.leading.len() + parts.tool.len()..];
+                        let value = rest.split_whitespace().next().unwrap_or_default();
+                        if value == expected_version {
+                            removed = true;
+                            continue;
+                        }
+                    }
+                }
+                rewritten.push(line.to_string());
+            }
+
+            if !removed {
+                return Ok(false);
+            }
+
+            let body = if rewritten.is_empty() {
+                String::new()
+            } else {
+                rewritten.join("\n") + "\n"
+            };
+            fs::write(file_path, body)?;
+            Ok(true)
+        }
+        VersionFileFormat::SingleValue => {
+            let Ok(content) = fs::read_to_string(file_path) else {
+                return Ok(false);
+            };
+            if content.trim() == expected_version {
+                fs::remove_file(file_path)?;
+                Ok(true)
+            } else {
+                Ok(false)
+            }
+        }
+    }
+}
+
 pub fn write_tool_version(file_path: &Path, tool_name: &str, version: &str) -> Result<()> {
     let content = match version_file_format(file_path) {
         VersionFileFormat::ToolVersions => {
@@ -194,6 +256,44 @@ mod tests {
 
         let content = fs::read_to_string(&file_path).unwrap();
         assert_eq!(content, "node 22.0.0 # lts\n");
+    }
+
+    #[test]
+    fn test_remove_tool_version_strips_matching_line() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join(".tool-versions");
+
+        fs::write(&file_path, "node 20.11.0\ngo 1.23.5\n").unwrap();
+        let removed = remove_tool_version_if_matches(&file_path, "node", "20.11.0").unwrap();
+
+        assert!(removed);
+        let content = fs::read_to_string(&file_path).unwrap();
+        assert_eq!(content, "go 1.23.5\n");
+    }
+
+    #[test]
+    fn test_remove_tool_version_keeps_other_versions() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join(".tool-versions");
+
+        fs::write(&file_path, "node 22.0.0\n").unwrap();
+        let removed = remove_tool_version_if_matches(&file_path, "node", "20.11.0").unwrap();
+
+        assert!(!removed);
+        let content = fs::read_to_string(&file_path).unwrap();
+        assert_eq!(content, "node 22.0.0\n");
+    }
+
+    #[test]
+    fn test_remove_single_value_file_when_match() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join(".python-version");
+
+        fs::write(&file_path, "3.12.1\n").unwrap();
+        let removed = remove_tool_version_if_matches(&file_path, "python", "3.12.1").unwrap();
+
+        assert!(removed);
+        assert!(!file_path.exists());
     }
 
     #[test]

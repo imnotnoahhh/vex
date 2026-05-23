@@ -114,6 +114,84 @@ fn test_verify_checksum_success() {
 }
 
 #[test]
+fn test_enforce_size_limit_evicts_oldest() {
+    let tmp = TempDir::new().unwrap();
+    let cache = ArchiveCache::with_size_limit(tmp.path(), 100);
+
+    let make_archive = |name: &str, bytes: usize| {
+        let p = tmp.path().join(name);
+        fs::write(&p, vec![0u8; bytes]).unwrap();
+        p
+    };
+
+    // Older, larger archive.
+    let old = make_archive("old.tar.gz", 80);
+    cache
+        .store_archive("node", "18.0.0", "node-v18.0.0.tar.gz", &old)
+        .unwrap();
+
+    // Make sure the second file's mtime is strictly newer.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+
+    let new = make_archive("new.tar.gz", 60);
+    cache
+        .store_archive("node", "20.0.0", "node-v20.0.0.tar.gz", &new)
+        .unwrap();
+
+    // Combined would be 140 > 100, so the older one should have been evicted.
+    assert!(!cache.has_archive("node", "18.0.0", "node-v18.0.0.tar.gz"));
+    assert!(cache.has_archive("node", "20.0.0", "node-v20.0.0.tar.gz"));
+    assert!(cache.total_size_bytes().unwrap() <= 100);
+}
+
+#[test]
+fn test_enforce_size_limit_keeps_newest_when_it_exceeds_limit() {
+    let tmp = TempDir::new().unwrap();
+    let cache = ArchiveCache::with_size_limit(tmp.path(), 50);
+
+    let test_file = tmp.path().join("large.tar.gz");
+    fs::write(&test_file, vec![0u8; 80]).unwrap();
+
+    cache
+        .store_archive("node", "24.0.0", "node-v24.0.0.tar.gz", &test_file)
+        .unwrap();
+
+    assert!(cache.has_archive("node", "24.0.0", "node-v24.0.0.tar.gz"));
+    assert_eq!(cache.total_size_bytes().unwrap(), 80);
+}
+
+#[test]
+fn test_enforce_size_limit_removes_checksum_with_evicted_archive() {
+    let tmp = TempDir::new().unwrap();
+    let cache = ArchiveCache::with_size_limit(tmp.path(), 100);
+
+    let old = tmp.path().join("old.tar.gz");
+    fs::write(&old, vec![0u8; 80]).unwrap();
+    cache
+        .store_archive("node", "18.0.0", "node-v18.0.0.tar.gz", &old)
+        .unwrap();
+    cache
+        .store_archive_checksum("node", "18.0.0", "node-v18.0.0.tar.gz", "abc123")
+        .unwrap();
+
+    std::thread::sleep(std::time::Duration::from_millis(20));
+
+    let new = tmp.path().join("new.tar.gz");
+    fs::write(&new, vec![0u8; 60]).unwrap();
+    cache
+        .store_archive("node", "20.0.0", "node-v20.0.0.tar.gz", &new)
+        .unwrap();
+
+    assert!(!cache.has_archive("node", "18.0.0", "node-v18.0.0.tar.gz"));
+    assert_eq!(
+        cache
+            .get_archive_checksum("node", "18.0.0", "node-v18.0.0.tar.gz")
+            .unwrap(),
+        None
+    );
+}
+
+#[test]
 fn test_verify_checksum_failure() {
     let tmp = TempDir::new().unwrap();
     let cache = ArchiveCache::new(tmp.path());

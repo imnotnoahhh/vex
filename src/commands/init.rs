@@ -33,3 +33,7 @@ pub fn run(
 
     setup::init_vex(shell.unwrap_or("skip"), dry_run)
 }
+
+pub fn run_uninit(shell: Option<&str>, dry_run: bool) -> Result<()> {
+    setup::uninit_vex(shell.unwrap_or("auto"), dry_run)
+}

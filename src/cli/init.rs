@@ -22,3 +22,14 @@ pub(crate) struct InitArgs {
     #[arg(long, requires = "template", conflicts_with_all = ["shell", "list_templates"])]
     pub(crate) add_only: bool,
 }
+
+#[derive(Args)]
+pub(crate) struct UninitArgs {
+    /// Shell to clean (auto, zsh, bash, fish, or nu)
+    #[arg(long)]
+    pub(crate) shell: Option<String>,
+
+    /// Preview changes without modifying files
+    #[arg(long)]
+    pub(crate) dry_run: bool,
+}

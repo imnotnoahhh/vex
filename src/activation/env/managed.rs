@@ -1,4 +1,4 @@
-use super::{checked_install_dir, ALWAYS_MANAGED_ENV_KEYS, SUPPORTED_TOOLS};
+use super::{checked_install_dir, ALWAYS_MANAGED_ENV_KEYS, ALWAYS_UNSET_ENV_KEYS, SUPPORTED_TOOLS};
 use crate::error::Result;
 use crate::tools;
 use std::collections::{BTreeMap, BTreeSet};
@@ -38,7 +38,9 @@ pub(in crate::activation) fn build_unset_env(
     for tool_name in versions.keys() {
         let tool = tools::get_tool(tool_name)?;
         for key in tool.managed_env_keys() {
-            if capture_user_state || ALWAYS_MANAGED_ENV_KEYS.contains(&key) {
+            if (capture_user_state || ALWAYS_MANAGED_ENV_KEYS.contains(&key))
+                && !ALWAYS_UNSET_ENV_KEYS.contains(&key)
+            {
                 active_keys.insert(key.to_string());
             }
         }
@@ -75,6 +77,9 @@ fn filter_managed_env(
 ) -> BTreeMap<String, String> {
     managed_env
         .into_iter()
-        .filter(|(key, _)| capture_user_state || ALWAYS_MANAGED_ENV_KEYS.contains(&key.as_str()))
+        .filter(|(key, _)| {
+            (capture_user_state || ALWAYS_MANAGED_ENV_KEYS.contains(&key.as_str()))
+                && !ALWAYS_UNSET_ENV_KEYS.contains(&key.as_str())
+        })
         .collect()
 }
