@@ -85,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: prepare-release
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare-release.outputs.tag_name }}
       - name: Ensure CHANGELOG entry exists
@@ -140,7 +140,7 @@ jobs:
     env:
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare-release.outputs.tag_name }}
       - name: Check Homebrew tap token
