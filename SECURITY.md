@@ -6,7 +6,7 @@ If you discover a security vulnerability in vex, please report it responsibly.
 
 **Please do not open a public GitHub issue for security reports.**
 
-Instead, email: **qinfuyaoo@icloud.com**
+Instead, email: **hi@noahqin.dev**
 
 Please include:
 - A clear description of the vulnerability
